@@ -1,25 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { toast } from 'react-hot-toast'
-import api from '../utils/api'
+import { accountsService } from '../services/accountsService'
+import toast from 'react-hot-toast'
 
 // Получить список аккаунтов
 export function useAccounts(filters = {}) {
   return useQuery({
     queryKey: ['accounts', filters],
     queryFn: async () => {
-      const params = new URLSearchParams()
-      
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value && value !== '') {
-          if (Array.isArray(value)) {
-            value.forEach(v => params.append(key, v))
-          } else {
-            params.append(key, value)
-          }
-        }
-      })
-      
-      const response = await api.get(`/accounts?${params.toString()}`)
+      const response = await accountsService.getAll(filters)
       return response.data.data
     },
     keepPreviousData: true,
@@ -31,7 +19,7 @@ export function useAccountsStats() {
   return useQuery({
     queryKey: ['accounts', 'stats'],
     queryFn: async () => {
-      const response = await api.get('/accounts/stats')
+      const response = await accountsService.getStats()
       return response.data.data
     },
   })
@@ -43,13 +31,16 @@ export function useCreateAccount() {
   
   return useMutation({
     mutationFn: async (accountData) => {
-      const response = await api.post('/accounts', accountData)
+      const response = await accountsService.create(accountData)
       return response.data.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['accounts'])
       toast.success('Аккаунт создан успешно')
     },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'Ошибка создания аккаунта')
+    }
   })
 }
 
@@ -59,13 +50,16 @@ export function useUpdateAccount() {
   
   return useMutation({
     mutationFn: async ({ id, data }) => {
-      const response = await api.put(`/accounts/${id}`, data)
+      const response = await accountsService.update(id, data)
       return response.data.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['accounts'])
       toast.success('Аккаунт обновлен успешно')
     },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'Ошибка обновления аккаунта')
+    }
   })
 }
 
@@ -75,48 +69,16 @@ export function useDeleteAccount() {
   
   return useMutation({
     mutationFn: async (id) => {
-      const response = await api.delete(`/accounts/${id}`)
+      const response = await accountsService.delete(id)
       return response.data
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['accounts'])
       toast.success('Аккаунт удален успешно')
     },
-  })
-}
-
-// Изменить статус аккаунта
-export function useChangeAccountStatus() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: async ({ id, status }) => {
-      const response = await api.post(`/accounts/${id}/status`, { status })
-      return response.data.data
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries(['accounts'])
-      toast.success('Статус изменен успешно')
-    },
-  })
-}
-
-// Импорт аккаунтов из текста
-export function useImportAccountsFromText() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: async ({ text, format, source }) => {
-      const response = await api.post('/accounts/import-text', { text, format, source })
-      return response.data.data
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries(['accounts'])
-      toast.success(`Импортировано ${data.imported} аккаунтов`)
-      if (data.errors?.length > 0) {
-        toast.error(`Ошибок: ${data.errors.length}`)
-      }
-    },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'Ошибка удаления аккаунта')
+    }
   })
 }
 
@@ -126,28 +88,15 @@ export function useBulkDeleteAccounts() {
   
   return useMutation({
     mutationFn: async (ids) => {
-      const response = await api.post('/accounts/bulk-delete', { ids })
+      const response = await accountsService.bulkDelete(ids)
       return response.data.data
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries(['accounts'])
       toast.success(`Удалено ${data.deleted} аккаунтов`)
     },
-  })
-}
-
-// Массовое обновление статуса
-export function useBulkUpdateAccountsStatus() {
-  const queryClient = useQueryClient()
-  
-  return useMutation({
-    mutationFn: async ({ ids, status }) => {
-      const response = await api.post('/accounts/bulk-update-status', { ids, status })
-      return response.data.data
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries(['accounts'])
-      toast.success(`Обновлен статус у ${data.updated} аккаунтов`)
-    },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'Ошибка массового удаления')
+    }
   })
 }
