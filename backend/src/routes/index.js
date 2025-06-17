@@ -10,6 +10,7 @@ const phoneRoutes = require('./phones');
 const zennoposterRoutes = require('./zennoposter');
 const activityRoutes = require('./activity');
 const otpRoutes = require('./otp');
+const configRoutes = require('./config'); // ДОБАВЛЕНО
 
 const router = express.Router();
 
@@ -38,7 +39,8 @@ router.get('/', (req, res) => {
       phones: '/api/phones',
       zennoposter: '/api/zp',
       activity: '/api/activity',
-      otp: '/api/otp'
+      otp: '/api/otp',
+      config: '/api/config' // ДОБАВЛЕНО
     }
   });
 });
@@ -53,5 +55,6 @@ router.use('/phones', phoneRoutes);
 router.use('/zp', zennoposterRoutes);
 router.use('/activity', activityRoutes);
 router.use('/otp', otpRoutes);
+router.use('/config', configRoutes); // ДОБАВЛЕНО
 
 module.exports = router;

@@ -1,28 +1,15 @@
 const express = require('express');
-const phoneController = require('../controllers/phoneController');
-const { validatePhone } = require('../validators/phoneValidator');
+const activityController = require('../controllers/activityController');
 
 const router = express.Router();
 
-// GET /api/phones - получить список телефонов
-router.get('/', phoneController.getPhones);
+// GET /api/activity - получить последнюю активность
+router.get('/', activityController.getRecentActivity);
 
-// GET /api/phones/:id - получить телефон по ID
-router.get('/:id', phoneController.getPhone);
+// GET /api/activity/stats - статистика активности
+router.get('/stats', activityController.getActivityStats);
 
-// POST /api/phones - создать новый телефон
-router.post('/', validatePhone, phoneController.createPhone);
-
-// PUT /api/phones/:id - обновить телефон
-router.put('/:id', validatePhone, phoneController.updatePhone);
-
-// DELETE /api/phones/:id - удалить телефон
-router.delete('/:id', phoneController.deletePhone);
-
-// POST /api/phones/:id/toggle-status - переключить статус телефона
-router.post('/:id/toggle-status', phoneController.togglePhoneStatus);
-
-// POST /api/phones/:id/reboot - перезагрузить телефон
-router.post('/:id/reboot', phoneController.rebootPhone);
+// GET /api/activity/:entityType/:entityId - активность по сущности
+router.get('/:entityType/:entityId', activityController.getActivityByEntity);
 
 module.exports = router;
