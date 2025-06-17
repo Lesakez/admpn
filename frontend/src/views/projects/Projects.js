@@ -22,6 +22,7 @@ import {
   CSpinner,
   CAlert,
   CProgress,
+  CWidgetStatsA,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -31,11 +32,17 @@ import {
   cilPencil,
   cilReload,
   cilChart,
+  cilFolder,
+  cilDevices,
+  cilGlobeAlt,
 } from '@coreui/icons'
 import { useProjects, useDeleteProject } from '../../hooks/useProjects'
+import { ProjectFormModal } from '../../components/forms'
 
 const Projects = () => {
   const [filters, setFilters] = useState({ page: 1, limit: 20 })
+  const [showModal, setShowModal] = useState(false)
+  const [editingProject, setEditingProject] = useState(null)
 
   // Загрузка данных
   const { data, isLoading, error, refetch } = useProjects(filters)
@@ -59,8 +66,34 @@ const Projects = () => {
     }
   }
 
+  const handleEdit = (project) => {
+    setEditingProject(project)
+    setShowModal(true)
+  }
+
+  const handleCreate = () => {
+    setEditingProject(null)
+    setShowModal(true)
+  }
+
+  const handleCloseModal = () => {
+    setShowModal(false)
+    setEditingProject(null)
+  }
+
   const projects = data?.projects || []
   const pagination = data?.pagination || {}
+
+  // Считаем общую статистику
+  const totalStats = projects.reduce((acc, project) => {
+    if (project.stats) {
+      acc.totalProxies += project.stats.proxies?.total || 0
+      acc.freeProxies += project.stats.proxies?.free || 0
+      acc.totalPhones += project.stats.phones?.total || 0
+      acc.freePhones += project.stats.phones?.free || 0
+    }
+    return acc
+  }, { totalProxies: 0, freeProxies: 0, totalPhones: 0, freePhones: 0 })
 
   if (error) {
     return (
@@ -75,33 +108,88 @@ const Projects = () => {
 
   return (
     <>
+      {/* Общая статистика */}
+      <CRow className="mb-4">
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="primary"
+            value={projects.length}
+            title="Всего проектов"
+            action={
+              <CIcon icon={cilFolder} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="info"
+            value={totalStats.totalProxies}
+            title="Всего прокси"
+            action={
+              <CIcon icon={cilGlobeAlt} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="success"
+            value={totalStats.freeProxies}
+            title="Свободных прокси"
+            action={
+              <CIcon icon={cilGlobeAlt} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="warning"
+            value={totalStats.totalPhones}
+            title="Всего устройств"
+            action={
+              <CIcon icon={cilDevices} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+      </CRow>
+
+      {/* Основная таблица */}
       <CRow>
         <CCol xs={12}>
           <CCard className="mb-4">
             <CCardHeader>
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
+              <CRow>
+                <CCol sm={6}>
                   <h4 className="mb-0">Проекты</h4>
                   <small className="text-muted">
                     Всего: {pagination.total || 0}
                   </small>
-                </div>
-                <div>
+                </CCol>
+                <CCol sm={6} className="d-flex justify-content-end">
                   <CButtonGroup>
+                    <CButton 
+                      color="primary" 
+                      onClick={handleCreate}
+                    >
+                      <CIcon icon={cilPlus} className="me-2" />
+                      Создать проект
+                    </CButton>
                     <CButton
-                      color="outline-secondary"
+                      color="secondary"
+                      variant="outline"
                       onClick={() => refetch()}
                       disabled={isLoading}
                     >
-                      <CIcon icon={cilReload} className={isLoading ? 'spin' : ''} />
-                    </CButton>
-                    <CButton color="primary">
-                      <CIcon icon={cilPlus} /> Создать проект
+                      <CIcon icon={cilReload} className={isLoading ? 'fa-spin' : ''} />
                     </CButton>
                   </CButtonGroup>
-                </div>
-              </div>
+                </CCol>
+              </CRow>
             </CCardHeader>
+
             <CCardBody>
               {/* Фильтры */}
               <CRow className="mb-3">
@@ -111,166 +199,226 @@ const Projects = () => {
                       <CIcon icon={cilSearch} />
                     </CInputGroupText>
                     <CFormInput
-                      placeholder="Поиск по названию или описанию..."
+                      placeholder="Поиск по названию проекта..."
                       value={filters.search || ''}
                       onChange={(e) => handleFilterChange('search', e.target.value)}
                     />
                   </CInputGroup>
                 </CCol>
+                <CCol md={3}>
+                  <label className="form-label text-muted small">На странице:</label>
+                  <select
+                    className="form-select"
+                    value={filters.limit || 20}
+                    onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </CCol>
               </CRow>
 
               {/* Таблица */}
-              <CTable hover responsive>
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell>Название</CTableHeaderCell>
-                    <CTableHeaderCell>Описание</CTableHeaderCell>
-                    <CTableHeaderCell>Прокси</CTableHeaderCell>
-                    <CTableHeaderCell>Телефоны</CTableHeaderCell>
-                    <CTableHeaderCell>Создан</CTableHeaderCell>
-                    <CTableHeaderCell>Действия</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {isLoading ? (
-                    <CTableRow>
-                      <CTableDataCell colSpan="6" className="text-center">
-                        <CSpinner /> Загрузка...
-                      </CTableDataCell>
-                    </CTableRow>
-                  ) : projects.length === 0 ? (
-                    <CTableRow>
-                      <CTableDataCell colSpan="6" className="text-center">
-                        Данные не найдены
-                      </CTableDataCell>
-                    </CTableRow>
-                  ) : (
-                    projects.map((project) => (
-                      <CTableRow key={project.id}>
-                        <CTableDataCell>
-                          <div>
-                            <strong>{project.name}</strong>
-                            {project.transliterateName && (
-                              <div className="small text-muted">
-                                ID: {project.transliterateName}
-                              </div>
-                            )}
-                          </div>
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {project.description ? (
-                            <span>{project.description}</span>
-                          ) : (
-                            <span className="text-muted">Без описания</span>
-                          )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {project.stats?.proxies ? (
-                            <div>
-                              <div className="d-flex justify-content-between align-items-center mb-1">
-                                <small>Всего: {project.stats.proxies.total}</small>
-                                <small>
-                                  <span className="text-success">{project.stats.proxies.free}</span>
-                                  {' / '}
-                                  <span className="text-warning">{project.stats.proxies.busy}</span>
-                                </small>
-                              </div>
-                              {project.stats.proxies.total > 0 && (
-                                <CProgress 
-                                  height={4}
-                                  value={(project.stats.proxies.free / project.stats.proxies.total) * 100}
-                                  color="success"
-                                />
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-muted">0</span>
-                          )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {project.stats?.phones ? (
-                            <div>
-                              <div className="d-flex justify-content-between align-items-center mb-1">
-                                <small>Всего: {project.stats.phones.total}</small>
-                                <small>
-                                  <span className="text-success">{project.stats.phones.free}</span>
-                                  {' / '}
-                                  <span className="text-warning">{project.stats.phones.busy}</span>
-                                </small>
-                              </div>
-                              {project.stats.phones.total > 0 && (
-                                <CProgress 
-                                  height={4}
-                                  value={(project.stats.phones.free / project.stats.phones.total) * 100}
-                                  color="success"
-                                />
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-muted">0</span>
-                          )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {project.createdAt ? 
-                            new Date(project.createdAt).toLocaleDateString('ru-RU') : 
-                            '-'
-                          }
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          <CButtonGroup size="sm">
-                            <CButton color="outline-info" variant="ghost" title="Статистика">
-                              <CIcon icon={cilChart} />
-                            </CButton>
-                            <CButton color="outline-primary" variant="ghost" title="Редактировать">
-                              <CIcon icon={cilPencil} />
-                            </CButton>
-                            <CButton 
-                              color="outline-danger" 
-                              variant="ghost"
-                              onClick={() => handleDelete(project.id)}
-                              disabled={deleteMutation.isLoading}
-                              title="Удалить"
-                            >
-                              <CIcon icon={cilTrash} />
-                            </CButton>
-                          </CButtonGroup>
-                        </CTableDataCell>
+              {isLoading ? (
+                <div className="text-center">
+                  <CSpinner color="primary" />
+                  <div className="mt-2">Загрузка...</div>
+                </div>
+              ) : (
+                <>
+                  <CTable align="middle" className="mb-0 border" hover responsive>
+                    <CTableHead color="light">
+                      <CTableRow>
+                        <CTableHeaderCell>ID</CTableHeaderCell>
+                        <CTableHeaderCell>Название</CTableHeaderCell>
+                        <CTableHeaderCell>Описание</CTableHeaderCell>
+                        <CTableHeaderCell>Прокси</CTableHeaderCell>
+                        <CTableHeaderCell>Устройства</CTableHeaderCell>
+                        <CTableHeaderCell>Создан</CTableHeaderCell>
+                        <CTableHeaderCell>Действия</CTableHeaderCell>
                       </CTableRow>
-                    ))
-                  )}
-                </CTableBody>
-              </CTable>
+                    </CTableHead>
+                    <CTableBody>
+                      {projects.length === 0 ? (
+                        <CTableRow>
+                          <CTableDataCell colSpan={7} className="text-center">
+                            Нет проектов для отображения
+                          </CTableDataCell>
+                        </CTableRow>
+                      ) : (
+                        projects.map((project) => (
+                          <CTableRow key={project.id}>
+                            <CTableDataCell>
+                              <strong>{project.id}</strong>
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              <div>
+                                <strong>{project.name}</strong>
+                                {project.transliterateName && (
+                                  <div className="text-muted small">
+                                    {project.transliterateName}
+                                  </div>
+                                )}
+                              </div>
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              <div 
+                                className="text-truncate" 
+                                style={{ maxWidth: '200px' }}
+                                title={project.description}
+                              >
+                                {project.description || 'Без описания'}
+                              </div>
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              {project.stats?.proxies ? (
+                                <div>
+                                  <CBadge color="primary" className="me-1">
+                                    {project.stats.proxies.total}
+                                  </CBadge>
+                                  <CBadge color="success" className="me-1">
+                                    {project.stats.proxies.free} свободных
+                                  </CBadge>
+                                  <CBadge color="warning">
+                                    {project.stats.proxies.busy} занятых
+                                  </CBadge>
+                                  {project.stats.proxies.total > 0 && (
+                                    <CProgress 
+                                      thin 
+                                      color="success" 
+                                      value={(project.stats.proxies.free / project.stats.proxies.total) * 100}
+                                      className="mt-1"
+                                    />
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted">Нет данных</span>
+                              )}
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              {project.stats?.phones ? (
+                                <div>
+                                  <CBadge color="primary" className="me-1">
+                                    {project.stats.phones.total}
+                                  </CBadge>
+                                  <CBadge color="success" className="me-1">
+                                    {project.stats.phones.free} свободных
+                                  </CBadge>
+                                  <CBadge color="warning">
+                                    {project.stats.phones.busy} занятых
+                                  </CBadge>
+                                  {project.stats.phones.total > 0 && (
+                                    <CProgress 
+                                      thin 
+                                      color="success" 
+                                      value={(project.stats.phones.free / project.stats.phones.total) * 100}
+                                      className="mt-1"
+                                    />
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted">Нет данных</span>
+                              )}
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              {project.createdAt ? 
+                                new Date(project.createdAt).toLocaleDateString('ru-RU') : 
+                                'N/A'
+                              }
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              <CButtonGroup size="sm">
+                                <CButton
+                                  color="info"
+                                  variant="outline"
+                                  onClick={() => handleEdit(project)}
+                                  title="Редактировать"
+                                >
+                                  <CIcon icon={cilPencil} />
+                                </CButton>
+                                <CButton
+                                  color="warning"
+                                  variant="outline"
+                                  title="Статистика"
+                                >
+                                  <CIcon icon={cilChart} />
+                                </CButton>
+                                <CButton
+                                  color="danger"
+                                  variant="outline"
+                                  onClick={() => handleDelete(project.id)}
+                                  disabled={deleteMutation.isLoading}
+                                  title="Удалить"
+                                >
+                                  <CIcon icon={cilTrash} />
+                                </CButton>
+                              </CButtonGroup>
+                            </CTableDataCell>
+                          </CTableRow>
+                        ))
+                      )}
+                    </CTableBody>
+                  </CTable>
 
-              {/* Пагинация */}
-              {pagination.pages > 1 && (
-                <CPagination className="justify-content-center">
-                  <CPaginationItem
-                    disabled={pagination.page <= 1}
-                    onClick={() => handlePageChange(pagination.page - 1)}
-                  >
-                    Назад
-                  </CPaginationItem>
-                  {Array.from({ length: pagination.pages }, (_, i) => i + 1).map(page => (
-                    <CPaginationItem
-                      key={page}
-                      active={page === pagination.page}
-                      onClick={() => handlePageChange(page)}
-                    >
-                      {page}
-                    </CPaginationItem>
-                  ))}
-                  <CPaginationItem
-                    disabled={pagination.page >= pagination.pages}
-                    onClick={() => handlePageChange(pagination.page + 1)}
-                  >
-                    Далее
-                  </CPaginationItem>
-                </CPagination>
+                  {/* Пагинация */}
+                  {pagination.pages > 1 && (
+                    <div className="d-flex justify-content-between align-items-center mt-3">
+                      <div>
+                        Показано {projects.length} из {pagination.total} записей
+                      </div>
+                      <CPagination>
+                        <CPaginationItem
+                          disabled={pagination.page <= 1}
+                          onClick={() => handlePageChange(pagination.page - 1)}
+                        >
+                          Предыдущая
+                        </CPaginationItem>
+                        
+                        {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                          const page = Math.max(1, Math.min(
+                            pagination.pages - 4,
+                            pagination.page - 2
+                          )) + i
+                          
+                          if (page <= pagination.pages) {
+                            return (
+                              <CPaginationItem
+                                key={page}
+                                active={page === pagination.page}
+                                onClick={() => handlePageChange(page)}
+                              >
+                                {page}
+                              </CPaginationItem>
+                            )
+                          }
+                          return null
+                        })}
+                        
+                        <CPaginationItem
+                          disabled={pagination.page >= pagination.pages}
+                          onClick={() => handlePageChange(pagination.page + 1)}
+                        >
+                          Следующая
+                        </CPaginationItem>
+                      </CPagination>
+                    </div>
+                  )}
+                </>
               )}
             </CCardBody>
           </CCard>
         </CCol>
       </CRow>
+
+      {/* Модальное окно */}
+      <ProjectFormModal
+        visible={showModal}
+        onClose={handleCloseModal}
+        project={editingProject}
+        isEdit={!!editingProject}
+      />
     </>
   )
 }

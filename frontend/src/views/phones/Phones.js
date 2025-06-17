@@ -22,6 +22,7 @@ import {
   CPaginationItem,
   CSpinner,
   CAlert,
+  CWidgetStatsA,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -34,6 +35,7 @@ import {
   cilSync,
   cilToggleOn,
   cilToggleOff,
+  cilDevices,
 } from '@coreui/icons'
 import { 
   usePhones, 
@@ -84,13 +86,13 @@ const Phones = () => {
     }
   }
 
-  const handleCreate = () => {
-    setEditingPhone(null)
+  const handleEdit = (phone) => {
+    setEditingPhone(phone)
     setShowModal(true)
   }
 
-  const handleEdit = (phone) => {
-    setEditingPhone(phone)
+  const handleCreate = () => {
+    setEditingPhone(null)
     setShowModal(true)
   }
 
@@ -99,69 +101,123 @@ const Phones = () => {
     setEditingPhone(null)
   }
 
-  const getStatusBadge = (status) => {
-    const statusColors = {
-      free: 'success',
-      busy: 'warning',
-      inactive: 'secondary',
-      maintenance: 'dark',
-      offline: 'danger',
-      rebooting: 'info',
-      error: 'danger',
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'free':
+        return 'success'
+      case 'busy':
+        return 'warning'
+      case 'disabled':
+        return 'danger'
+      default:
+        return 'secondary'
     }
-    return <CBadge color={statusColors[status] || 'secondary'}>{status}</CBadge>
   }
 
-  const phones = data?.phones || []
-  const pagination = data?.pagination || {}
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'free':
+        return 'Свободен'
+      case 'busy':
+        return 'Занят'
+      case 'disabled':
+        return 'Отключен'
+      default:
+        return status
+    }
+  }
 
   if (error) {
     return (
       <CAlert color="danger">
         Ошибка загрузки данных: {error.message}
-        <CButton color="link" onClick={() => refetch()}>
-          Попробовать снова
-        </CButton>
       </CAlert>
     )
   }
 
+  const phones = data?.phones || []
+  const pagination = data?.pagination || {}
+
   return (
     <>
+      {/* Статистика */}
+      <CRow className="mb-4">
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="primary"
+            value={stats?.total || 0}
+            title="Всего устройств"
+            action={
+              <CIcon icon={cilDevices} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="success"
+            value={stats?.free || 0}
+            title="Свободные"
+            action={
+              <CIcon icon={cilToggleOn} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="warning"
+            value={stats?.busy || 0}
+            title="Занятые"
+            action={
+              <CIcon icon={cilSync} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="danger"
+            value={stats?.disabled || 0}
+            title="Отключенные"
+            action={
+              <CIcon icon={cilToggleOff} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+      </CRow>
+
+      {/* Основная таблица */}
       <CRow>
         <CCol xs={12}>
           <CCard className="mb-4">
             <CCardHeader>
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
-                  <h4 className="mb-0">Устройства</h4>
-                  {stats && (
-                    <small className="text-muted">
-                      Всего: {stats.total || 0}
-                      {stats.byStatus && Object.entries(stats.byStatus).map(([status, count]) => (
-                        <span key={status} className="ms-3">
-                          {status}: {count}
-                        </span>
-                      ))}
-                    </small>
-                  )}
-                </div>
-                <div>
+              <CRow>
+                <CCol sm={6}>
+                  <h4 className="mb-0">Управление устройствами</h4>
+                </CCol>
+                <CCol sm={6} className="d-flex justify-content-end">
                   <CButtonGroup>
-                    <CButton
-                      color="outline-secondary"
-                      onClick={() => refetch()}
-                      disabled={isLoading}
+                    <CButton 
+                      color="primary" 
+                      onClick={handleCreate}
                     >
-                      <CIcon icon={cilReload} className={isLoading ? 'spin' : ''} />
+                      <CIcon icon={cilPlus} className="me-2" />
+                      Добавить устройство
                     </CButton>
-                    <CButton color="primary" onClick={handleCreate}>
-                      <CIcon icon={cilPlus} /> Добавить устройство
+                    <CButton 
+                      color="secondary" 
+                      variant="outline"
+                      onClick={() => refetch()}
+                    >
+                      <CIcon icon={cilReload} />
                     </CButton>
                   </CButtonGroup>
-                </div>
-              </div>
+                </CCol>
+              </CRow>
             </CCardHeader>
+
             <CCardBody>
               {/* Фильтры */}
               <CRow className="mb-3">
@@ -171,189 +227,178 @@ const Phones = () => {
                       <CIcon icon={cilSearch} />
                     </CInputGroupText>
                     <CFormInput
-                      placeholder="Поиск по модели, устройству или IP..."
+                      placeholder="Поиск по модели, устройству..."
                       value={filters.search || ''}
                       onChange={(e) => handleFilterChange('search', e.target.value)}
                     />
                   </CInputGroup>
                 </CCol>
-                <CCol md={2}>
+                <CCol md={3}>
                   <CFormSelect
                     value={filters.status || ''}
                     onChange={(e) => handleFilterChange('status', e.target.value)}
                   >
                     <option value="">Все статусы</option>
-                    <option value="free">free</option>
-                    <option value="busy">busy</option>
-                    <option value="inactive">inactive</option>
-                    <option value="maintenance">maintenance</option>
-                    <option value="offline">offline</option>
-                    <option value="rebooting">rebooting</option>
-                    <option value="error">error</option>
+                    <option value="free">Свободные</option>
+                    <option value="busy">Занятые</option>
+                    <option value="disabled">Отключенные</option>
                   </CFormSelect>
                 </CCol>
                 <CCol md={2}>
                   <CFormSelect
-                    value={filters.projectId || ''}
-                    onChange={(e) => handleFilterChange('projectId', e.target.value)}
+                    value={filters.limit || 20}
+                    onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
                   >
-                    <option value="">Все проекты</option>
-                    {/* Здесь можно добавить список проектов */}
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
                   </CFormSelect>
                 </CCol>
               </CRow>
 
               {/* Таблица */}
-              <CTable hover responsive>
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell>Модель/Устройство</CTableHeaderCell>
-                    <CTableHeaderCell>Android</CTableHeaderCell>
-                    <CTableHeaderCell>IP/MAC</CTableHeaderCell>
-                    <CTableHeaderCell>Статус</CTableHeaderCell>
-                    <CTableHeaderCell>Проект</CTableHeaderCell>
-                    <CTableHeaderCell>Последняя перезагрузка</CTableHeaderCell>
-                    <CTableHeaderCell>Действия</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {isLoading ? (
-                    <CTableRow>
-                      <CTableDataCell colSpan="7" className="text-center">
-                        <CSpinner /> Загрузка...
-                      </CTableDataCell>
-                    </CTableRow>
-                  ) : phones.length === 0 ? (
-                    <CTableRow>
-                      <CTableDataCell colSpan="7" className="text-center">
-                        Данные не найдены
-                      </CTableDataCell>
-                    </CTableRow>
-                  ) : (
-                    phones.map((phone) => (
-                      <CTableRow key={phone.id}>
-                        <CTableDataCell>
-                          <div>
-                            <strong>{phone.model || phone.device || 'Неизвестно'}</strong>
-                            {phone.device && phone.model && phone.device !== phone.model && (
-                              <div className="small text-muted">{phone.device}</div>
-                            )}
-                          </div>
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {phone.androidVersion ? (
-                            <CBadge color="info">Android {phone.androidVersion}</CBadge>
-                          ) : (
-                            <span className="text-muted">-</span>
-                          )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          <div>
-                            {phone.ipAddress && (
-                              <div><strong>IP:</strong> {phone.ipAddress}</div>
-                            )}
-                            {phone.macAddress && (
-                              <div className="small text-muted">MAC: {phone.macAddress}</div>
-                            )}
-                            {!phone.ipAddress && !phone.macAddress && (
-                              <span className="text-muted">-</span>
-                            )}
-                          </div>
-                        </CTableDataCell>
-                        <CTableDataCell>{getStatusBadge(phone.status)}</CTableDataCell>
-                        <CTableDataCell>
-                          {phone.project ? phone.project.name : <span className="text-muted">Без проекта</span>}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {phone.dateLastReboot ? (
-                            <div>
-                              <div>{new Date(phone.dateLastReboot).toLocaleDateString('ru-RU')}</div>
-                              <div className="small text-muted">
-                                {new Date(phone.dateLastReboot).toLocaleTimeString('ru-RU')}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-muted">-</span>
-                          )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          <CButtonGroup size="sm">
-                            <CButton 
-                              color={phone.status === 'free' ? 'outline-warning' : 'outline-success'} 
-                              variant="ghost"
-                              onClick={() => handleToggleStatus(phone.id)}
-                              disabled={toggleStatusMutation.isLoading || phone.status === 'rebooting'}
-                              title={phone.status === 'free' ? 'Занять' : 'Освободить'}
-                            >
-                              <CIcon icon={phone.status === 'free' ? cilToggleOff : cilToggleOn} />
-                            </CButton>
-                            <CButton 
-                              color="outline-info" 
-                              variant="ghost"
-                              onClick={() => handleReboot(phone.id)}
-                              disabled={rebootMutation.isLoading || phone.status === 'rebooting'}
-                              title="Перезагрузить"
-                            >
-                              <CIcon icon={phone.status === 'rebooting' ? cilSync : cilPowerStandby} 
-                                     className={phone.status === 'rebooting' ? 'spin' : ''} />
-                            </CButton>
-                            <CButton 
-                              color="outline-primary" 
-                              variant="ghost" 
-                              title="Редактировать"
-                              onClick={() => handleEdit(phone)}
-                            >
-                              <CIcon icon={cilPencil} />
-                            </CButton>
-                            <CButton 
-                              color="outline-danger" 
-                              variant="ghost"
-                              onClick={() => handleDelete(phone.id)}
-                              disabled={deleteMutation.isLoading}
-                              title="Удалить"
-                            >
-                              <CIcon icon={cilTrash} />
-                            </CButton>
-                          </CButtonGroup>
-                        </CTableDataCell>
+              {isLoading ? (
+                <div className="text-center">
+                  <CSpinner color="primary" />
+                  <div className="mt-2">Загрузка...</div>
+                </div>
+              ) : (
+                <>
+                  <CTable align="middle" className="mb-0 border" hover responsive>
+                    <CTableHead color="light">
+                      <CTableRow>
+                        <CTableHeaderCell>ID</CTableHeaderCell>
+                        <CTableHeaderCell>Модель</CTableHeaderCell>
+                        <CTableHeaderCell>Устройство</CTableHeaderCell>
+                        <CTableHeaderCell>Android</CTableHeaderCell>
+                        <CTableHeaderCell>IP Адрес</CTableHeaderCell>
+                        <CTableHeaderCell>Статус</CTableHeaderCell>
+                        <CTableHeaderCell>Проект</CTableHeaderCell>
+                        <CTableHeaderCell>Действия</CTableHeaderCell>
                       </CTableRow>
-                    ))
-                  )}
-                </CTableBody>
-              </CTable>
+                    </CTableHead>
+                    <CTableBody>
+                      {phones.length === 0 ? (
+                        <CTableRow>
+                          <CTableDataCell colSpan={8} className="text-center">
+                            Нет данных для отображения
+                          </CTableDataCell>
+                        </CTableRow>
+                      ) : (
+                        phones.map((phone) => (
+                          <CTableRow key={phone.id}>
+                            <CTableDataCell>
+                              <strong>{phone.id}</strong>
+                            </CTableDataCell>
+                            <CTableDataCell>{phone.model || 'N/A'}</CTableDataCell>
+                            <CTableDataCell>{phone.device || 'N/A'}</CTableDataCell>
+                            <CTableDataCell>{phone.androidVersion || 'N/A'}</CTableDataCell>
+                            <CTableDataCell>{phone.ipAddress || 'N/A'}</CTableDataCell>
+                            <CTableDataCell>
+                              <CBadge color={getStatusColor(phone.status)}>
+                                {getStatusText(phone.status)}
+                              </CBadge>
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              {phone.project?.name || 'Без проекта'}
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              <CButtonGroup size="sm">
+                                <CButton
+                                  color="info"
+                                  variant="outline"
+                                  onClick={() => handleEdit(phone)}
+                                  title="Редактировать"
+                                >
+                                  <CIcon icon={cilPencil} />
+                                </CButton>
+                                <CButton
+                                  color={phone.status === 'free' ? 'warning' : 'success'}
+                                  variant="outline"
+                                  onClick={() => handleToggleStatus(phone.id)}
+                                  disabled={toggleStatusMutation.isLoading}
+                                  title="Переключить статус"
+                                >
+                                  <CIcon icon={phone.status === 'free' ? cilToggleOff : cilToggleOn} />
+                                </CButton>
+                                <CButton
+                                  color="secondary"
+                                  variant="outline"
+                                  onClick={() => handleReboot(phone.id)}
+                                  disabled={rebootMutation.isLoading}
+                                  title="Перезагрузить"
+                                >
+                                  <CIcon icon={cilPowerStandby} />
+                                </CButton>
+                                <CButton
+                                  color="danger"
+                                  variant="outline"
+                                  onClick={() => handleDelete(phone.id)}
+                                  disabled={deleteMutation.isLoading}
+                                  title="Удалить"
+                                >
+                                  <CIcon icon={cilTrash} />
+                                </CButton>
+                              </CButtonGroup>
+                            </CTableDataCell>
+                          </CTableRow>
+                        ))
+                      )}
+                    </CTableBody>
+                  </CTable>
 
-              {/* Пагинация */}
-              {pagination.pages > 1 && (
-                <CPagination className="justify-content-center">
-                  <CPaginationItem
-                    disabled={pagination.page <= 1}
-                    onClick={() => handlePageChange(pagination.page - 1)}
-                  >
-                    Назад
-                  </CPaginationItem>
-                  {Array.from({ length: pagination.pages }, (_, i) => i + 1).map(page => (
-                    <CPaginationItem
-                      key={page}
-                      active={page === pagination.page}
-                      onClick={() => handlePageChange(page)}
-                    >
-                      {page}
-                    </CPaginationItem>
-                  ))}
-                  <CPaginationItem
-                    disabled={pagination.page >= pagination.pages}
-                    onClick={() => handlePageChange(pagination.page + 1)}
-                  >
-                    Далее
-                  </CPaginationItem>
-                </CPagination>
+                  {/* Пагинация */}
+                  {pagination.pages > 1 && (
+                    <div className="d-flex justify-content-between align-items-center mt-3">
+                      <div>
+                        Показано {phones.length} из {pagination.total} записей
+                      </div>
+                      <CPagination>
+                        <CPaginationItem
+                          disabled={pagination.page <= 1}
+                          onClick={() => handlePageChange(pagination.page - 1)}
+                        >
+                          Предыдущая
+                        </CPaginationItem>
+                        
+                        {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
+                          const page = Math.max(1, Math.min(
+                            pagination.pages - 4,
+                            pagination.page - 2
+                          )) + i
+                          
+                          if (page <= pagination.pages) {
+                            return (
+                              <CPaginationItem
+                                key={page}
+                                active={page === pagination.page}
+                                onClick={() => handlePageChange(page)}
+                              >
+                                {page}
+                              </CPaginationItem>
+                            )
+                          }
+                          return null
+                        })}
+                        
+                        <CPaginationItem
+                          disabled={pagination.page >= pagination.pages}
+                          onClick={() => handlePageChange(pagination.page + 1)}
+                        >
+                          Следующая
+                        </CPaginationItem>
+                      </CPagination>
+                    </div>
+                  )}
+                </>
               )}
             </CCardBody>
           </CCard>
         </CCol>
       </CRow>
 
-      {/* Модальное окно формы */}
+      {/* Модальное окно */}
       <PhoneFormModal
         visible={showModal}
         onClose={handleCloseModal}

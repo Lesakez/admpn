@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { otpService } from '../services/otpService'
 import toast from 'react-hot-toast'
 
@@ -8,6 +8,9 @@ export function useGenerateOTP() {
     mutationFn: async (secret) => {
       const response = await otpService.generate(secret)
       return response.data.data
+    },
+    onSuccess: () => {
+      // Не показываем toast для успешной генерации, так как это происходит часто
     },
     onError: (error) => {
       toast.error(error.response?.data?.error || 'Ошибка генерации OTP')
@@ -24,9 +27,9 @@ export function useValidateOTP() {
     },
     onSuccess: (data) => {
       if (data.valid) {
-        toast.success('Код подтвержден!')
+        toast.success('OTP код действителен!')
       } else {
-        toast.error('Неверный код')
+        toast.error('OTP код недействителен или истек')
       }
     },
     onError: (error) => {
@@ -36,13 +39,17 @@ export function useValidateOTP() {
 }
 
 // Генерировать секретный ключ
-export function useGenerateSecret(length = 32) {
-  return useQuery({
-    queryKey: ['otp', 'secret', length],
-    queryFn: async () => {
+export function useGenerateSecret() {
+  return useMutation({
+    mutationFn: async (length = 32) => {
       const response = await otpService.generateSecret(length)
       return response.data.data
     },
-    enabled: false, // Запускаем только по требованию
+    onSuccess: () => {
+      toast.success('Новый секретный ключ сгенерирован')
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.error || 'Ошибка генерации секретного ключа')
+    }
   })
 }

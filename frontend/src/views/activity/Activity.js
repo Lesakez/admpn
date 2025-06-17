@@ -20,12 +20,20 @@ import {
   CFormSelect,
   CSpinner,
   CAlert,
+  CWidgetStatsA,
+  CTooltip,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
   cilSearch,
   cilReload,
   cilChart,
+  cilPeople,
+  cilUser,
+  cilGlobeAlt,
+  cilDevices,
+  cilFolder,
+  cilCalendar,
 } from '@coreui/icons'
 import { useRecentActivity, useActivityStats } from '../../hooks/useActivity'
 
@@ -60,7 +68,29 @@ const Activity = () => {
       reboot: 'warning',
       change_ip: 'info',
     }
-    return <CBadge color={actionColors[actionType] || 'secondary'}>{actionType}</CBadge>
+    
+    const actionLabels = {
+      create: 'Создание',
+      update: 'Обновление',
+      delete: 'Удаление',
+      bulk_create: 'Массовое создание',
+      bulk_update: 'Массовое обновление',
+      bulk_delete: 'Массовое удаление',
+      status_change: 'Смена статуса',
+      status_toggle: 'Переключение статуса',
+      import: 'Импорт',
+      export: 'Экспорт',
+      allocate: 'Назначение',
+      release: 'Освобождение',
+      reboot: 'Перезагрузка',
+      change_ip: 'Смена IP',
+    }
+    
+    return (
+      <CBadge color={actionColors[actionType] || 'secondary'}>
+        {actionLabels[actionType] || actionType}
+      </CBadge>
+    )
   }
 
   const getEntityBadge = (entityType) => {
@@ -70,27 +100,53 @@ const Activity = () => {
       proxy: 'warning',
       phone: 'success',
       project: 'dark',
-      registration: 'secondary',
-      config: 'light',
-      folder: 'info',
     }
-    return <CBadge color={entityColors[entityType] || 'secondary'}>{entityType}</CBadge>
+    
+    const entityLabels = {
+      account: 'Аккаунт',
+      profile: 'Профиль',
+      proxy: 'Прокси',
+      phone: 'Устройство',
+      project: 'Проект',
+    }
+    
+    const entityIcons = {
+      account: cilPeople,
+      profile: cilUser,
+      proxy: cilGlobeAlt,
+      phone: cilDevices,
+      project: cilFolder,
+    }
+    
+    return (
+      <CBadge color={entityColors[entityType] || 'secondary'} className="d-flex align-items-center">
+        <CIcon icon={entityIcons[entityType]} className="me-1" size="sm" />
+        {entityLabels[entityType] || entityType}
+      </CBadge>
+    )
   }
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp)
     const now = new Date()
-    const diffMs = now - date
-    const diffMinutes = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
-
-    if (diffMinutes < 1) return 'только что'
-    if (diffMinutes < 60) return `${diffMinutes} мин назад`
-    if (diffHours < 24) return `${diffHours} ч назад`
-    if (diffDays < 7) return `${diffDays} д назад`
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60))
     
-    return date.toLocaleDateString('ru-RU')
+    if (diffInMinutes < 1) {
+      return 'Только что'
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes} мин назад`
+    } else if (diffInMinutes < 1440) {
+      const hours = Math.floor(diffInMinutes / 60)
+      return `${hours} ч назад`
+    } else {
+      return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    }
   }
 
   if (error) {
@@ -106,71 +162,82 @@ const Activity = () => {
 
   return (
     <>
-      <CRow>
-        {/* Статистика */}
-        {stats && (
-          <CCol xs={12} className="mb-4">
-            <CRow>
-              <CCol sm={6} lg={3}>
-                <CCard className="text-center">
-                  <CCardBody>
-                    <h4 className="text-primary">{stats.total}</h4>
-                    <p className="text-muted mb-0">Всего действий за неделю</p>
-                  </CCardBody>
-                </CCard>
-              </CCol>
-              <CCol sm={6} lg={3}>
-                <CCard className="text-center">
-                  <CCardBody>
-                    <h4 className="text-success">{stats.byAction?.find(a => a.action === 'create')?.count || 0}</h4>
-                    <p className="text-muted mb-0">Создано</p>
-                  </CCardBody>
-                </CCard>
-              </CCol>
-              <CCol sm={6} lg={3}>
-                <CCard className="text-center">
-                  <CCardBody>
-                    <h4 className="text-info">{stats.byAction?.find(a => a.action === 'update')?.count || 0}</h4>
-                    <p className="text-muted mb-0">Обновлено</p>
-                  </CCardBody>
-                </CCard>
-              </CCol>
-              <CCol sm={6} lg={3}>
-                <CCard className="text-center">
-                  <CCardBody>
-                    <h4 className="text-danger">{stats.byAction?.find(a => a.action === 'delete')?.count || 0}</h4>
-                    <p className="text-muted mb-0">Удалено</p>
-                  </CCardBody>
-                </CCard>
-              </CCol>
-            </CRow>
+      {/* Статистика за неделю */}
+      {stats && (
+        <CRow className="mb-4">
+          <CCol sm={6} lg={3}>
+            <CWidgetStatsA
+              className="mb-4"
+              color="primary"
+              value={stats.totalActions || 0}
+              title="Всего действий"
+              action={
+                <CIcon icon={cilChart} height={24} className="my-4 text-white" />
+              }
+            />
           </CCol>
-        )}
+          <CCol sm={6} lg={3}>
+            <CWidgetStatsA
+              className="mb-4"
+              color="success"
+              value={stats.todayActions || 0}
+              title="Сегодня"
+              action={
+                <CIcon icon={cilCalendar} height={24} className="my-4 text-white" />
+              }
+            />
+          </CCol>
+          <CCol sm={6} lg={3}>
+            <CWidgetStatsA
+              className="mb-4"
+              color="info"
+              value={stats.byEntityType?.account || 0}
+              title="Действия с аккаунтами"
+              action={
+                <CIcon icon={cilPeople} height={24} className="my-4 text-white" />
+              }
+            />
+          </CCol>
+          <CCol sm={6} lg={3}>
+            <CWidgetStatsA
+              className="mb-4"
+              color="warning"
+              value={stats.byEntityType?.project || 0}
+              title="Действия с проектами"
+              action={
+                <CIcon icon={cilFolder} height={24} className="my-4 text-white" />
+              }
+            />
+          </CCol>
+        </CRow>
+      )}
 
+      {/* Основная таблица */}
+      <CRow>
         <CCol xs={12}>
-          <CCard>
+          <CCard className="mb-4">
             <CCardHeader>
-              <div className="d-flex justify-content-between align-items-center">
-                <div>
+              <CRow>
+                <CCol sm={6}>
                   <h4 className="mb-0">Журнал активности</h4>
-                  <small className="text-muted">Последние действия в системе</small>
-                </div>
-                <div>
-                  <CButtonGroup>
-                    <CButton
-                      color="outline-secondary"
-                      onClick={() => refetch()}
-                      disabled={isLoading}
-                    >
-                      <CIcon icon={cilReload} className={isLoading ? 'spin' : ''} />
-                    </CButton>
-                    <CButton color="outline-info">
-                      <CIcon icon={cilChart} /> Статистика
-                    </CButton>
-                  </CButtonGroup>
-                </div>
-              </div>
+                  <small className="text-muted">
+                    Последние действия в системе
+                  </small>
+                </CCol>
+                <CCol sm={6} className="d-flex justify-content-end">
+                  <CButton
+                    color="secondary"
+                    variant="outline"
+                    onClick={() => refetch()}
+                    disabled={isLoading}
+                  >
+                    <CIcon icon={cilReload} className={isLoading ? 'fa-spin' : ''} />
+                    Обновить
+                  </CButton>
+                </CCol>
+              </CRow>
             </CCardHeader>
+
             <CCardBody>
               {/* Фильтры */}
               <CRow className="mb-3">
@@ -180,110 +247,134 @@ const Activity = () => {
                       <CIcon icon={cilSearch} />
                     </CInputGroupText>
                     <CFormInput
-                      placeholder="Поиск в описании..."
+                      placeholder="Поиск по описанию..."
                       value={filters.search || ''}
                       onChange={(e) => handleFilterChange('search', e.target.value)}
                     />
                   </CInputGroup>
                 </CCol>
-                <CCol md={2}>
+                <CCol md={3}>
                   <CFormSelect
                     value={filters.entityType || ''}
                     onChange={(e) => handleFilterChange('entityType', e.target.value)}
                   >
                     <option value="">Все сущности</option>
-                    <option value="account">account</option>
-                    <option value="profile">profile</option>
-                    <option value="proxy">proxy</option>
-                    <option value="phone">phone</option>
-                    <option value="project">project</option>
-                    <option value="registration">registration</option>
+                    <option value="account">Аккаунты</option>
+                    <option value="profile">Профили</option>
+                    <option value="proxy">Прокси</option>
+                    <option value="phone">Устройства</option>
+                    <option value="project">Проекты</option>
                   </CFormSelect>
                 </CCol>
-                <CCol md={2}>
+                <CCol md={3}>
                   <CFormSelect
                     value={filters.actionType || ''}
                     onChange={(e) => handleFilterChange('actionType', e.target.value)}
                   >
                     <option value="">Все действия</option>
-                    <option value="create">create</option>
-                    <option value="update">update</option>
-                    <option value="delete">delete</option>
-                    <option value="import">import</option>
-                    <option value="export">export</option>
-                    <option value="status_change">status_change</option>
+                    <option value="create">Создание</option>
+                    <option value="update">Обновление</option>
+                    <option value="delete">Удаление</option>
+                    <option value="status_change">Смена статуса</option>
+                    <option value="import">Импорт</option>
+                    <option value="export">Экспорт</option>
                   </CFormSelect>
                 </CCol>
                 <CCol md={2}>
                   <CFormSelect
                     value={filters.limit || 50}
-                    onChange={(e) => handleFilterChange('limit', e.target.value)}
+                    onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
                   >
-                    <option value={25}>25 записей</option>
-                    <option value={50}>50 записей</option>
-                    <option value={100}>100 записей</option>
-                    <option value={200}>200 записей</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
                   </CFormSelect>
                 </CCol>
               </CRow>
 
-              {/* Таблица */}
-              <CTable hover responsive>
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell>Время</CTableHeaderCell>
-                    <CTableHeaderCell>Действие</CTableHeaderCell>
-                    <CTableHeaderCell>Сущность</CTableHeaderCell>
-                    <CTableHeaderCell>Описание</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {isLoading ? (
+              {/* Таблица активности */}
+              {isLoading ? (
+                <div className="text-center">
+                  <CSpinner color="primary" />
+                  <div className="mt-2">Загрузка...</div>
+                </div>
+              ) : (
+                <CTable align="middle" className="mb-0 border" hover responsive>
+                  <CTableHead color="light">
                     <CTableRow>
-                      <CTableDataCell colSpan="4" className="text-center">
-                        <CSpinner /> Загрузка...
-                      </CTableDataCell>
+                      <CTableHeaderCell style={{ width: '140px' }}>Время</CTableHeaderCell>
+                      <CTableHeaderCell style={{ width: '120px' }}>Сущность</CTableHeaderCell>
+                      <CTableHeaderCell style={{ width: '120px' }}>Действие</CTableHeaderCell>
+                      <CTableHeaderCell>Описание</CTableHeaderCell>
+                      <CTableHeaderCell style={{ width: '80px' }}>ID</CTableHeaderCell>
                     </CTableRow>
-                  ) : !activities || activities.length === 0 ? (
-                    <CTableRow>
-                      <CTableDataCell colSpan="4" className="text-center">
-                        Данные не найдены
-                      </CTableDataCell>
-                    </CTableRow>
-                  ) : (
-                    activities.map((activity) => (
-                      <CTableRow key={activity.id}>
-                        <CTableDataCell>
-                          <div>{formatTimestamp(activity.timestamp)}</div>
-                          <div className="small text-muted">
-                            {new Date(activity.timestamp).toLocaleTimeString('ru-RU')}
-                          </div>
-                        </CTableDataCell>
-                        <CTableDataCell>{getActionBadge(activity.actionType)}</CTableDataCell>
-                        <CTableDataCell>
-                          <div>{getEntityBadge(activity.entityType)}</div>
-                          {activity.entityId !== 0 && (
-                            <div className="small text-muted">ID: {activity.entityId}</div>
-                          )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          <div>{activity.description}</div>
-                          {activity.metadata && Object.keys(activity.metadata).length > 0 && (
-                            <details className="mt-1">
-                              <summary className="small text-muted" style={{ cursor: 'pointer' }}>
-                                Подробности
-                              </summary>
-                              <pre className="small mt-1 p-2 bg-light rounded" style={{ fontSize: '0.75rem' }}>
-                                {JSON.stringify(activity.metadata, null, 2)}
-                              </pre>
-                            </details>
-                          )}
+                  </CTableHead>
+                  <CTableBody>
+                    {!activities || activities.length === 0 ? (
+                      <CTableRow>
+                        <CTableDataCell colSpan={5} className="text-center">
+                          Нет активности для отображения
                         </CTableDataCell>
                       </CTableRow>
-                    ))
-                  )}
-                </CTableBody>
-              </CTable>
+                    ) : (
+                      activities.map((activity, index) => (
+                        <CTableRow key={`${activity.id}-${index}`}>
+                          <CTableDataCell>
+                            <CTooltip
+                              content={new Date(activity.timestamp).toLocaleString('ru-RU')}
+                            >
+                              <small className="text-muted">
+                                {formatTimestamp(activity.timestamp)}
+                              </small>
+                            </CTooltip>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            {getEntityBadge(activity.entityType)}
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            {getActionBadge(activity.actionType)}
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <div>
+                              {activity.description}
+                              {activity.metadata && (
+                                <div className="text-muted small mt-1">
+                                  {Object.entries(activity.metadata).slice(0, 2).map(([key, value]) => (
+                                    <span key={key} className="me-2">
+                                      <strong>{key}:</strong> {JSON.stringify(value).slice(0, 50)}
+                                      {JSON.stringify(value).length > 50 && '...'}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            {activity.entityId && (
+                              <CBadge color="secondary" shape="rounded-pill">
+                                #{activity.entityId}
+                              </CBadge>
+                            )}
+                          </CTableDataCell>
+                        </CTableRow>
+                      ))
+                    )}
+                  </CTableBody>
+                </CTable>
+              )}
+
+              {/* Информация о загрузке */}
+              {activities && activities.length > 0 && (
+                <div className="d-flex justify-content-between align-items-center mt-3">
+                  <small className="text-muted">
+                    Показано {activities.length} записей
+                  </small>
+                  <small className="text-muted">
+                    Обновление каждые 30 секунд
+                  </small>
+                </div>
+              )}
             </CCardBody>
           </CCard>
         </CCol>

@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   # MySQL Database
   mysql:
@@ -16,6 +18,10 @@ services:
     networks:
       - adminpanel_network
     command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
 
   # Redis
   redis:
@@ -29,6 +35,11 @@ services:
     networks:
       - adminpanel_network
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # Backend API
   backend:
@@ -47,27 +58,43 @@ services:
       DB_PASSWORD: password
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Дополнительные переменные для вашего приложения
+      JWT_SECRET: your-jwt-secret-key
+      RATE_LIMIT_WINDOW_MS: 900000
+      RATE_LIMIT_MAX_REQUESTS: 100
     ports:
       - "3000:3000"
     volumes:
       - ./backend:/app
       - /app/node_modules
+      - ./backend/logs:/app/logs  # Для логов Winston
     depends_on:
-      - mysql
-      - redis
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - adminpanel_network
     command: npm run dev
 
-  # Frontend
+  # Frontend (Create React App)
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
     container_name: adminpanel_frontend_dev
     restart: unless-stopped
+    environment:
+      # Create React App использует порт 3000 по умолчанию
+      PORT: 3000
+      # Переменные для проксирования к бэкенду
+      REACT_APP_API_URL: http://localhost:3000/api
+      # Отключаем автоматическое открытие браузера
+      BROWSER: none
+      # Включаем горячую перезагрузку
+      FAST_REFRESH: true
     ports:
-      - "5173:5173"
+      - "3001:3000"  # Изменил на 3001, так как 3000 занят бэкендом
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -75,6 +102,8 @@ services:
       - adminpanel_network
     depends_on:
       - backend
+    stdin_open: true
+    tty: true
 
 volumes:
   mysql_data_dev:

@@ -6,13 +6,14 @@ import {
   CCol,
   CRow,
   CButton,
-  CInputGroup,
   CFormInput,
+  CFormLabel,
+  CInputGroup,
   CInputGroupText,
-  CAlert,
   CSpinner,
+  CAlert,
   CProgress,
-  CButtonGroup,
+  CWidgetStatsA,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -21,73 +22,87 @@ import {
   cilCopy,
   cilCheckAlt,
   cilX,
+  cilKeyboard,
+  cilClock,
 } from '@coreui/icons'
 import { useGenerateOTP, useValidateOTP, useGenerateSecret } from '../../hooks/useOTP'
 
 const OTPGenerator = () => {
   const [secret, setSecret] = useState('')
-  const [token, setToken] = useState('')
-  const [validationToken, setValidationToken] = useState('')
+  const [validateToken, setValidateToken] = useState('')
   const [currentOTP, setCurrentOTP] = useState(null)
-  const [timeLeft, setTimeLeft] = useState(0)
+  const [timeLeft, setTimeLeft] = useState(30)
   const [copiedSecret, setCopiedSecret] = useState(false)
   const [copiedOTP, setCopiedOTP] = useState(false)
 
+  // Хуки для API
   const generateOTPMutation = useGenerateOTP()
   const validateOTPMutation = useValidateOTP()
-  const { data: generatedSecret, refetch: generateNewSecret } = useGenerateSecret()
+  const generateSecretMutation = useGenerateSecret()
 
-  // Обновляем прогресс бар каждую секунду
+  // Таймер для обновления OTP и обратного отсчета
   useEffect(() => {
-    if (currentOTP && currentOTP.remainingTime > 0) {
-      const timer = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            // Автоматически обновляем код когда время истекло
-            if (secret) {
-              generateOTPMutation.mutate(secret)
-            }
-            return 30
-          }
-          return prev - 1
-        })
+    let interval
+    if (currentOTP) {
+      interval = setInterval(() => {
+        const now = Math.floor(Date.now() / 1000)
+        const elapsed = now % 30
+        const remaining = 30 - elapsed
+        setTimeLeft(remaining)
+
+        // Автоматически генерируем новый OTP каждые 30 секунд
+        if (remaining === 30 && secret) {
+          handleGenerateOTP()
+        }
       }, 1000)
-
-      return () => clearInterval(timer)
     }
-  }, [currentOTP, secret, generateOTPMutation])
+    return () => clearInterval(interval)
+  }, [currentOTP, secret])
 
-  const handleGenerateOTP = () => {
-    if (!secret.trim()) return
-    
-    generateOTPMutation.mutate(secret, {
-      onSuccess: (data) => {
-        setCurrentOTP(data)
-        setTimeLeft(data.remainingTime)
-      }
-    })
-  }
-
-  const handleValidateOTP = () => {
-    if (!secret.trim() || !validationToken.trim()) return
-    
-    validateOTPMutation.mutate({
-      secret: secret,
-      token: validationToken,
-      window: 1
-    })
-  }
-
-  const handleGenerateSecret = () => {
-    generateNewSecret()
-  }
-
-  const handleUseGeneratedSecret = () => {
-    if (generatedSecret?.secret) {
-      setSecret(generatedSecret.secret)
+  // Генерация нового секретного ключа
+  const handleGenerateSecret = async () => {
+    try {
+      const result = await generateSecretMutation.mutateAsync(32)
+      setSecret(result.secret)
+      setCurrentOTP(null)
+    } catch (error) {
+      console.error('Error generating secret:', error)
     }
   }
 
+  // Генерация OTP кода
+  const handleGenerateOTP = async () => {
+    if (!secret) return
+    
+    try {
+      const result = await generateOTPMutation.mutateAsync(secret)
+      setCurrentOTP(result)
+      
+      // Вычисляем оставшееся время
+      const now = Math.floor(Date.now() / 1000)
+      const elapsed = now % 30
+      setTimeLeft(30 - elapsed)
+    } catch (error) {
+      console.error('Error generating OTP:', error)
+    }
+  }
+
+  // Валидация OTP кода
+  const handleValidateOTP = async () => {
+    if (!secret || !validateToken) return
+    
+    try {
+      await validateOTPMutation.mutateAsync({
+        secret,
+        token: validateToken,
+        window: 1
+      })
+    } catch (error) {
+      console.error('Error validating OTP:', error)
+    }
+  }
+
+  // Копирование в буфер обмена
   const copyToClipboard = async (text, type) => {
     try {
       await navigator.clipboard.writeText(text)
@@ -98,37 +113,86 @@ const OTPGenerator = () => {
         setCopiedOTP(true)
         setTimeout(() => setCopiedOTP(false), 2000)
       }
-    } catch (err) {
-      console.error('Не удалось скопировать: ', err)
+    } catch (error) {
+      console.error('Failed to copy:', error)
     }
   }
 
-  const progressPercentage = timeLeft > 0 ? (timeLeft / 30) * 100 : 0
+  // Прогресс бар для оставшегося времени
+  const progressPercentage = (timeLeft / 30) * 100
 
   return (
     <>
+      {/* Статистические карточки */}
+      <CRow className="mb-4">
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="primary"
+            value={currentOTP ? currentOTP.otp : '------'}
+            title="Текущий OTP"
+            action={
+              <CIcon icon={cilShieldAlt} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="info"
+            value={`${timeLeft}s`}
+            title="Осталось времени"
+            action={
+              <CIcon icon={cilClock} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="success"
+            value={validateOTPMutation.data?.valid ? 'ВЕРНЫЙ' : 'НЕ ПРОВЕРЕН'}
+            title="Статус валидации"
+            action={
+              <CIcon icon={validateOTPMutation.data?.valid ? cilCheckAlt : cilKeyboard} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="warning"
+            value="TOTP"
+            title="Алгоритм"
+            action={
+              <CIcon icon={cilShieldAlt} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+      </CRow>
+
+      {/* Основной компонент */}
       <CRow>
-        <CCol lg={8} className="mx-auto">
-          <CCard>
+        <CCol xs={12}>
+          <CCard className="mb-4">
             <CCardHeader>
-              <div className="d-flex align-items-center">
-                <CIcon icon={cilShieldAlt} className="me-2" />
-                <h4 className="mb-0">OTP Генератор</h4>
-              </div>
+              <h4 className="mb-0">OTP Generator (TOTP)</h4>
               <small className="text-muted">
-                Генерация и валидация одноразовых паролей (TOTP)
+                Генератор одноразовых паролей с временной привязкой
               </small>
             </CCardHeader>
+
             <CCardBody>
               {/* Генерация секретного ключа */}
               <CRow className="mb-4">
                 <CCol>
                   <h5>1. Секретный ключ</h5>
-                  <CInputGroup className="mb-2">
+                  <CInputGroup className="mb-3">
                     <CFormInput
-                      placeholder="Введите секретный ключ Base32 или сгенерируйте новый"
+                      placeholder="Введите секретный ключ в формате Base32 или сгенерируйте новый"
                       value={secret}
                       onChange={(e) => setSecret(e.target.value)}
+                      type="password"
                     />
                     <CButton 
                       color="outline-secondary"
@@ -137,25 +201,27 @@ const OTPGenerator = () => {
                     >
                       <CIcon icon={copiedSecret ? cilCheckAlt : cilCopy} />
                     </CButton>
-                  </CInputGroup>
-                  <div className="d-flex gap-2">
                     <CButton 
-                      color="outline-primary" 
-                      size="sm"
+                      color="primary"
                       onClick={handleGenerateSecret}
+                      disabled={generateSecretMutation.isLoading}
                     >
-                      Сгенерировать новый ключ
+                      {generateSecretMutation.isLoading ? (
+                        <CSpinner size="sm" />
+                      ) : (
+                        <>
+                          <CIcon icon={cilReload} className="me-1" />
+                          Сгенерировать
+                        </>
+                      )}
                     </CButton>
-                    {generatedSecret?.secret && (
-                      <CButton 
-                        color="outline-success" 
-                        size="sm"
-                        onClick={handleUseGeneratedSecret}
-                      >
-                        Использовать: {generatedSecret.secret.substring(0, 8)}...
-                      </CButton>
-                    )}
-                  </div>
+                  </CInputGroup>
+
+                  {generateSecretMutation.isError && (
+                    <CAlert color="danger" className="mt-2">
+                      {generateSecretMutation.error?.response?.data?.error || 'Ошибка генерации секретного ключа'}
+                    </CAlert>
+                  )}
                 </CCol>
               </CRow>
 
@@ -184,7 +250,7 @@ const OTPGenerator = () => {
                   {currentOTP && (
                     <CCard className="bg-light">
                       <CCardBody className="text-center">
-                        <h2 className="text-primary mb-2">{currentOTP.otp}</h2>
+                        <h2 className="text-primary mb-2 font-monospace">{currentOTP.otp}</h2>
                         <div className="d-flex justify-content-center gap-2 mb-3">
                           <CButton 
                             color="outline-primary" 
@@ -218,25 +284,32 @@ const OTPGenerator = () => {
               </CRow>
 
               {/* Валидация OTP */}
-              <CRow>
+              <CRow className="mb-4">
                 <CCol>
-                  <h5>3. Проверка OTP кода</h5>
-                  <CInputGroup className="mb-2">
+                  <h5>3. Валидация OTP кода</h5>
+                  <CInputGroup className="mb-3">
+                    <CInputGroupText>
+                      <CIcon icon={cilKeyboard} />
+                    </CInputGroupText>
                     <CFormInput
-                      placeholder="Введите 6-значный код для проверки"
-                      value={validationToken}
-                      onChange={(e) => setValidationToken(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                      placeholder="Введите 6-значный OTP код для проверки"
+                      value={validateToken}
+                      onChange={(e) => setValidateToken(e.target.value)}
                       maxLength={6}
+                      pattern="[0-9]*"
                     />
                     <CButton 
                       color="success"
                       onClick={handleValidateOTP}
-                      disabled={!secret || !validationToken || validationToken.length !== 6 || validateOTPMutation.isLoading}
+                      disabled={!secret || !validateToken || validateOTPMutation.isLoading}
                     >
                       {validateOTPMutation.isLoading ? (
                         <CSpinner size="sm" />
                       ) : (
-                        'Проверить'
+                        <>
+                          <CIcon icon={cilCheckAlt} className="me-1" />
+                          Проверить
+                        </>
                       )}
                     </CButton>
                   </CInputGroup>
@@ -271,13 +344,61 @@ const OTPGenerator = () => {
                 <CCol>
                   <CCard className="bg-info bg-opacity-10 border-info">
                     <CCardBody>
-                      <h6 className="text-info">Справка:</h6>
+                      <h6 className="text-info">
+                        <CIcon icon={cilShieldAlt} className="me-2" />
+                        Справка по использованию:
+                      </h6>
                       <ul className="mb-0 small">
                         <li>OTP коды обновляются каждые 30 секунд</li>
-                        <li>Секретный ключ должен быть в формате Base32</li>
+                        <li>Секретный ключ должен быть в формате Base32 (A-Z, 2-7)</li>
                         <li>Для проверки используется окно ±1 интервал (90 секунд)</li>
                         <li>Коды совместимы с Google Authenticator, Authy и другими TOTP приложениями</li>
+                        <li>Длина секретного ключа: рекомендуется 32 символа</li>
+                        <li>Алгоритм: TOTP (Time-based One-Time Password) RFC 6238</li>
                       </ul>
+                    </CCardBody>
+                  </CCard>
+                </CCol>
+              </CRow>
+
+              {/* Дополнительные инструменты */}
+              <CRow className="mt-4">
+                <CCol>
+                  <CCard className="bg-light">
+                    <CCardBody>
+                      <h6>Быстрые действия:</h6>
+                      <div className="d-flex gap-2 flex-wrap">
+                        <CButton 
+                          color="outline-primary" 
+                          size="sm"
+                          onClick={() => {
+                            setSecret('')
+                            setCurrentOTP(null)
+                            setValidateToken('')
+                          }}
+                        >
+                          Очистить все
+                        </CButton>
+                        <CButton 
+                          color="outline-info" 
+                          size="sm"
+                          onClick={() => setSecret('JBSWY3DPEHPK3PXP')}
+                        >
+                          Тестовый ключ
+                        </CButton>
+                        <CButton 
+                          color="outline-success" 
+                          size="sm"
+                          onClick={() => {
+                            if (currentOTP) {
+                              setValidateToken(currentOTP.otp)
+                            }
+                          }}
+                          disabled={!currentOTP}
+                        >
+                          Использовать текущий OTP
+                        </CButton>
+                      </div>
                     </CCardBody>
                   </CCard>
                 </CCol>

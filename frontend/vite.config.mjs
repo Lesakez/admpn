@@ -40,10 +40,11 @@ export default defineConfig(() => {
       extensions: ['.mjs', '.js', '.ts', '.jsx', '.tsx', '.json', '.scss'],
     },
     server: {
+      host: '0.0.0.0',  // Важно для Docker!
       port: 3000,
       proxy: {
         '/api': {
-          target: 'http://localhost:3000',
+          target: 'http://backend:3000',  // Используем имя сервиса из docker-compose
           changeOrigin: true,
           secure: false
         }
