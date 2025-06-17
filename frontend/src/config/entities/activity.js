@@ -19,9 +19,11 @@ export const activityConfig = {
       key: 'entityType',
       label: 'Тип',
       width: 'w-24',
-      render: (value) => (
-        <span className="badge badge-info">{value}</span>
-      )
+      render: (value) => ({
+        type: 'badge',
+        variant: 'info',
+        text: value
+      })
     },
     {
       key: 'actionType',
@@ -29,30 +31,30 @@ export const activityConfig = {
       width: 'w-32',
       render: (value) => {
         const colors = {
-          create: 'badge-success',
-          update: 'badge-warning',
-          delete: 'badge-danger',
-          status_change: 'badge-info',
-          bulk_create: 'badge-success',
-          bulk_update: 'badge-warning',
-          bulk_delete: 'badge-danger'
+          create: 'success',
+          update: 'warning',
+          delete: 'danger',
+          status_change: 'info',
+          bulk_create: 'success',
+          bulk_update: 'warning',
+          bulk_delete: 'danger'
         }
-        return (
-          <span className={`badge ${colors[value] || 'badge-gray'}`}>
-            {value}
-          </span>
-        )
+        return {
+          type: 'badge',
+          variant: colors[value] || 'gray',
+          text: value
+        }
       }
     },
     {
       key: 'description',
       label: 'Описание',
       width: 'w-96',
-      render: (value) => (
-        <div className="text-sm text-gray-900 max-w-md truncate">
-          {value}
-        </div>
-      )
+      render: (value) => ({
+        type: 'text',
+        text: value,
+        className: 'text-sm text-gray-900 max-w-md truncate'
+      })
     },
     {
       key: 'entityId',
@@ -121,33 +123,17 @@ export const activityConfig = {
       label: 'Подробности',
       icon: 'Eye',
       openInModal: true,
-      modalContent: (item) => (
-        <div className="space-y-4">
-          <div>
-            <strong>Время:</strong> {new Date(item.timestamp).toLocaleString('ru-RU')}
-          </div>
-          <div>
-            <strong>Тип сущности:</strong> {item.entityType}
-          </div>
-          <div>
-            <strong>ID сущности:</strong> {item.entityId}
-          </div>
-          <div>
-            <strong>Действие:</strong> {item.actionType}
-          </div>
-          <div>
-            <strong>Описание:</strong> {item.description}
-          </div>
-          {item.metadata && (
-            <div>
-              <strong>Метаданные:</strong>
-              <pre className="mt-2 bg-gray-100 p-2 rounded text-sm">
-                {JSON.stringify(item.metadata, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-      )
+      modalContent: (item) => ({
+        type: 'details',
+        fields: [
+          { label: 'Время', value: new Date(item.timestamp).toLocaleString('ru-RU') },
+          { label: 'Тип сущности', value: item.entityType },
+          { label: 'ID сущности', value: item.entityId },
+          { label: 'Действие', value: item.actionType },
+          { label: 'Описание', value: item.description },
+          { label: 'Метаданные', value: item.metadata ? JSON.stringify(item.metadata, null, 2) : 'Нет', type: 'json' }
+        ]
+      })
     }
   ]
 }
