@@ -17,33 +17,29 @@ import {
   CInputGroupText,
   CBadge,
   CButtonGroup,
-  CFormSelect,
   CPagination,
   CPaginationItem,
   CSpinner,
   CAlert,
+  CProgress,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
   cilSearch,
-  cilUserPlus,
+  cilPlus,
   cilTrash,
   cilPencil,
   cilReload,
-  cilFolderOpen,
+  cilChart,
 } from '@coreui/icons'
-import { useProfiles, useDeleteProfile, useFolders } from '../../hooks/useProfiles'
-import { ProfileFormModal } from '../../components/forms'
+import { useProjects, useDeleteProject } from '../../hooks/useProjects'
 
-const Profiles = () => {
+const Projects = () => {
   const [filters, setFilters] = useState({ page: 1, limit: 20 })
-  const [showModal, setShowModal] = useState(false)
-  const [editingProfile, setEditingProfile] = useState(null)
 
   // Загрузка данных
-  const { data, isLoading, error, refetch } = useProfiles(filters)
-  const { data: folders } = useFolders()
-  const deleteMutation = useDeleteProfile()
+  const { data, isLoading, error, refetch } = useProjects(filters)
+  const deleteMutation = useDeleteProject()
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
@@ -58,38 +54,12 @@ const Profiles = () => {
   }
 
   const handleDelete = async (id) => {
-    if (window.confirm('Удалить профиль?')) {
+    if (window.confirm('Удалить проект? Все связанные ресурсы будут отвязаны.')) {
       await deleteMutation.mutateAsync(id)
     }
   }
 
-  const handleCreate = () => {
-    setEditingProfile(null)
-    setShowModal(true)
-  }
-
-  const handleEdit = (profile) => {
-    setEditingProfile(profile)
-    setShowModal(true)
-  }
-
-  const handleCloseModal = () => {
-    setShowModal(false)
-    setEditingProfile(null)
-  }
-
-  const getStatusBadge = (status) => {
-    const statusColors = {
-      created: 'secondary',
-      active: 'success',
-      inactive: 'secondary',
-      working: 'warning',
-      banned: 'danger',
-    }
-    return <CBadge color={statusColors[status] || 'secondary'}>{status}</CBadge>
-  }
-
-  const profiles = data?.profiles || []
+  const projects = data?.projects || []
   const pagination = data?.pagination || {}
 
   if (error) {
@@ -111,7 +81,7 @@ const Profiles = () => {
             <CCardHeader>
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <h4 className="mb-0">Профили</h4>
+                  <h4 className="mb-0">Проекты</h4>
                   <small className="text-muted">
                     Всего: {pagination.total || 0}
                   </small>
@@ -125,11 +95,8 @@ const Profiles = () => {
                     >
                       <CIcon icon={cilReload} className={isLoading ? 'spin' : ''} />
                     </CButton>
-                    <CButton color="outline-primary">
-                      <CIcon icon={cilFolderOpen} /> Создать папку
-                    </CButton>
-                    <CButton color="primary" onClick={handleCreate}>
-                      <CIcon icon={cilUserPlus} /> Создать профиль
+                    <CButton color="primary">
+                      <CIcon icon={cilPlus} /> Создать проект
                     </CButton>
                   </CButtonGroup>
                 </div>
@@ -138,44 +105,17 @@ const Profiles = () => {
             <CCardBody>
               {/* Фильтры */}
               <CRow className="mb-3">
-                <CCol md={4}>
+                <CCol md={6}>
                   <CInputGroup>
                     <CInputGroupText>
                       <CIcon icon={cilSearch} />
                     </CInputGroupText>
                     <CFormInput
-                      placeholder="Поиск по названию, profile ID или user ID..."
+                      placeholder="Поиск по названию или описанию..."
                       value={filters.search || ''}
                       onChange={(e) => handleFilterChange('search', e.target.value)}
                     />
                   </CInputGroup>
-                </CCol>
-                <CCol md={3}>
-                  <CFormSelect
-                    value={filters.folderName || ''}
-                    onChange={(e) => handleFilterChange('folderName', e.target.value)}
-                  >
-                    <option value="">Все папки</option>
-                    <option value="[Пусто]">Без папки</option>
-                    {folders?.map((folder) => (
-                      <option key={folder.name} value={folder.name}>
-                        {folder.name} ({folder.count})
-                      </option>
-                    ))}
-                  </CFormSelect>
-                </CCol>
-                <CCol md={2}>
-                  <CFormSelect
-                    value={filters.status || ''}
-                    onChange={(e) => handleFilterChange('status', e.target.value)}
-                  >
-                    <option value="">Все статусы</option>
-                    <option value="created">created</option>
-                    <option value="active">active</option>
-                    <option value="inactive">inactive</option>
-                    <option value="working">working</option>
-                    <option value="banned">banned</option>
-                  </CFormSelect>
                 </CCol>
               </CRow>
 
@@ -184,10 +124,9 @@ const Profiles = () => {
                 <CTableHead>
                   <CTableRow>
                     <CTableHeaderCell>Название</CTableHeaderCell>
-                    <CTableHeaderCell>Profile ID</CTableHeaderCell>
-                    <CTableHeaderCell>Папка</CTableHeaderCell>
-                    <CTableHeaderCell>Workspace</CTableHeaderCell>
-                    <CTableHeaderCell>Статус</CTableHeaderCell>
+                    <CTableHeaderCell>Описание</CTableHeaderCell>
+                    <CTableHeaderCell>Прокси</CTableHeaderCell>
+                    <CTableHeaderCell>Телефоны</CTableHeaderCell>
                     <CTableHeaderCell>Создан</CTableHeaderCell>
                     <CTableHeaderCell>Действия</CTableHeaderCell>
                   </CTableRow>
@@ -195,53 +134,102 @@ const Profiles = () => {
                 <CTableBody>
                   {isLoading ? (
                     <CTableRow>
-                      <CTableDataCell colSpan="7" className="text-center">
+                      <CTableDataCell colSpan="6" className="text-center">
                         <CSpinner /> Загрузка...
                       </CTableDataCell>
                     </CTableRow>
-                  ) : profiles.length === 0 ? (
+                  ) : projects.length === 0 ? (
                     <CTableRow>
-                      <CTableDataCell colSpan="7" className="text-center">
+                      <CTableDataCell colSpan="6" className="text-center">
                         Данные не найдены
                       </CTableDataCell>
                     </CTableRow>
                   ) : (
-                    profiles.map((profile) => (
-                      <CTableRow key={profile.id}>
+                    projects.map((project) => (
+                      <CTableRow key={project.id}>
                         <CTableDataCell>
-                          <strong>{profile.name}</strong>
-                          {profile.userId && (
-                            <div className="small text-muted">User ID: {profile.userId}</div>
+                          <div>
+                            <strong>{project.name}</strong>
+                            {project.transliterateName && (
+                              <div className="small text-muted">
+                                ID: {project.transliterateName}
+                              </div>
+                            )}
+                          </div>
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          {project.description ? (
+                            <span>{project.description}</span>
+                          ) : (
+                            <span className="text-muted">Без описания</span>
                           )}
                         </CTableDataCell>
                         <CTableDataCell>
-                          <code className="small">{profile.profileId}</code>
+                          {project.stats?.proxies ? (
+                            <div>
+                              <div className="d-flex justify-content-between align-items-center mb-1">
+                                <small>Всего: {project.stats.proxies.total}</small>
+                                <small>
+                                  <span className="text-success">{project.stats.proxies.free}</span>
+                                  {' / '}
+                                  <span className="text-warning">{project.stats.proxies.busy}</span>
+                                </small>
+                              </div>
+                              {project.stats.proxies.total > 0 && (
+                                <CProgress 
+                                  height={4}
+                                  value={(project.stats.proxies.free / project.stats.proxies.total) * 100}
+                                  color="success"
+                                />
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted">0</span>
+                          )}
                         </CTableDataCell>
                         <CTableDataCell>
-                          {profile.folderName || <span className="text-muted">Без папки</span>}
+                          {project.stats?.phones ? (
+                            <div>
+                              <div className="d-flex justify-content-between align-items-center mb-1">
+                                <small>Всего: {project.stats.phones.total}</small>
+                                <small>
+                                  <span className="text-success">{project.stats.phones.free}</span>
+                                  {' / '}
+                                  <span className="text-warning">{project.stats.phones.busy}</span>
+                                </small>
+                              </div>
+                              {project.stats.phones.total > 0 && (
+                                <CProgress 
+                                  height={4}
+                                  value={(project.stats.phones.free / project.stats.phones.total) * 100}
+                                  color="success"
+                                />
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted">0</span>
+                          )}
                         </CTableDataCell>
                         <CTableDataCell>
-                          <div>{profile.workspaceName}</div>
-                          <div className="small text-muted">ID: {profile.workspaceId}</div>
-                        </CTableDataCell>
-                        <CTableDataCell>{getStatusBadge(profile.status)}</CTableDataCell>
-                        <CTableDataCell>
-                          {profile.createdAt ? new Date(profile.createdAt).toLocaleDateString('ru-RU') : '-'}
+                          {project.createdAt ? 
+                            new Date(project.createdAt).toLocaleDateString('ru-RU') : 
+                            '-'
+                          }
                         </CTableDataCell>
                         <CTableDataCell>
                           <CButtonGroup size="sm">
-                            <CButton 
-                              color="outline-primary" 
-                              variant="ghost"
-                              onClick={() => handleEdit(profile)}
-                            >
+                            <CButton color="outline-info" variant="ghost" title="Статистика">
+                              <CIcon icon={cilChart} />
+                            </CButton>
+                            <CButton color="outline-primary" variant="ghost" title="Редактировать">
                               <CIcon icon={cilPencil} />
                             </CButton>
                             <CButton 
                               color="outline-danger" 
                               variant="ghost"
-                              onClick={() => handleDelete(profile.id)}
+                              onClick={() => handleDelete(project.id)}
                               disabled={deleteMutation.isLoading}
+                              title="Удалить"
                             >
                               <CIcon icon={cilTrash} />
                             </CButton>
@@ -283,16 +271,8 @@ const Profiles = () => {
           </CCard>
         </CCol>
       </CRow>
-
-      {/* Модальное окно формы */}
-      <ProfileFormModal
-        visible={showModal}
-        onClose={handleCloseModal}
-        profile={editingProfile}
-        isEdit={!!editingProfile}
-      />
     </>
   )
 }
 
-export default Profiles
+export default Projects

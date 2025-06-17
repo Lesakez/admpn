@@ -34,10 +34,13 @@ import {
   cilCloudUpload,
 } from '@coreui/icons'
 import { useAccounts, useAccountsStats, useDeleteAccount } from '../../hooks/useAccounts'
+import { AccountFormModal } from '../../components/forms'
 
 const Accounts = () => {
   const [filters, setFilters] = useState({ page: 1, limit: 20 })
   const [selectedIds, setSelectedIds] = useState([])
+  const [showModal, setShowModal] = useState(false)
+  const [editingAccount, setEditingAccount] = useState(null)
 
   // Загрузка данных
   const { data, isLoading, error, refetch } = useAccounts(filters)
@@ -48,7 +51,7 @@ const Accounts = () => {
     setFilters(prev => ({
       ...prev,
       [key]: value,
-      page: 1 // Сбрасываем на первую страницу при изменении фильтров
+      page: 1
     }))
   }
 
@@ -60,6 +63,21 @@ const Accounts = () => {
     if (window.confirm('Удалить аккаунт?')) {
       await deleteMutation.mutateAsync(id)
     }
+  }
+
+  const handleCreate = () => {
+    setEditingAccount(null)
+    setShowModal(true)
+  }
+
+  const handleEdit = (account) => {
+    setEditingAccount(account)
+    setShowModal(true)
+  }
+
+  const handleCloseModal = () => {
+    setShowModal(false)
+    setEditingAccount(null)
   }
 
   const getStatusBadge = (status) => {
@@ -123,7 +141,7 @@ const Accounts = () => {
                     <CButton color="outline-success">
                       <CIcon icon={cilCloudDownload} /> Экспорт
                     </CButton>
-                    <CButton color="primary">
+                    <CButton color="primary" onClick={handleCreate}>
                       <CIcon icon={cilUserPlus} /> Создать аккаунт
                     </CButton>
                   </CButtonGroup>
@@ -214,7 +232,11 @@ const Accounts = () => {
                         </CTableDataCell>
                         <CTableDataCell>
                           <CButtonGroup size="sm">
-                            <CButton color="outline-primary" variant="ghost">
+                            <CButton 
+                              color="outline-primary" 
+                              variant="ghost"
+                              onClick={() => handleEdit(account)}
+                            >
                               <CIcon icon={cilPencil} />
                             </CButton>
                             <CButton 
@@ -263,6 +285,14 @@ const Accounts = () => {
           </CCard>
         </CCol>
       </CRow>
+
+      {/* Модальное окно формы */}
+      <AccountFormModal
+        visible={showModal}
+        onClose={handleCloseModal}
+        account={editingAccount}
+        isEdit={!!editingAccount}
+      />
     </>
   )
 }

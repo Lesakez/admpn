@@ -5,7 +5,10 @@ import {
   cilPeople,
   cilUser,
   cilGlobeAlt,
-  cilColorPalette,
+  cilDevices,
+  cilFolder,
+  cilChart,
+  cilShieldAlt,
 } from '@coreui/icons'
 import { CNavItem, CNavTitle } from '@coreui/react'
 
@@ -43,14 +46,36 @@ const _nav = [
     icon: <CIcon icon={cilGlobeAlt} customClassName="nav-icon" />,
   },
   {
-    component: CNavTitle,
-    name: 'Примеры CoreUI',
+    component: CNavItem,
+    name: 'Телефоны',
+    to: '/phones',
+    icon: <CIcon icon={cilDevices} customClassName="nav-icon" />,
   },
   {
     component: CNavItem,
-    name: 'Цвета',
-    to: '/theme/colors',
-    icon: <CIcon icon={cilColorPalette} customClassName="nav-icon" />,
+    name: 'Проекты',
+    to: '/projects',
+    icon: <CIcon icon={cilFolder} customClassName="nav-icon" />,
+  },
+  {
+    component: CNavTitle,
+    name: 'Мониторинг',
+  },
+  {
+    component: CNavItem,
+    name: 'Активность',
+    to: '/activity',
+    icon: <CIcon icon={cilChart} customClassName="nav-icon" />,
+  },
+  {
+    component: CNavTitle,
+    name: 'Инструменты',
+  },
+  {
+    component: CNavItem,
+    name: 'OTP Генератор',
+    to: '/otp',
+    icon: <CIcon icon={cilShieldAlt} customClassName="nav-icon" />,
   },
 ]
 

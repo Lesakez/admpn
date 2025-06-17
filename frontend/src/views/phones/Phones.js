@@ -30,32 +30,31 @@ import {
   cilTrash,
   cilPencil,
   cilReload,
-  cilCloudDownload,
-  cilCloudUpload,
+  cilPowerStandby,
   cilSync,
   cilToggleOn,
   cilToggleOff,
 } from '@coreui/icons'
 import { 
-  useProxies, 
-  useProxiesStats, 
-  useDeleteProxy, 
-  useToggleProxyStatus,
-  useChangeProxyIP 
-} from '../../hooks/useProxies'
-import { ProxyFormModal } from '../../components/forms'
+  usePhones, 
+  usePhonesStats, 
+  useDeletePhone, 
+  useTogglePhoneStatus,
+  useRebootPhone 
+} from '../../hooks/usePhones'
+import { PhoneFormModal } from '../../components/forms'
 
-const Proxies = () => {
+const Phones = () => {
   const [filters, setFilters] = useState({ page: 1, limit: 20 })
   const [showModal, setShowModal] = useState(false)
-  const [editingProxy, setEditingProxy] = useState(null)
+  const [editingPhone, setEditingPhone] = useState(null)
 
   // Загрузка данных
-  const { data, isLoading, error, refetch } = useProxies(filters)
-  const { data: stats } = useProxiesStats()
-  const deleteMutation = useDeleteProxy()
-  const toggleStatusMutation = useToggleProxyStatus()
-  const changeIPMutation = useChangeProxyIP()
+  const { data, isLoading, error, refetch } = usePhones(filters)
+  const { data: stats } = usePhonesStats()
+  const deleteMutation = useDeletePhone()
+  const toggleStatusMutation = useTogglePhoneStatus()
+  const rebootMutation = useRebootPhone()
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
@@ -70,7 +69,7 @@ const Proxies = () => {
   }
 
   const handleDelete = async (id) => {
-    if (window.confirm('Удалить прокси?')) {
+    if (window.confirm('Удалить устройство?')) {
       await deleteMutation.mutateAsync(id)
     }
   }
@@ -79,25 +78,25 @@ const Proxies = () => {
     await toggleStatusMutation.mutateAsync(id)
   }
 
-  const handleChangeIP = async (id) => {
-    if (window.confirm('Сменить IP для этого прокси?')) {
-      await changeIPMutation.mutateAsync(id)
+  const handleReboot = async (id) => {
+    if (window.confirm('Перезагрузить устройство? Это может занять несколько минут.')) {
+      await rebootMutation.mutateAsync(id)
     }
   }
 
   const handleCreate = () => {
-    setEditingProxy(null)
+    setEditingPhone(null)
     setShowModal(true)
   }
 
-  const handleEdit = (proxy) => {
-    setEditingProxy(proxy)
+  const handleEdit = (phone) => {
+    setEditingPhone(phone)
     setShowModal(true)
   }
 
   const handleCloseModal = () => {
     setShowModal(false)
-    setEditingProxy(null)
+    setEditingPhone(null)
   }
 
   const getStatusBadge = (status) => {
@@ -105,14 +104,15 @@ const Proxies = () => {
       free: 'success',
       busy: 'warning',
       inactive: 'secondary',
-      banned: 'danger',
-      checking: 'info',
       maintenance: 'dark',
+      offline: 'danger',
+      rebooting: 'info',
+      error: 'danger',
     }
     return <CBadge color={statusColors[status] || 'secondary'}>{status}</CBadge>
   }
 
-  const proxies = data?.proxies || []
+  const phones = data?.phones || []
   const pagination = data?.pagination || {}
 
   if (error) {
@@ -134,7 +134,7 @@ const Proxies = () => {
             <CCardHeader>
               <div className="d-flex justify-content-between align-items-center">
                 <div>
-                  <h4 className="mb-0">Прокси</h4>
+                  <h4 className="mb-0">Устройства</h4>
                   {stats && (
                     <small className="text-muted">
                       Всего: {stats.total || 0}
@@ -155,14 +155,8 @@ const Proxies = () => {
                     >
                       <CIcon icon={cilReload} className={isLoading ? 'spin' : ''} />
                     </CButton>
-                    <CButton color="outline-primary">
-                      <CIcon icon={cilCloudUpload} /> Импорт
-                    </CButton>
-                    <CButton color="outline-success">
-                      <CIcon icon={cilCloudDownload} /> Экспорт
-                    </CButton>
                     <CButton color="primary" onClick={handleCreate}>
-                      <CIcon icon={cilPlus} /> Добавить прокси
+                      <CIcon icon={cilPlus} /> Добавить устройство
                     </CButton>
                   </CButtonGroup>
                 </div>
@@ -177,7 +171,7 @@ const Proxies = () => {
                       <CIcon icon={cilSearch} />
                     </CInputGroupText>
                     <CFormInput
-                      placeholder="Поиск по IP:Port, логину или стране..."
+                      placeholder="Поиск по модели, устройству или IP..."
                       value={filters.search || ''}
                       onChange={(e) => handleFilterChange('search', e.target.value)}
                     />
@@ -192,22 +186,19 @@ const Proxies = () => {
                     <option value="free">free</option>
                     <option value="busy">busy</option>
                     <option value="inactive">inactive</option>
-                    <option value="banned">banned</option>
-                    <option value="checking">checking</option>
                     <option value="maintenance">maintenance</option>
+                    <option value="offline">offline</option>
+                    <option value="rebooting">rebooting</option>
+                    <option value="error">error</option>
                   </CFormSelect>
                 </CCol>
                 <CCol md={2}>
                   <CFormSelect
-                    value={filters.country || ''}
-                    onChange={(e) => handleFilterChange('country', e.target.value)}
+                    value={filters.projectId || ''}
+                    onChange={(e) => handleFilterChange('projectId', e.target.value)}
                   >
-                    <option value="">Все страны</option>
-                    {stats?.byCountry?.map(({ country }) => (
-                      <option key={country} value={country}>
-                        {country}
-                      </option>
-                    ))}
+                    <option value="">Все проекты</option>
+                    {/* Здесь можно добавить список проектов */}
                   </CFormSelect>
                 </CCol>
               </CRow>
@@ -216,12 +207,12 @@ const Proxies = () => {
               <CTable hover responsive>
                 <CTableHead>
                   <CTableRow>
-                    <CTableHeaderCell>IP:Port</CTableHeaderCell>
-                    <CTableHeaderCell>Тип</CTableHeaderCell>
-                    <CTableHeaderCell>Авторизация</CTableHeaderCell>
-                    <CTableHeaderCell>Страна</CTableHeaderCell>
+                    <CTableHeaderCell>Модель/Устройство</CTableHeaderCell>
+                    <CTableHeaderCell>Android</CTableHeaderCell>
+                    <CTableHeaderCell>IP/MAC</CTableHeaderCell>
                     <CTableHeaderCell>Статус</CTableHeaderCell>
                     <CTableHeaderCell>Проект</CTableHeaderCell>
+                    <CTableHeaderCell>Последняя перезагрузка</CTableHeaderCell>
                     <CTableHeaderCell>Действия</CTableHeaderCell>
                   </CTableRow>
                 </CTableHead>
@@ -232,81 +223,92 @@ const Proxies = () => {
                         <CSpinner /> Загрузка...
                       </CTableDataCell>
                     </CTableRow>
-                  ) : proxies.length === 0 ? (
+                  ) : phones.length === 0 ? (
                     <CTableRow>
                       <CTableDataCell colSpan="7" className="text-center">
                         Данные не найдены
                       </CTableDataCell>
                     </CTableRow>
                   ) : (
-                    proxies.map((proxy) => (
-                      <CTableRow key={proxy.id}>
+                    phones.map((phone) => (
+                      <CTableRow key={phone.id}>
                         <CTableDataCell>
-                          <code>{proxy.ipPort}</code>
-                          {proxy.dateLastChangeIp && (
-                            <div className="small text-muted">
-                              Последняя смена IP: {new Date(proxy.dateLastChangeIp).toLocaleString('ru-RU')}
-                            </div>
-                          )}
+                          <div>
+                            <strong>{phone.model || phone.device || 'Неизвестно'}</strong>
+                            {phone.device && phone.model && phone.device !== phone.model && (
+                              <div className="small text-muted">{phone.device}</div>
+                            )}
+                          </div>
                         </CTableDataCell>
                         <CTableDataCell>
-                          {proxy.type ? (
-                            <CBadge color="info">{proxy.type.toUpperCase()}</CBadge>
+                          {phone.androidVersion ? (
+                            <CBadge color="info">Android {phone.androidVersion}</CBadge>
                           ) : (
                             <span className="text-muted">-</span>
                           )}
                         </CTableDataCell>
                         <CTableDataCell>
-                          {proxy.login ? (
+                          <div>
+                            {phone.ipAddress && (
+                              <div><strong>IP:</strong> {phone.ipAddress}</div>
+                            )}
+                            {phone.macAddress && (
+                              <div className="small text-muted">MAC: {phone.macAddress}</div>
+                            )}
+                            {!phone.ipAddress && !phone.macAddress && (
+                              <span className="text-muted">-</span>
+                            )}
+                          </div>
+                        </CTableDataCell>
+                        <CTableDataCell>{getStatusBadge(phone.status)}</CTableDataCell>
+                        <CTableDataCell>
+                          {phone.project ? phone.project.name : <span className="text-muted">Без проекта</span>}
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          {phone.dateLastReboot ? (
                             <div>
-                              <div><strong>{proxy.login}</strong></div>
-                              <div className="small text-muted">{'*'.repeat(proxy.password?.length || 0)}</div>
+                              <div>{new Date(phone.dateLastReboot).toLocaleDateString('ru-RU')}</div>
+                              <div className="small text-muted">
+                                {new Date(phone.dateLastReboot).toLocaleTimeString('ru-RU')}
+                              </div>
                             </div>
                           ) : (
-                            <span className="text-muted">Без авторизации</span>
+                            <span className="text-muted">-</span>
                           )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {proxy.country || <span className="text-muted">-</span>}
-                        </CTableDataCell>
-                        <CTableDataCell>{getStatusBadge(proxy.status)}</CTableDataCell>
-                        <CTableDataCell>
-                          {proxy.project ? proxy.project.name : <span className="text-muted">Без проекта</span>}
                         </CTableDataCell>
                         <CTableDataCell>
                           <CButtonGroup size="sm">
                             <CButton 
-                              color={proxy.status === 'free' ? 'outline-warning' : 'outline-success'} 
+                              color={phone.status === 'free' ? 'outline-warning' : 'outline-success'} 
                               variant="ghost"
-                              onClick={() => handleToggleStatus(proxy.id)}
-                              disabled={toggleStatusMutation.isLoading}
-                              title={proxy.status === 'free' ? 'Занять' : 'Освободить'}
+                              onClick={() => handleToggleStatus(phone.id)}
+                              disabled={toggleStatusMutation.isLoading || phone.status === 'rebooting'}
+                              title={phone.status === 'free' ? 'Занять' : 'Освободить'}
                             >
-                              <CIcon icon={proxy.status === 'free' ? cilToggleOff : cilToggleOn} />
+                              <CIcon icon={phone.status === 'free' ? cilToggleOff : cilToggleOn} />
                             </CButton>
-                            {proxy.changeIpUrl && (
-                              <CButton 
-                                color="outline-info" 
-                                variant="ghost"
-                                onClick={() => handleChangeIP(proxy.id)}
-                                disabled={changeIPMutation.isLoading}
-                                title="Сменить IP"
-                              >
-                                <CIcon icon={cilSync} />
-                              </CButton>
-                            )}
+                            <CButton 
+                              color="outline-info" 
+                              variant="ghost"
+                              onClick={() => handleReboot(phone.id)}
+                              disabled={rebootMutation.isLoading || phone.status === 'rebooting'}
+                              title="Перезагрузить"
+                            >
+                              <CIcon icon={phone.status === 'rebooting' ? cilSync : cilPowerStandby} 
+                                     className={phone.status === 'rebooting' ? 'spin' : ''} />
+                            </CButton>
                             <CButton 
                               color="outline-primary" 
                               variant="ghost" 
                               title="Редактировать"
-                              onClick={() => handleEdit(proxy)}
+                              onClick={() => handleEdit(phone)}
                             >
                               <CIcon icon={cilPencil} />
                             </CButton>
                             <CButton 
                               color="outline-danger" 
                               variant="ghost"
-                              onClick={() => handleDelete(proxy.id)}
+                              onClick={() => handleDelete(phone.id)}
                               disabled={deleteMutation.isLoading}
                               title="Удалить"
                             >
@@ -352,14 +354,14 @@ const Proxies = () => {
       </CRow>
 
       {/* Модальное окно формы */}
-      <ProxyFormModal
+      <PhoneFormModal
         visible={showModal}
         onClose={handleCloseModal}
-        proxy={editingProxy}
-        isEdit={!!editingProxy}
+        phone={editingPhone}
+        isEdit={!!editingPhone}
       />
     </>
   )
 }
 
-export default Proxies
+export default Phones

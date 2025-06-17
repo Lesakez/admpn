@@ -1,14 +1,14 @@
 import React from 'react'
 
-// Наши страницы
+
 const Dashboard = React.lazy(() => import('./views/dashboard/Dashboard'))
 const Accounts = React.lazy(() => import('./views/accounts/Accounts'))
 const Profiles = React.lazy(() => import('./views/profiles/Profiles'))
 const Proxies = React.lazy(() => import('./views/proxies/Proxies'))
-
-// Стандартные CoreUI страницы (оставляем некоторые для примера)
-const Colors = React.lazy(() => import('./views/theme/colors/Colors'))
-const Typography = React.lazy(() => import('./views/theme/typography/Typography'))
+const Phones = React.lazy(() => import('./views/phones/Phones'))
+const Projects = React.lazy(() => import('./views/projects/Projects'))
+const Activity = React.lazy(() => import('./views/activity/Activity'))
+const OTPGenerator = React.lazy(() => import('./views/otp/OTPGenerator'))
 
 const routes = [
   { path: '/', exact: true, name: 'Home' },
@@ -18,11 +18,10 @@ const routes = [
   { path: '/accounts', name: 'Аккаунты', element: Accounts },
   { path: '/profiles', name: 'Профили', element: Profiles },
   { path: '/proxies', name: 'Прокси', element: Proxies },
-  
-  // Примеры CoreUI (оставляем для справки)
-  { path: '/theme', name: 'Theme', element: Colors, exact: true },
-  { path: '/theme/colors', name: 'Colors', element: Colors },
-  { path: '/theme/typography', name: 'Typography', element: Typography },
+  { path: '/phones', name: 'Телефоны', element: Phones },
+  { path: '/projects', name: 'Проекты', element: Projects },
+  { path: '/activity', name: 'Активность', element: Activity },
+  { path: '/otp', name: 'OTP Генератор', element: OTPGenerator },
 ]
 
 export default routes
