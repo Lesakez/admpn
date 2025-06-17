@@ -1,0 +1,68 @@
+{
+  "name": "adminpanel-backend",
+  "version": "1.0.0",
+  "description": "Backend API for AdminPanel ZDE",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "migrate": "sequelize-cli db:migrate",
+    "migrate:undo": "sequelize-cli db:migrate:undo",
+    "seed": "sequelize-cli db:seed:all",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/ --ext .js",
+    "lint:fix": "eslint src/ --ext .js --fix"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "compression": "^1.7.4",
+    "morgan": "^1.10.0",
+    "dotenv": "^16.4.5",
+    "sequelize": "^6.37.3",
+    "mysql2": "^3.9.7",
+    "redis": "^4.6.13",
+    "ioredis": "^5.4.1",
+    "joi": "^17.13.1",
+    "winston": "^3.13.0",
+    "multer": "^1.4.4",
+    "express-rate-limit": "^7.2.0",
+    "express-validator": "^7.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0",
+    "eslint": "^9.3.0",
+    "prettier": "^3.2.5",
+    "sequelize-cli": "^6.6.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageLinks": {
+    "express": "https://github.com/expressjs/express",
+    "cors": "https://github.com/expressjs/cors",
+    "helmet": "https://github.com/helmetjs/helmet",
+    "compression": "https://github.com/expressjs/compression",
+    "morgan": "https://github.com/expressjs/morgan",
+    "dotenv": "https://github.com/motdotla/dotenv",
+    "sequelize": "https://github.com/sequelize/sequelize",
+    "mysql2": "https://github.com/sidorares/node-mysql2",
+    "redis": "https://github.com/redis/node-redis",
+    "ioredis": "https://github.com/redis/ioredis",
+    "joi": "https://github.com/hapijs/joi",
+    "winston": "https://github.com/winstonjs/winston",
+    "multer": "https://github.com/expressjs/multer",
+    "express-rate-limit": "https://github.com/express-rate-limit/express-rate-limit",
+    "express-validator": "https://github.com/express-validator/express-validator",
+    "nodemon": "https://github.com/remy/nodemon",
+    "eslint": "https://github.com/eslint/eslint",
+    "prettier": "https://github.com/prettier/prettier",
+    "sequelize-cli": "https://github.com/sequelize/cli",
+    "jest": "https://github.com/jestjs/jest",
+    "supertest": "https://github.com/ladjs/supertest"
+  }
+}
