@@ -1,3 +1,4 @@
+// frontend/src/hooks/useProjects.js
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectsService } from '../services/projectsService'
 import toast from 'react-hot-toast'
@@ -35,6 +36,48 @@ export function useProjectStats(id) {
       return response.data.data
     },
     enabled: !!id,
+  })
+}
+
+// ДОБАВЛЕНО: Получить общую статистику по всем проектам
+export function useProjectsStats() {
+  return useQuery({
+    queryKey: ['projects', 'stats'],
+    queryFn: async () => {
+      try {
+        // Получаем список всех проектов
+        const response = await projectsService.getAll({ includeStats: true })
+        const projects = response.data.data.projects || []
+        
+        // Вычисляем общую статистику
+        const stats = projects.reduce((acc, project) => {
+          acc.total += 1
+          if (project.stats) {
+            acc.proxies.total += project.stats.proxies?.total || 0
+            acc.proxies.free += project.stats.proxies?.free || 0
+            acc.proxies.busy += project.stats.proxies?.busy || 0
+            acc.phones.total += project.stats.phones?.total || 0
+            acc.phones.free += project.stats.phones?.free || 0
+            acc.phones.busy += project.stats.phones?.busy || 0
+          }
+          return acc
+        }, {
+          total: 0,
+          proxies: { total: 0, free: 0, busy: 0 },
+          phones: { total: 0, free: 0, busy: 0 }
+        })
+        
+        return stats
+      } catch (error) {
+        console.error('Error fetching projects stats:', error)
+        // Возвращаем базовую статистику в случае ошибки
+        return {
+          total: 0,
+          proxies: { total: 0, free: 0, busy: 0 },
+          phones: { total: 0, free: 0, busy: 0 }
+        }
+      }
+    },
   })
 }
 

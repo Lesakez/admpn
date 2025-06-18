@@ -40,7 +40,7 @@ const getProjects = async (req, res, next) => {
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [['createdAt', 'DESC']]
+      order: [['id', 'DESC']]  // ИЗМЕНЕНО: с createdAt на id
     });
 
     // Добавляем статистику для каждого проекта
