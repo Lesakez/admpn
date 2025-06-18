@@ -72,10 +72,16 @@ const startServer = async () => {
       logger.warn('Could not ensure database exists:', error.message);
     }
 
-    // Sync database (только для разработки)
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
+    // ОТКЛЮЧАЕМ синхронизацию БД - используем существующую структуру
+    // Sync database только если явно указано в переменной окружения
+    if (process.env.DB_SYNC === 'true') {
+      logger.info('Database sync enabled via DB_SYNC=true');
+      await sequelize.sync({ alter: false, force: false });
       logger.info('Database synchronized');
+    } else {
+      logger.info('Database sync disabled - using existing schema');
+      // Просто проверяем подключение к БД
+      await sequelize.authenticate();
     }
 
     app.listen(PORT, () => {

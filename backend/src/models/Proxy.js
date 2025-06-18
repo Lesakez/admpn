@@ -1,32 +1,34 @@
+// backend/src/models/Proxy.js
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
   const Proxy = sequelize.define('Proxy', {
     id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.BIGINT.UNSIGNED,
       primaryKey: true,
       autoIncrement: true
     },
-    type: {
-      type: DataTypes.STRING(50),
+    protocol: {
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Тип прокси (http, socks5, etc.)'
+      field: 'type', // В БД поле называется 'type'
+      comment: 'Тип/протокол прокси'
     },
     ipPort: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
+      type: DataTypes.TEXT,
+      allowNull: true,
       field: 'ip_port',
-      comment: 'IP:Port прокси'
+      comment: 'IP:PORT прокси'
     },
     login: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Логин для прокси'
+      comment: 'Логин для авторизации'
     },
     password: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Пароль для прокси'
+      comment: 'Пароль для авторизации'
     },
     changeIpUrl: {
       type: DataTypes.TEXT,
@@ -34,70 +36,50 @@ module.exports = (sequelize) => {
       field: 'change_ip_url',
       comment: 'URL для смены IP'
     },
-    dateSetStatusFree: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      field: 'date_set_status_free',
-      comment: 'Дата установки статуса "свободен"'
-    },
     dateSetStatusBusy: {
-      type: DataTypes.DATE,
+      type: DataTypes.DATE(3),
       allowNull: true,
       field: 'date_set_status_busy',
       comment: 'Дата установки статуса "занят"'
     },
+    dateSetStatusFree: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'date_set_status_free',
+      comment: 'Дата установки статуса "свободен"'
+    },
     dateLastChangeIp: {
-      type: DataTypes.DATE,
+      type: DataTypes.DATE(3),
       allowNull: true,
       field: 'date_last_change_ip',
       comment: 'Дата последней смены IP'
     },
     status: {
-      type: DataTypes.ENUM('free', 'busy', 'inactive'),
-      defaultValue: 'free',
+      type: DataTypes.TEXT,
+      allowNull: true,
       comment: 'Статус прокси'
     },
     country: {
-      type: DataTypes.STRING(100),
+      type: DataTypes.TEXT,
       allowNull: true,
       comment: 'Страна прокси'
     },
     projectId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.BIGINT.UNSIGNED,
       allowNull: true,
       field: 'project_id',
       comment: 'ID проекта'
     },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'created_at'
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'updated_at'
+    // Добавляем поля которых нет в БД, но есть в коде
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Заметки'
     }
   }, {
     tableName: 'proxies',
-    timestamps: true,
-    underscored: true,
-    indexes: [
-      {
-        fields: ['status']
-      },
-      {
-        fields: ['project_id']
-      },
-      {
-        fields: ['country']
-      },
-      {
-        fields: ['ip_port']
-      }
-    ]
+    timestamps: false, // В БД нет created_at/updated_at
+    underscored: true
   });
 
   Proxy.associate = (models) => {

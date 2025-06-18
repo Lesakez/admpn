@@ -16,6 +16,7 @@ export const statusService = {
       statusCache = response.data.data
       return statusCache
     } catch (error) {
+      console.warn('Failed to load status config from server, using fallback')
       // Fallback к локальной конфигурации если сервер недоступен
       return getLocalStatusConfig()
     }
@@ -23,8 +24,16 @@ export const statusService = {
 
   // Получить статусы для конкретной сущности
   getEntityStatuses: async (entityType) => {
-    const config = await statusService.getStatusConfig()
-    return config.statuses[entityType.toUpperCase()] || {}
+    try {
+      // Используем специальный эндпоинт для получения статусов сущности
+      const response = await api.get(`/config/statuses/${entityType}`)
+      return response.data.data.statuses || {}
+    } catch (error) {
+      console.warn(`Failed to load statuses for ${entityType}, using fallback`)
+      // Fallback к полной конфигурации
+      const config = await statusService.getStatusConfig()
+      return config.statuses[entityType.toUpperCase()] || {}
+    }
   },
 
   // Получить описание статуса
@@ -115,14 +124,6 @@ const getLocalStatusConfig = () => ({
       OFFLINE: 'offline',
       REBOOTING: 'rebooting',
       ERROR: 'error'
-    },
-    REGISTRATION: {
-      SUCCESS: 'success',
-      FAILED: 'failed',
-      PENDING: 'pending',
-      CANCELLED: 'cancelled',
-      TIMEOUT: 'timeout',
-      ERROR: 'error'
     }
   },
   descriptions: {
@@ -132,7 +133,7 @@ const getLocalStatusConfig = () => ({
     'working': 'В работе',
     'free': 'Свободный',
     'busy': 'Занятый',
-    'pending': 'Ожидает обработки',
+    'pending': 'Ожидает',
     'suspended': 'Приостановлен',
     'verified': 'Верифицированный',
     'unverified': 'Неверифицированный',
@@ -150,73 +151,29 @@ const getLocalStatusConfig = () => ({
     'timeout': 'Таймаут'
   },
   colors: {
-    'active': 'success',
-    'inactive': 'secondary',
-    'banned': 'danger',
-    'working': 'warning',
-    'free': 'success',
-    'busy': 'warning',
-    'pending': 'info',
-    'suspended': 'warning',
-    'verified': 'success',
-    'unverified': 'secondary',
-    'created': 'info',
-    'warming': 'warning',
-    'ready': 'success',
-    'error': 'danger',
-    'checking': 'info',
-    'maintenance': 'warning',
-    'offline': 'secondary',
-    'rebooting': 'info',
-    'success': 'success',
-    'failed': 'danger',
-    'cancelled': 'secondary',
-    'timeout': 'warning'
+    'active': '#10b981',
+    'inactive': '#6b7280',
+    'banned': '#ef4444',
+    'working': '#f59e0b',
+    'free': '#10b981',
+    'busy': '#f59e0b',
+    'pending': '#3b82f6',
+    'suspended': '#f97316',
+    'verified': '#059669',
+    'unverified': '#6b7280',
+    'created': '#8b5cf6',
+    'warming': '#f59e0b',
+    'ready': '#10b981',
+    'error': '#ef4444',
+    'checking': '#3b82f6',
+    'maintenance': '#f97316',
+    'offline': '#6b7280',
+    'rebooting': '#8b5cf6',
+    'success': '#10b981',
+    'failed': '#ef4444',
+    'cancelled': '#6b7280',
+    'timeout': '#f97316'
   },
-  groups: {
-    ACCOUNT: {
-      AVAILABLE: ['active', 'free', 'verified'],
-      UNAVAILABLE: ['inactive', 'banned', 'busy', 'working'],
-      NEED_ATTENTION: ['pending', 'suspended', 'unverified', 'error']
-    },
-    PROFILE: {
-      READY_TO_USE: ['active', 'ready'],
-      IN_PROGRESS: ['created', 'warming', 'working'],
-      ISSUES: ['inactive', 'banned', 'error']
-    },
-    PROXY: {
-      AVAILABLE: ['free'],
-      UNAVAILABLE: ['busy', 'inactive', 'banned'],
-      ISSUES: ['error', 'checking', 'maintenance']
-    },
-    PHONE: {
-      AVAILABLE: ['free'],
-      UNAVAILABLE: ['busy', 'inactive', 'offline'],
-      ISSUES: ['error', 'maintenance', 'rebooting']
-    }
-  },
-  transitions: {
-    ACCOUNT: {
-      'active': ['inactive', 'banned', 'working', 'busy'],
-      'inactive': ['active', 'banned'],
-      'banned': ['inactive'],
-      'working': ['active', 'inactive', 'free'],
-      'free': ['busy', 'working', 'inactive'],
-      'busy': ['free', 'working'],
-      'pending': ['active', 'inactive', 'banned'],
-      'suspended': ['active', 'inactive', 'banned'],
-      'verified': ['active', 'inactive', 'banned'],
-      'unverified': ['verified', 'banned']
-    },
-    PROFILE: {
-      'created': ['active', 'warming', 'inactive', 'error'],
-      'warming': ['ready', 'active', 'error'],
-      'ready': ['active', 'working', 'inactive'],
-      'active': ['working', 'inactive', 'banned'],
-      'working': ['active', 'inactive', 'error'],
-      'inactive': ['active', 'warming'],
-      'banned': ['inactive'],
-      'error': ['inactive', 'created']
-    }
-  }
+  groups: {},
+  transitions: {}
 })

@@ -1,103 +1,91 @@
+// backend/src/models/Phone.js
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
-  const Profile = sequelize.define('Profile', {
+  const Phone = sequelize.define('Phone', {
     id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.BIGINT.UNSIGNED,
       primaryKey: true,
       autoIncrement: true
     },
-    profileId: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      unique: true,
-      field: 'profile_id',
-      comment: 'Уникальный ID профиля'
+    model: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Модель устройства'
+    },
+    device: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Идентификатор устройства'
     },
     name: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      comment: 'Название профиля'
-    },
-    folderId: {
-      type: DataTypes.STRING(255),
-      allowNull: true,
-      field: 'folder_id',
-      comment: 'ID папки'
-    },
-    folderName: {
-      type: DataTypes.STRING(255),
-      allowNull: true,
-      field: 'folder_name',
-      comment: 'Название папки'
-    },
-    workspaceId: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-      field: 'workspace_id',
-      comment: 'ID рабочего пространства'
-    },
-    workspaceName: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      field: 'workspace_name',
-      comment: 'Название рабочего пространства'
-    },
-    proxy: {
       type: DataTypes.TEXT,
-      allowNull: false,
-      comment: 'Прокси настройки'
-    },
-    userId: {
-      type: DataTypes.STRING(255),
       allowNull: true,
-      field: 'user_id',
-      comment: 'ID пользователя'
+      comment: 'Название устройства'
+    },
+    androidVersion: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'android_version',
+      comment: 'Версия Android'
+    },
+    dateSetStatusBusy: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'date_set_status_busy',
+      comment: 'Дата установки статуса "занят"'
+    },
+    dateSetStatusFree: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'date_set_status_free',
+      comment: 'Дата установки статуса "свободен"'
+    },
+    dateLastReboot: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'date_last_reboot',
+      comment: 'Дата последней перезагрузки'
     },
     status: {
-      type: DataTypes.ENUM('created', 'active', 'inactive', 'working', 'banned'),
-      defaultValue: 'created',
-      comment: 'Статус профиля'
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Статус устройства'
     },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'created_at'
+    projectId: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      allowNull: true,
+      field: 'project_id',
+      comment: 'ID проекта'
     },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'updated_at'
+    // Добавляем поля которых нет в БД, но есть в коде
+    ipAddress: {
+      type: DataTypes.STRING(45),
+      allowNull: true,
+      comment: 'IP адрес'
+    },
+    macAddress: {
+      type: DataTypes.STRING(17),
+      allowNull: true,
+      comment: 'MAC адрес'
+    },
+    notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Заметки'
     }
   }, {
-    tableName: 'profiles',
-    timestamps: true,
-    underscored: true,
-    indexes: [
-      {
-        fields: ['profile_id'],
-        unique: true
-      },
-      {
-        fields: ['name']
-      },
-      {
-        fields: ['folder_name']
-      },
-      {
-        fields: ['user_id']
-      },
-      {
-        fields: ['status']
-      }
-    ]
+    tableName: 'phones',
+    timestamps: false, // В БД нет created_at/updated_at
+    underscored: true
   });
 
-  Profile.associate = (models) => {
-    // Associations можно добавить позже
+  Phone.associate = (models) => {
+    Phone.belongsTo(models.Project, {
+      foreignKey: 'projectId',
+      as: 'project'
+    });
   };
 
-  return Profile;
+  return Phone;
 };

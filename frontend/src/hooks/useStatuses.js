@@ -1,4 +1,5 @@
 // frontend/src/hooks/useStatuses.js
+import React from 'react' // ДОБАВЛЕНО
 import { useQuery } from '@tanstack/react-query'
 import { statusService } from '../services/statusService'
 
@@ -9,6 +10,7 @@ export function useEntityStatuses(entityType) {
     queryFn: () => statusService.getEntityStatuses(entityType),
     staleTime: 5 * 60 * 1000, // 5 минут
     cacheTime: 10 * 60 * 1000, // 10 минут
+    enabled: !!entityType, // Только если entityType передан
   })
 }
 

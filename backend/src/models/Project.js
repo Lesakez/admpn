@@ -1,52 +1,34 @@
+// backend/src/models/Project.js
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
   const Project = sequelize.define('Project', {
     id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.BIGINT.UNSIGNED,
       primaryKey: true,
       autoIncrement: true
     },
     name: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
+      type: DataTypes.TEXT,
+      allowNull: true,
       comment: 'Название проекта'
     },
     transliterateName: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
       field: 'transliterate_name',
       comment: 'Транслитерированное название'
     },
+    // Добавляем поле которого нет в БД, но есть в коде
     description: {
       type: DataTypes.TEXT,
       allowNull: true,
       comment: 'Описание проекта'
-    },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'created_at'
-    },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'updated_at'
     }
   }, {
     tableName: 'projects',
-    timestamps: true,
-    underscored: true,
-    indexes: [
-      {
-        fields: ['name']
-      },
-      {
-        fields: ['transliterate_name']
-      }
-    ]
+    timestamps: false, // В БД нет created_at/updated_at
+    underscored: true
   });
 
   Project.associate = (models) => {
