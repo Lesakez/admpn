@@ -10,8 +10,7 @@ const phoneRoutes = require('./phones');
 const zennoposterRoutes = require('./zennoposter');
 const activityRoutes = require('./activity');
 const otpRoutes = require('./otp');
-// Временно убираем configRoutes пока не создадим контроллер
-// const configRoutes = require('./config');
+const configRoutes = require('./config'); // Подключаем config routes
 
 const router = express.Router();
 
@@ -40,8 +39,8 @@ router.get('/', (req, res) => {
       phones: '/api/phones',
       zennoposter: '/api/zp',
       activity: '/api/activity',
-      otp: '/api/otp'
-      // config: '/api/config' // Временно убираем
+      otp: '/api/otp',
+      config: '/api/config' // Добавляем config в список эндпоинтов
     }
   });
 });
@@ -56,7 +55,6 @@ router.use('/phones', phoneRoutes);
 router.use('/zp', zennoposterRoutes);
 router.use('/activity', activityRoutes);
 router.use('/otp', otpRoutes);
-// Временно убираем configRoutes
-// router.use('/config', configRoutes);
+router.use('/config', configRoutes); // Подключаем config routes
 
 module.exports = router;

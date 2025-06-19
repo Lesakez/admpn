@@ -1,81 +1,195 @@
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
-  const Activity = sequelize.define('Activity', {
+  const Account = sequelize.define('Account', {
     id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.BIGINT.UNSIGNED,
       primaryKey: true,
       autoIncrement: true
     },
-    timestamp: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      comment: 'Время события'
+    login: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'Логин аккаунта'
     },
-    description: {
-      type: DataTypes.TEXT,
-      allowNull: false,
-      comment: 'Описание действия'
+    password: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'Пароль аккаунта'
     },
-    entityType: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-      field: 'entity_type',
-      comment: 'Тип сущности (account, profile, proxy, etc.)'
+    email: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'Email аккаунта'
     },
-    entityId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      field: 'entity_id',
-      comment: 'ID сущности'
+    emailPassword: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'email_password',
+      comment: 'Пароль от email'
     },
-    actionType: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-      field: 'action_type',
-      comment: 'Тип действия (create, update, delete, etc.)'
+    userAgent: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'user_agent',
+      comment: 'User Agent'
+    },
+    twoFa: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'two_fa',
+      comment: '2FA данные'
+    },
+    dob: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      comment: 'Дата рождения'
+    },
+    nameProfiles: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'name_profiles',
+      comment: 'Имена профилей'
     },
     userId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.TEXT('long'),
       allowNull: true,
       field: 'user_id',
-      comment: 'ID пользователя (если применимо)'
+      comment: 'User ID'
     },
-    metadata: {
-      type: DataTypes.JSON,
+    cookies: {
+      type: DataTypes.TEXT('long'),
       allowNull: true,
-      comment: 'Дополнительные данные в JSON формате'
+      comment: 'Cookies'
+    },
+    status: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'Статус аккаунта'
+    },
+    friendsCounts: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      field: 'friends_counts',
+      comment: 'Количество друзей'
+    },
+    note: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'Заметка'
+    },
+    statusCheck: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'status_check',
+      comment: 'Статус проверки'
+    },
+    eaab: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'EAAB токен'
+    },
+    namePage: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'name_page',
+      comment: 'Название страницы'
+    },
+    data: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'Дополнительные данные'
+    },
+    dataRegistration: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'data_registration',
+      comment: 'Дата регистрации'
+    },
+    idActive: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'id_active',
+      comment: 'ID активности'
+    },
+    counter: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      comment: 'Счетчик'
+    },
+    code: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'Код'
+    },
+    device: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      comment: 'Устройство'
+    },
+    emailJsonData: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'email_json_data',
+      comment: 'JSON данные email'
+    },
+    lsposedJson: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'ls_posed_json',
+      comment: 'LSPosed JSON данные'
+    },
+    accessToken: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'access_token',
+      comment: 'Access token'
+    },
+    clientId: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'client_id',
+      comment: 'Client ID'
+    },
+    refreshToken: {
+      type: DataTypes.TEXT('long'),
+      allowNull: true,
+      field: 'refresh_token',
+      comment: 'Refresh token'
     },
     createdAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
+      type: DataTypes.DATE(3),
+      allowNull: true,
       field: 'created_at'
+    },
+    updatedAt: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'updated_at'
     }
   }, {
-    tableName: 'activity',
-    timestamps: false,
+    tableName: 'accounts',
+    timestamps: false, // Отключаем автоматическое управление timestamps
     underscored: true,
     indexes: [
       {
-        fields: ['timestamp']
+        fields: ['login']
       },
       {
-        fields: ['entity_type', 'entity_id']
+        fields: ['email']
       },
       {
-        fields: ['action_type']
+        fields: ['status']
       },
       {
-        fields: ['user_id']
+        fields: ['created_at']
       }
     ]
   });
 
-  Activity.associate = (models) => {
-    // Associations можно добавить позже если нужно
+  Account.associate = (models) => {
+    // Связи можно добавить позже при необходимости
   };
 
-  return Activity;
+  return Account;
 };
