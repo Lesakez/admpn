@@ -1,22 +1,21 @@
-const { Project, Proxy, Phone, Profile, sequelize } = require('../models');
+const { Project, Proxy, Phone, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 
-// Получить список проектов с оптимизированной статистикой
+// Получить список проектов с фильтрацией и пагинацией
 const getProjects = async (req, res, next) => {
   try {
     const {
       page = 1,
       limit = 20,
       search,
-      sortBy = 'created_at', // ИСПРАВЛЕНО: используем snake_case как в БД
+      sortBy = 'id',
       sortOrder = 'DESC'
     } = req.query;
 
     const offset = (page - 1) * limit;
     const where = {};
 
-    // Поиск по названию или описанию
     if (search) {
       where[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
@@ -24,110 +23,40 @@ const getProjects = async (req, res, next) => {
       ];
     }
 
-    // Получаем проекты с подсчетом статистики через подзапросы
-    const projects = await Project.findAll({
+    const { count, rows } = await Project.findAndCountAll({
       where,
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [[sortBy, sortOrder]],
-      attributes: [
-        'id',
-        'name', 
-        'description',
-        'created_at', // ИСПРАВЛЕНО: используем названия полей как в БД
-        'updated_at',
-        // Подсчет прокси - используем правильные названия таблиц и полей
-        [
-          sequelize.literal(`(
-            SELECT COUNT(*)
-            FROM proxies
-            WHERE proxies.project_id = Project.id
-          )`),
-          'totalProxies'
-        ],
-        [
-          sequelize.literal(`(
-            SELECT COUNT(*)
-            FROM proxies
-            WHERE proxies.project_id = Project.id AND proxies.status = 'free'
-          )`),
-          'freeProxies'
-        ],
-        // Подсчет телефонов - используем правильное название таблицы
-        [
-          sequelize.literal(`(
-            SELECT COUNT(*)
-            FROM phones
-            WHERE phones.project_id = Project.id
-          )`),
-          'totalPhones'
-        ],
-        [
-          sequelize.literal(`(
-            SELECT COUNT(*)
-            FROM phones
-            WHERE phones.project_id = Project.id AND phones.status = 'free'
-          )`),
-          'freePhones'
-        ],
-        // Подсчет профилей - убираем так как нет связи project_id в таблице profiles
-        // [
-        //   sequelize.literal(`(
-        //     SELECT COUNT(*)
-        //     FROM profiles
-        //     WHERE profiles.project_id = Project.id
-        //   )`),
-        //   'totalProfiles'
-        // ],
-        // [
-        //   sequelize.literal(`(
-        //     SELECT COUNT(*)
-        //     FROM profiles
-        //     WHERE profiles.project_id = Project.id AND profiles.status = 'active'
-        //   )`),
-        //   'activeProfiles'
-        // ]
-      ]
+      order: [[sortBy, sortOrder]]
     });
 
-    // Общий подсчет для пагинации
-    const total = await Project.count({ where });
+    // Получаем статистику для каждого проекта
+    const projectsWithStats = await Promise.all(
+      rows.map(async (project) => {
+        const [proxiesCount, phonesCount] = await Promise.all([
+          Proxy.count({ where: { project_id: project.id } }),
+          Phone.count({ where: { project_id: project.id } })
+        ]);
 
-    // Форматируем ответ
-    const projectsWithStats = projects.map(project => {
-      const data = project.toJSON();
-      return {
-        id: data.id,
-        name: data.name,
-        description: data.description,
-        createdAt: data.created_at, // Преобразуем в camelCase для frontend
-        updatedAt: data.updated_at,
-        stats: {
-          proxies: {
-            total: parseInt(data.totalProxies) || 0,
-            free: parseInt(data.freeProxies) || 0
-          },
-          phones: {
-            total: parseInt(data.totalPhones) || 0,
-            free: parseInt(data.freePhones) || 0
-          },
-          profiles: {
-            total: 0, // Отключаем так как нет связи
-            active: 0
+        return {
+          ...project.toJSON(),
+          stats: {
+            proxies: proxiesCount,
+            phones: phonesCount
           }
-        }
-      };
-    });
+        };
+      })
+    );
 
     res.json({
       success: true,
       data: {
         projects: projectsWithStats,
         pagination: {
-          total,
+          total: count,
           page: parseInt(page),
           limit: parseInt(limit),
-          totalPages: Math.ceil(total / limit)
+          totalPages: Math.ceil(count / limit)
         }
       }
     });
@@ -142,7 +71,7 @@ const getProject = async (req, res, next) => {
     const { id } = req.params;
 
     const project = await Project.findByPk(id);
-
+    
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -150,7 +79,7 @@ const getProject = async (req, res, next) => {
       });
     }
 
-    // Получаем связанные данные отдельными запросами для надежности
+    // Получаем связанные данные
     const [proxies, phones] = await Promise.all([
       Proxy.findAll({
         where: { project_id: id },
@@ -160,7 +89,6 @@ const getProject = async (req, res, next) => {
         where: { project_id: id },
         attributes: ['id', 'model', 'status', 'device']
       })
-      // Убираем Profile так как нет связи project_id
     ]);
 
     // Формируем детальную статистику
@@ -174,10 +102,6 @@ const getProject = async (req, res, next) => {
         total: phones.length,
         byStatus: {},
         byModel: {}
-      },
-      profiles: {
-        total: 0, // Отключаем так как нет связи
-        byStatus: {}
       }
     };
 
@@ -207,12 +131,6 @@ const getProject = async (req, res, next) => {
       }
     });
 
-    // Статистика профилей - отключено
-    // profiles.forEach(profile => {
-    //   stats.profiles.byStatus[profile.status] = 
-    //     (stats.profiles.byStatus[profile.status] || 0) + 1;
-    // });
-
     const projectData = project.toJSON();
 
     res.json({
@@ -221,8 +139,7 @@ const getProject = async (req, res, next) => {
         id: projectData.id,
         name: projectData.name,
         description: projectData.description,
-        createdAt: projectData.created_at,
-        updatedAt: projectData.updated_at,
+        transliterateName: projectData.transliterateName,
         stats,
         // Добавляем связанные данные
         proxies: proxies.map(p => ({
@@ -237,7 +154,6 @@ const getProject = async (req, res, next) => {
           status: p.status,
           device: p.device
         }))
-        // Убираем profiles так как нет связи
       }
     });
   } catch (error) {
@@ -249,8 +165,8 @@ const getProject = async (req, res, next) => {
 const createProject = async (req, res, next) => {
   try {
     const project = await Project.create(req.body);
-    
-    logger.info('Project created successfully', { projectId: project.id });
+
+    logger.info('Project created', { projectId: project.id, name: project.name });
 
     res.status(201).json({
       success: true,
@@ -258,8 +174,7 @@ const createProject = async (req, res, next) => {
         id: project.id,
         name: project.name,
         description: project.description,
-        createdAt: project.created_at,
-        updatedAt: project.updated_at
+        transliterateName: project.transliterateName
       }
     });
   } catch (error) {
@@ -273,6 +188,7 @@ const updateProject = async (req, res, next) => {
     const { id } = req.params;
     
     const project = await Project.findByPk(id);
+    
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -281,8 +197,8 @@ const updateProject = async (req, res, next) => {
     }
 
     await project.update(req.body);
-    
-    logger.info('Project updated successfully', { projectId: id });
+
+    logger.info('Project updated', { projectId: project.id, name: project.name });
 
     res.json({
       success: true,
@@ -290,8 +206,7 @@ const updateProject = async (req, res, next) => {
         id: project.id,
         name: project.name,
         description: project.description,
-        createdAt: project.created_at,
-        updatedAt: project.updated_at
+        transliterateName: project.transliterateName
       }
     });
   } catch (error) {
@@ -305,6 +220,7 @@ const deleteProject = async (req, res, next) => {
     const { id } = req.params;
     
     const project = await Project.findByPk(id);
+    
     if (!project) {
       return res.status(404).json({
         success: false,
@@ -312,33 +228,35 @@ const deleteProject = async (req, res, next) => {
       });
     }
 
-    // Проверяем, есть ли связанные ресурсы (убираем profiles)
-    const [proxiesCount, phonesCount] = await Promise.all([
-      Proxy.count({ where: { project_id: id } }),
-      Phone.count({ where: { project_id: id } })
-    ]);
+    // Используем транзакцию для атомарности
+    await sequelize.transaction(async (t) => {
+      // Отвязываем прокси
+      await Proxy.update(
+        { project_id: null },
+        { 
+          where: { project_id: id },
+          transaction: t 
+        }
+      );
 
-    if (proxiesCount > 0 || phonesCount > 0) {
-      // Отвязываем ресурсы вместо удаления (убираем profiles)
-      await Promise.all([
-        Proxy.update({ project_id: null }, { where: { project_id: id } }),
-        Phone.update({ project_id: null }, { where: { project_id: id } })
-      ]);
-      
-      logger.info('Project resources unlinked', { 
-        projectId: id, 
-        proxies: proxiesCount, 
-        phones: phonesCount
-      });
-    }
+      // Отвязываем телефоны
+      await Phone.update(
+        { project_id: null },
+        { 
+          where: { project_id: id },
+          transaction: t 
+        }
+      );
 
-    await project.destroy();
-    
-    logger.info('Project deleted successfully', { projectId: id });
+      // Удаляем проект
+      await project.destroy({ transaction: t });
+    });
+
+    logger.info('Project deleted', { projectId: id, name: project.name });
 
     res.json({
       success: true,
-      message: 'Проект успешно удален. Связанные ресурсы отвязаны.'
+      message: 'Проект удален. Связанные ресурсы отвязаны.'
     });
   } catch (error) {
     next(error);
@@ -348,7 +266,6 @@ const deleteProject = async (req, res, next) => {
 // Получить общую статистику по всем проектам
 const getProjectsStats = async (req, res, next) => {
   try {
-    // Используем простые запросы для совместимости (убираем profiles)
     const [totalProjects, totalAssignedProxies, totalUnassignedProxies, 
            totalAssignedPhones, totalUnassignedPhones] = await Promise.all([
       Project.count(),
@@ -374,7 +291,6 @@ const getProjectsStats = async (req, res, next) => {
           unassigned: totalUnassignedPhones,
           total: totalAssignedPhones + totalUnassignedPhones
         }
-        // Убираем profiles так как нет связи
       }
     });
   } catch (error) {
@@ -386,7 +302,7 @@ const getProjectsStats = async (req, res, next) => {
 const assignResources = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { proxyIds = [], phoneIds = [] } = req.body; // Убираем profileIds
+    const { proxyIds = [], phoneIds = [] } = req.body;
 
     const project = await Project.findByPk(id);
     if (!project) {
@@ -423,8 +339,6 @@ const assignResources = async (req, res, next) => {
           )
         );
       }
-
-      // Убираем profileIds так как нет связи
 
       const results = await Promise.all(updates);
       return results;

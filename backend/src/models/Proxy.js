@@ -83,9 +83,10 @@ module.exports = (sequelize) => {
   });
 
   Proxy.associate = (models) => {
+    // Используем алиас 'project' для устранения ошибки
     Proxy.belongsTo(models.Project, {
       foreignKey: 'projectId',
-      as: 'project'
+      as: 'project' // Указываем алиас явно
     });
   };
 

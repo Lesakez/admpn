@@ -12,7 +12,7 @@ const getProxies = async (req, res, next) => {
       country,
       projectId,
       search,
-      sortBy = 'created_at',
+      sortBy = 'id',
       sortOrder = 'DESC'
     } = req.query;
 
@@ -22,10 +22,10 @@ const getProxies = async (req, res, next) => {
     // Фильтры
     if (status) where.status = status;
     if (country) where.country = country;
-    if (projectId) where.project_id = projectId;
+    if (projectId) where.projectId = projectId;
     if (search) {
       where[Op.or] = [
-        { ip_port: { [Op.like]: `%${search}%` } },
+        { ipPort: { [Op.like]: `%${search}%` } },
         { login: { [Op.like]: `%${search}%` } }
       ];
     }
@@ -38,6 +38,7 @@ const getProxies = async (req, res, next) => {
       include: [
         {
           model: Project,
+          as: 'project', // Используем алиас 'project'
           attributes: ['id', 'name'],
           required: false
         }
@@ -47,20 +48,20 @@ const getProxies = async (req, res, next) => {
     // Преобразуем данные для frontend
     const proxies = rows.map(proxy => ({
       id: proxy.id,
-      ipPort: proxy.ip_port,
+      ipPort: proxy.ipPort,
       protocol: proxy.protocol,
       login: proxy.login,
       password: proxy.password,
       country: proxy.country,
       status: proxy.status,
-      projectId: proxy.project_id,
-      project: proxy.Project ? {
-        id: proxy.Project.id,
-        name: proxy.Project.name
+      projectId: proxy.projectId,
+      project: proxy.project ? {
+        id: proxy.project.id,
+        name: proxy.project.name
       } : null,
       notes: proxy.notes,
-      createdAt: proxy.created_at,
-      updatedAt: proxy.updated_at
+      createdAt: proxy.createdAt,
+      updatedAt: proxy.updatedAt
     }));
 
     res.json({
@@ -89,6 +90,7 @@ const getProxy = async (req, res, next) => {
       include: [
         {
           model: Project,
+          as: 'project', // Используем алиас 'project'
           attributes: ['id', 'name'],
           required: false
         }
@@ -106,20 +108,20 @@ const getProxy = async (req, res, next) => {
       success: true,
       data: {
         id: proxy.id,
-        ipPort: proxy.ip_port,
+        ipPort: proxy.ipPort,
         protocol: proxy.protocol,
         login: proxy.login,
         password: proxy.password,
         country: proxy.country,
         status: proxy.status,
-        projectId: proxy.project_id,
-        project: proxy.Project ? {
-          id: proxy.Project.id,
-          name: proxy.Project.name
+        projectId: proxy.projectId,
+        project: proxy.project ? {
+          id: proxy.project.id,
+          name: proxy.project.name
         } : null,
         notes: proxy.notes,
-        createdAt: proxy.created_at,
-        updatedAt: proxy.updated_at
+        createdAt: proxy.createdAt,
+        updatedAt: proxy.updatedAt
       }
     });
   } catch (error) {
@@ -130,37 +132,25 @@ const getProxy = async (req, res, next) => {
 // Создать новый прокси
 const createProxy = async (req, res, next) => {
   try {
-    // Преобразуем camelCase в snake_case для БД
-    const proxyData = {
-      ip_port: req.body.ipPort,
-      protocol: req.body.protocol || 'http',
-      login: req.body.login,
-      password: req.body.password,
-      country: req.body.country,
-      status: req.body.status || 'free',
-      project_id: req.body.projectId || null,
-      notes: req.body.notes
-    };
-
-    const proxy = await Proxy.create(proxyData);
+    const proxy = await Proxy.create(req.body);
     
-    logger.info('Proxy created successfully', { proxyId: proxy.id });
+    // Получаем созданный прокси с проектом
+    const createdProxy = await Proxy.findByPk(proxy.id, {
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name'],
+          required: false
+        }
+      ]
+    });
+
+    logger.info('Proxy created', { proxyId: proxy.id });
 
     res.status(201).json({
       success: true,
-      data: {
-        id: proxy.id,
-        ipPort: proxy.ip_port,
-        protocol: proxy.protocol,
-        login: proxy.login,
-        password: proxy.password,
-        country: proxy.country,
-        status: proxy.status,
-        projectId: proxy.project_id,
-        notes: proxy.notes,
-        createdAt: proxy.created_at,
-        updatedAt: proxy.updated_at
-      }
+      data: createdProxy
     });
   } catch (error) {
     next(error);
@@ -173,6 +163,7 @@ const updateProxy = async (req, res, next) => {
     const { id } = req.params;
     
     const proxy = await Proxy.findByPk(id);
+    
     if (!proxy) {
       return res.status(404).json({
         success: false,
@@ -180,36 +171,25 @@ const updateProxy = async (req, res, next) => {
       });
     }
 
-    // Преобразуем camelCase в snake_case для БД
-    const updateData = {};
-    if (req.body.ipPort !== undefined) updateData.ip_port = req.body.ipPort;
-    if (req.body.protocol !== undefined) updateData.protocol = req.body.protocol;
-    if (req.body.login !== undefined) updateData.login = req.body.login;
-    if (req.body.password !== undefined) updateData.password = req.body.password;
-    if (req.body.country !== undefined) updateData.country = req.body.country;
-    if (req.body.status !== undefined) updateData.status = req.body.status;
-    if (req.body.projectId !== undefined) updateData.project_id = req.body.projectId;
-    if (req.body.notes !== undefined) updateData.notes = req.body.notes;
+    await proxy.update(req.body);
 
-    await proxy.update(updateData);
-    
-    logger.info('Proxy updated successfully', { proxyId: id });
+    // Получаем обновленный прокси с проектом
+    const updatedProxy = await Proxy.findByPk(proxy.id, {
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name'],
+          required: false
+        }
+      ]
+    });
+
+    logger.info('Proxy updated', { proxyId: proxy.id });
 
     res.json({
       success: true,
-      data: {
-        id: proxy.id,
-        ipPort: proxy.ip_port,
-        protocol: proxy.protocol,
-        login: proxy.login,
-        password: proxy.password,
-        country: proxy.country,
-        status: proxy.status,
-        projectId: proxy.project_id,
-        notes: proxy.notes,
-        createdAt: proxy.created_at,
-        updatedAt: proxy.updated_at
-      }
+      data: updatedProxy
     });
   } catch (error) {
     next(error);
@@ -222,6 +202,7 @@ const deleteProxy = async (req, res, next) => {
     const { id } = req.params;
     
     const proxy = await Proxy.findByPk(id);
+    
     if (!proxy) {
       return res.status(404).json({
         success: false,
@@ -230,8 +211,8 @@ const deleteProxy = async (req, res, next) => {
     }
 
     await proxy.destroy();
-    
-    logger.info('Proxy deleted successfully', { proxyId: id });
+
+    logger.info('Proxy deleted', { proxyId: id });
 
     res.json({
       success: true,
@@ -242,68 +223,102 @@ const deleteProxy = async (req, res, next) => {
   }
 };
 
-// Получить статистику прокси - ДОБАВЛЕНО
+// Изменить статус прокси
+const toggleProxyStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const proxy = await Proxy.findByPk(id);
+    
+    if (!proxy) {
+      return res.status(404).json({
+        success: false,
+        error: 'Прокси не найден'
+      });
+    }
+
+    const newStatus = proxy.status === 'free' ? 'busy' : 'free';
+    const now = new Date();
+
+    const updateData = {
+      status: newStatus
+    };
+
+    if (newStatus === 'free') {
+      updateData.dateSetStatusFree = now;
+      updateData.dateSetStatusBusy = null;
+    } else {
+      updateData.dateSetStatusBusy = now;
+      updateData.dateSetStatusFree = null;
+    }
+
+    await proxy.update(updateData);
+
+    logger.info('Proxy status toggled', { proxyId: proxy.id, newStatus });
+
+    res.json({
+      success: true,
+      data: proxy
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Получить статистику прокси
 const getProxyStats = async (req, res, next) => {
   try {
-    // Получаем статистику по статусам
+    const totalCount = await Proxy.count();
+    
     const statusStats = await Proxy.findAll({
       attributes: [
         'status',
         [Proxy.sequelize.fn('COUNT', Proxy.sequelize.col('id')), 'count']
       ],
-      group: ['status'],
-      raw: true
+      group: ['status']
     });
 
-    // Получаем статистику по странам
     const countryStats = await Proxy.findAll({
       attributes: [
         'country',
         [Proxy.sequelize.fn('COUNT', Proxy.sequelize.col('id')), 'count']
       ],
       where: {
-        country: { [Op.ne]: null }
+        country: { [Op.not]: null }
       },
       group: ['country'],
       order: [[Proxy.sequelize.fn('COUNT', Proxy.sequelize.col('id')), 'DESC']],
-      limit: 10,
-      raw: true
+      limit: 10
     });
 
-    // Получаем статистику по протоколам
     const protocolStats = await Proxy.findAll({
       attributes: [
         'protocol',
         [Proxy.sequelize.fn('COUNT', Proxy.sequelize.col('id')), 'count']
       ],
+      where: {
+        protocol: { [Op.not]: null }
+      },
       group: ['protocol'],
-      raw: true
-    });
-
-    // Общая статистика
-    const total = await Proxy.count();
-    const assignedToProjects = await Proxy.count({
-      where: { project_id: { [Op.ne]: null } }
+      order: [[Proxy.sequelize.fn('COUNT', Proxy.sequelize.col('id')), 'DESC']]
     });
 
     res.json({
       success: true,
       data: {
-        total,
-        assignedToProjects,
-        unassigned: total - assignedToProjects,
+        total: totalCount,
         byStatus: statusStats.reduce((acc, stat) => {
-          acc[stat.status] = parseInt(stat.count);
+          acc[stat.status] = parseInt(stat.dataValues.count);
           return acc;
         }, {}),
-        byCountry: countryStats.reduce((acc, stat) => {
-          acc[stat.country] = parseInt(stat.count);
-          return acc;
-        }, {}),
-        byProtocol: protocolStats.reduce((acc, stat) => {
-          acc[stat.protocol] = parseInt(stat.count);
-          return acc;
-        }, {})
+        byCountry: countryStats.map(stat => ({
+          country: stat.country,
+          count: parseInt(stat.dataValues.count)
+        })),
+        byProtocol: protocolStats.map(stat => ({
+          protocol: stat.protocol,
+          count: parseInt(stat.dataValues.count)
+        }))
       }
     });
   } catch (error) {
@@ -387,45 +402,14 @@ const bulkUpdateStatus = async (req, res, next) => {
   }
 };
 
-// Переключить статус прокси
-const toggleProxyStatus = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const proxy = await Proxy.findByPk(id);
-    if (!proxy) {
-      return res.status(404).json({
-        success: false,
-        error: 'Прокси не найден'
-      });
-    }
-
-    // Переключаем между free и busy
-    const newStatus = proxy.status === 'free' ? 'busy' : 'free';
-    await proxy.update({ status: newStatus });
-    
-    logger.info('Proxy status toggled', { proxyId: id, newStatus });
-
-    res.json({
-      success: true,
-      data: {
-        id: proxy.id,
-        status: newStatus
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
 module.exports = {
   getProxies,
   getProxy,
   createProxy,
   updateProxy,
   deleteProxy,
-  getProxyStats, // ДОБАВЛЕНО
+  toggleProxyStatus,
+  getProxyStats,
   bulkDeleteProxies,
-  bulkUpdateStatus,
-  toggleProxyStatus
+  bulkUpdateStatus
 };
