@@ -1,122 +1,29 @@
-const { Profile, Activity, sequelize } = require('../models');
-const logger = require('../utils/logger');
+const { Profile, Project } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
-// Создать профили (пакетно)
-const createProfiles = async (req, res, next) => {
-  const transaction = await sequelize.transaction();
-  
-  try {
-    const profiles = req.body;
-    
-    if (!Array.isArray(profiles)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Ожидается массив профилей'
-      });
-    }
-
-    // Проверяем дубликаты profileId
-    const existingProfiles = await Profile.findAll({
-      where: {
-        profileId: { [Op.in]: profiles.map(p => p.profileId) }
-      },
-      transaction
-    });
-
-    const existingIds = existingProfiles.map(p => p.profileId);
-    const newProfiles = profiles.filter(p => !existingIds.includes(p.profileId));
-    const duplicates = profiles.filter(p => existingIds.includes(p.profileId));
-
-    if (newProfiles.length === 0) {
-      await transaction.rollback();
-      return res.status(400).json({
-        success: false,
-        error: 'Все профили уже существуют',
-        details: { duplicates: duplicates.length }
-      });
-    }
-
-    // Создаем новые профили
-    const createdProfiles = await Profile.bulkCreate(newProfiles, { 
-      transaction,
-      validate: true 
-    });
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Создано ${createdProfiles.length} профилей`,
-      entityType: 'profile',
-      entityId: 0,
-      actionType: 'bulk_create',
-      metadata: {
-        count: createdProfiles.length,
-        duplicates: duplicates.length
-      }
-    }, { transaction });
-
-    await transaction.commit();
-
-    logger.info('Profiles created', { 
-      created: createdProfiles.length,
-      duplicates: duplicates.length 
-    });
-
-    res.status(201).json({
-      success: true,
-      data: {
-        created: createdProfiles.length,
-        duplicates: duplicates.length,
-        profiles: createdProfiles
-      }
-    });
-  } catch (error) {
-    await transaction.rollback();
-    next(error);
-  }
-};
-
-// Получить список профилей
+// Получить список профилей с фильтрацией и пагинацией
 const getProfiles = async (req, res, next) => {
   try {
     const {
       page = 1,
       limit = 20,
-      folderName,
-      userId,
+      status,
       search,
-      status
+      sortBy = 'created_at',
+      sortOrder = 'DESC'
     } = req.query;
 
     const offset = (page - 1) * limit;
     const where = {};
 
     // Фильтры
-    if (folderName) {
-      if (folderName === '[Пусто]') {
-        where[Op.or] = [
-          { folderName: '' },
-          { folderName: null }
-        ];
-      } else {
-        where.folderName = folderName;
-      }
-    }
-
-    if (userId) {
-      where.userId = userId;
-    }
-
-    if (status) {
-      where.status = Array.isArray(status) ? { [Op.in]: status } : status;
-    }
-
+    if (status) where.status = status;
     if (search) {
       where[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
-        { profileId: { [Op.like]: `%${search}%` } },
-        { userId: { [Op.like]: `%${search}%` } }
+        { folder_name: { [Op.like]: `%${search}%` } },
+        { workspace_name: { [Op.like]: `%${search}%` } }
       ];
     }
 
@@ -124,18 +31,48 @@ const getProfiles = async (req, res, next) => {
       where,
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [['createdAt', 'DESC']]
+      order: [[sortBy, sortOrder]],
+      attributes: [
+        'id',
+        'profile_id',
+        'name',
+        'folder_id',
+        'folder_name', 
+        'workspace_id',
+        'workspace_name',
+        'proxy',
+        'user_id',
+        'status',
+        'created_at',
+        'updated_at'
+      ]
     });
+
+    // Преобразуем данные для frontend (snake_case -> camelCase)
+    const profiles = rows.map(profile => ({
+      id: profile.id,
+      profileId: profile.profile_id,
+      profileName: profile.name, // ИСПРАВЛЕНО: name это название профиля
+      folderId: profile.folder_id,
+      folderName: profile.folder_name,
+      workspaceId: profile.workspace_id,
+      workspaceName: profile.workspace_name,
+      proxy: profile.proxy,
+      userId: profile.user_id,
+      status: profile.status,
+      createdAt: profile.created_at,
+      updatedAt: profile.updated_at
+    }));
 
     res.json({
       success: true,
       data: {
-        profiles: rows,
+        profiles,
         pagination: {
           total: count,
           page: parseInt(page),
           limit: parseInt(limit),
-          pages: Math.ceil(count / limit)
+          totalPages: Math.ceil(count / limit)
         }
       }
     });
@@ -149,8 +86,23 @@ const getProfile = async (req, res, next) => {
   try {
     const { id } = req.params;
     
-    const profile = await Profile.findByPk(id);
-    
+    const profile = await Profile.findByPk(id, {
+      attributes: [
+        'id',
+        'profile_id',
+        'name',
+        'folder_id',
+        'folder_name', 
+        'workspace_id',
+        'workspace_name',
+        'proxy',
+        'user_id',
+        'status',
+        'created_at',
+        'updated_at'
+      ]
+    });
+
     if (!profile) {
       return res.status(404).json({
         success: false,
@@ -160,7 +112,72 @@ const getProfile = async (req, res, next) => {
 
     res.json({
       success: true,
-      data: profile
+      data: {
+        id: profile.id,
+        profileId: profile.profile_id,
+        profileName: profile.name,
+        folderId: profile.folder_id,
+        folderName: profile.folder_name,
+        workspaceId: profile.workspace_id,
+        workspaceName: profile.workspace_name,
+        proxy: profile.proxy,
+        userId: profile.user_id,
+        status: profile.status,
+        createdAt: profile.created_at,
+        updatedAt: profile.updated_at
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Создать новые профили (пакетно)
+const createProfiles = async (req, res, next) => {
+  try {
+    // Поддерживаем как один профиль, так и массив
+    const profilesData = Array.isArray(req.body) ? req.body : [req.body];
+    
+    const createdProfiles = [];
+    
+    for (const profileData of profilesData) {
+      // Преобразуем camelCase в snake_case для БД
+      const dbData = {
+        profile_id: profileData.profileId || null,
+        name: profileData.profileName, // ИСПРАВЛЕНО: name это название профиля
+        folder_id: profileData.folderId || null,
+        folder_name: profileData.folderName,
+        workspace_id: profileData.workspaceId,
+        workspace_name: profileData.workspaceName,
+        proxy: profileData.proxy || null,
+        user_id: profileData.userId || null,
+        status: profileData.status || 'created'
+      };
+
+      const profile = await Profile.create(dbData);
+      
+      // Преобразуем обратно в camelCase для ответа
+      createdProfiles.push({
+        id: profile.id,
+        profileId: profile.profile_id,
+        profileName: profile.name,
+        folderId: profile.folder_id,
+        folderName: profile.folder_name,
+        workspaceId: profile.workspace_id,
+        workspaceName: profile.workspace_name,
+        proxy: profile.proxy,
+        userId: profile.user_id,
+        status: profile.status,
+        createdAt: profile.created_at,
+        updatedAt: profile.updated_at
+      });
+    }
+    
+    logger.info('Profiles created successfully', { count: createdProfiles.length });
+
+    res.status(201).json({
+      success: true,
+      data: createdProfiles.length === 1 ? createdProfiles[0] : createdProfiles
     });
   } catch (error) {
     next(error);
@@ -173,7 +190,6 @@ const updateProfile = async (req, res, next) => {
     const { id } = req.params;
     
     const profile = await Profile.findByPk(id);
-    
     if (!profile) {
       return res.status(404).json({
         success: false,
@@ -181,85 +197,98 @@ const updateProfile = async (req, res, next) => {
       });
     }
 
-    const oldData = { ...profile.dataValues };
-    await profile.update(req.body);
+    // Преобразуем camelCase в snake_case для БД
+    const updateData = {};
+    if (req.body.profileId !== undefined) updateData.profile_id = req.body.profileId;
+    if (req.body.profileName !== undefined) updateData.name = req.body.profileName;
+    if (req.body.folderId !== undefined) updateData.folder_id = req.body.folderId;
+    if (req.body.folderName !== undefined) updateData.folder_name = req.body.folderName;
+    if (req.body.workspaceId !== undefined) updateData.workspace_id = req.body.workspaceId;
+    if (req.body.workspaceName !== undefined) updateData.workspace_name = req.body.workspaceName;
+    if (req.body.proxy !== undefined) updateData.proxy = req.body.proxy;
+    if (req.body.userId !== undefined) updateData.user_id = req.body.userId;
+    if (req.body.status !== undefined) updateData.status = req.body.status;
 
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Обновлен профиль: ${profile.name}`,
-      entityType: 'profile',
-      entityId: profile.id,
-      actionType: 'update',
-      metadata: {
-        oldData: oldData,
-        newData: req.body
-      }
-    });
-
-    logger.info('Profile updated', { profileId: profile.id, name: profile.name });
+    await profile.update(updateData);
+    
+    logger.info('Profile updated successfully', { profileId: id });
 
     res.json({
       success: true,
-      data: profile
+      data: {
+        id: profile.id,
+        profileId: profile.profile_id,
+        profileName: profile.name,
+        folderId: profile.folder_id,
+        folderName: profile.folder_name,
+        workspaceId: profile.workspace_id,
+        workspaceName: profile.workspace_name,
+        proxy: profile.proxy,
+        userId: profile.user_id,
+        status: profile.status,
+        createdAt: profile.created_at,
+        updatedAt: profile.updated_at
+      }
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Обновить профили (пакетно)
+// Обновить профили пакетно
 const updateProfiles = async (req, res, next) => {
-  const transaction = await sequelize.transaction();
-  
   try {
-    const profiles = req.body;
+    const profilesData = Array.isArray(req.body) ? req.body : [req.body];
     
-    if (!Array.isArray(profiles)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Ожидается массив профилей'
+    const updatedProfiles = [];
+    
+    for (const profileData of profilesData) {
+      if (!profileData.id) {
+        continue; // Пропускаем записи без ID
+      }
+      
+      const profile = await Profile.findByPk(profileData.id);
+      if (!profile) {
+        continue; // Пропускаем несуществующие профили
+      }
+
+      // Преобразуем camelCase в snake_case для БД
+      const updateData = {};
+      if (profileData.profileId !== undefined) updateData.profile_id = profileData.profileId;
+      if (profileData.profileName !== undefined) updateData.name = profileData.profileName;
+      if (profileData.folderId !== undefined) updateData.folder_id = profileData.folderId;
+      if (profileData.folderName !== undefined) updateData.folder_name = profileData.folderName;
+      if (profileData.workspaceId !== undefined) updateData.workspace_id = profileData.workspaceId;
+      if (profileData.workspaceName !== undefined) updateData.workspace_name = profileData.workspaceName;
+      if (profileData.proxy !== undefined) updateData.proxy = profileData.proxy;
+      if (profileData.userId !== undefined) updateData.user_id = profileData.userId;
+      if (profileData.status !== undefined) updateData.status = profileData.status;
+
+      await profile.update(updateData);
+      
+      updatedProfiles.push({
+        id: profile.id,
+        profileId: profile.profile_id,
+        profileName: profile.name,
+        folderId: profile.folder_id,
+        folderName: profile.folder_name,
+        workspaceId: profile.workspace_id,
+        workspaceName: profile.workspace_name,
+        proxy: profile.proxy,
+        userId: profile.user_id,
+        status: profile.status,
+        createdAt: profile.created_at,
+        updatedAt: profile.updated_at
       });
     }
-
-    let updatedCount = 0;
-
-    for (const profileData of profiles) {
-      const profile = await Profile.findOne({
-        where: { profileId: profileData.profileId },
-        transaction
-      });
-
-      if (profile) {
-        await profile.update(profileData, { transaction });
-        updatedCount++;
-      }
-    }
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Обновлено ${updatedCount} профилей`,
-      entityType: 'profile',
-      entityId: 0,
-      actionType: 'bulk_update',
-      metadata: {
-        count: updatedCount
-      }
-    }, { transaction });
-
-    await transaction.commit();
-
-    logger.info('Profiles bulk updated', { count: updatedCount });
+    
+    logger.info('Profiles updated successfully', { count: updatedProfiles.length });
 
     res.json({
       success: true,
-      data: {
-        updated: updatedCount
-      }
+      data: updatedProfiles
     });
   } catch (error) {
-    await transaction.rollback();
     next(error);
   }
 };
@@ -270,7 +299,6 @@ const deleteProfile = async (req, res, next) => {
     const { id } = req.params;
     
     const profile = await Profile.findByPk(id);
-    
     if (!profile) {
       return res.status(404).json({
         success: false,
@@ -278,20 +306,9 @@ const deleteProfile = async (req, res, next) => {
       });
     }
 
-    const deletedData = { name: profile.name, id: profile.id };
-
     await profile.destroy();
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Удален профиль: ${deletedData.name}`,
-      entityType: 'profile',
-      entityId: deletedData.id,
-      actionType: 'delete'
-    });
-
-    logger.info('Profile deleted', { profileId: deletedData.id, name: deletedData.name });
+    
+    logger.info('Profile deleted successfully', { profileId: id });
 
     res.json({
       success: true,
@@ -302,85 +319,106 @@ const deleteProfile = async (req, res, next) => {
   }
 };
 
-// Получить папки
-const getFolders = async (req, res, next) => {
+// Получить статистику профилей
+const getProfileStats = async (req, res, next) => {
   try {
-    const folders = await Profile.findAll({
+    // Получаем статистику по статусам
+    const statusStats = await Profile.findAll({
       attributes: [
-        'folderName',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        'status',
+        [Profile.sequelize.fn('COUNT', Profile.sequelize.col('id')), 'count']
       ],
-      where: {
-        folderName: { [Op.not]: null }
-      },
-      group: ['folderName'],
-      order: [['folderName', 'ASC']]
+      group: ['status'],
+      raw: true
     });
 
-    const folderList = folders.map(folder => ({
-      name: folder.folderName || 'Без папки',
-      count: parseInt(folder.dataValues.count)
-    }));
+    // Общая статистика
+    const total = await Profile.count();
 
     res.json({
       success: true,
-      data: folderList
+      data: {
+        total,
+        byStatus: statusStats.reduce((acc, stat) => {
+          acc[stat.status] = parseInt(stat.count);
+          return acc;
+        }, {})
+      }
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Создать папку
-const createFolder = async (req, res, next) => {
+// Массовое удаление профилей
+const bulkDeleteProfiles = async (req, res, next) => {
   try {
-    const { name } = req.body;
+    const { ids } = req.body;
 
-    if (!name) {
+    if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Название папки обязательно'
+        error: 'Массив ID обязателен'
       });
     }
 
-    // Проверяем, не существует ли уже папка
-    const existingProfile = await Profile.findOne({
-      where: { folderName: name }
+    const deletedCount = await Profile.destroy({
+      where: {
+        id: {
+          [Op.in]: ids
+        }
+      }
     });
 
-    if (existingProfile) {
-      return res.status(400).json({
-        success: false,
-        error: `Папка с именем '${name}' уже существует`
-      });
-    }
+    logger.info('Bulk delete profiles', { count: deletedCount });
 
-    // Создаем временный профиль для папки
-    const profile = await Profile.create({
-      profileId: `temp-${name}-${Date.now()}`,
-      name: 'Temporary Profile for Folder',
-      folderName: name,
-      workspaceId: '0',
-      workspaceName: 'Default',
-      proxy: 'none'
-    });
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Создана папка: ${name}`,
-      entityType: 'folder',
-      entityId: 0,
-      actionType: 'create'
-    });
-
-    logger.info('Folder created', { folderName: name });
-
-    res.status(201).json({
+    res.json({
       success: true,
       data: {
-        message: `Папка '${name}' успешно создана`,
-        folder: name
+        deletedCount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Массовое обновление статуса
+const bulkUpdateStatus = async (req, res, next) => {
+  try {
+    const { ids, status } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Массив ID обязателен'
+      });
+    }
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        error: 'Статус обязателен'
+      });
+    }
+
+    const [updatedCount] = await Profile.update(
+      { status },
+      {
+        where: {
+          id: {
+            [Op.in]: ids
+          }
+        }
+      }
+    );
+
+    logger.info('Bulk update profile status', { count: updatedCount, status });
+
+    res.json({
+      success: true,
+      data: {
+        updatedCount
       }
     });
   } catch (error) {
@@ -389,12 +427,13 @@ const createFolder = async (req, res, next) => {
 };
 
 module.exports = {
-  createProfiles,
   getProfiles,
   getProfile,
+  createProfiles,
   updateProfile,
   updateProfiles,
   deleteProfile,
-  getFolders,
-  createFolder
+  getProfileStats,
+  bulkDeleteProfiles,
+  bulkUpdateStatus
 };

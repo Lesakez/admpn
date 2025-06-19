@@ -2,38 +2,60 @@ const Joi = require('joi');
 
 // Схема для создания прокси
 const createProxySchema = Joi.object({
-  type: Joi.string().max(50).allow('', null),
-  ipPort: Joi.string().pattern(/^.+:\d+$/).required().messages({
-    'string.pattern.base': 'IP:Port должен быть в формате "IP:PORT"',
+  ipPort: Joi.string().required().messages({
+    'string.empty': 'IP:Port не может быть пустым',
     'any.required': 'IP:Port обязателен'
   }),
-  login: Joi.string().max(255).allow('', null),
-  password: Joi.string().max(255).allow('', null),
-  changeIpUrl: Joi.string().uri().allow('', null).messages({
-    'string.uri': 'URL для смены IP должен быть корректным URL'
+  protocol: Joi.string().valid('http', 'https', 'socks4', 'socks5').default('http').messages({
+    'any.only': 'Протокол должен быть одним из: http, https, socks4, socks5'
   }),
-  status: Joi.string().valid('free', 'busy', 'inactive').default('free'),
-  country: Joi.string().max(100).allow('', null),
-  projectId: Joi.number().integer().positive().allow(null).messages({
-    'number.positive': 'ID проекта должен быть положительным числом'
+  login: Joi.string().allow('', null).messages({
+    'string.base': 'Логин должен быть строкой'
+  }),
+  password: Joi.string().allow('', null).messages({
+    'string.base': 'Пароль должен быть строкой'
+  }),
+  country: Joi.string().allow('', null).messages({
+    'string.base': 'Страна должна быть строкой'
+  }),
+  status: Joi.string().valid('free', 'busy', 'blocked', 'error').default('free').messages({
+    'any.only': 'Статус должен быть одним из: free, busy, blocked, error'
+  }),
+  projectId: Joi.number().integer().allow(null).messages({
+    'number.base': 'ID проекта должен быть числом',
+    'number.integer': 'ID проекта должен быть целым числом'
+  }),
+  notes: Joi.string().allow('', null).max(1000).messages({
+    'string.max': 'Заметки не могут быть длиннее 1000 символов'
   })
 });
 
 // Схема для обновления прокси
 const updateProxySchema = Joi.object({
-  type: Joi.string().max(50).allow('', null),
-  ipPort: Joi.string().pattern(/^.+:\d+$/).messages({
-    'string.pattern.base': 'IP:Port должен быть в формате "IP:PORT"'
+  ipPort: Joi.string().messages({
+    'string.empty': 'IP:Port не может быть пустым'
   }),
-  login: Joi.string().max(255).allow('', null),
-  password: Joi.string().max(255).allow('', null),
-  changeIpUrl: Joi.string().uri().allow('', null).messages({
-    'string.uri': 'URL для смены IP должен быть корректным URL'
+  protocol: Joi.string().valid('http', 'https', 'socks4', 'socks5').messages({
+    'any.only': 'Протокол должен быть одним из: http, https, socks4, socks5'
   }),
-  status: Joi.string().valid('free', 'busy', 'inactive'),
-  country: Joi.string().max(100).allow('', null),
-  projectId: Joi.number().integer().positive().allow(null).messages({
-    'number.positive': 'ID проекта должен быть положительным числом'
+  login: Joi.string().allow('', null).messages({
+    'string.base': 'Логин должен быть строкой'
+  }),
+  password: Joi.string().allow('', null).messages({
+    'string.base': 'Пароль должен быть строкой'
+  }),
+  country: Joi.string().allow('', null).messages({
+    'string.base': 'Страна должна быть строкой'
+  }),
+  status: Joi.string().valid('free', 'busy', 'blocked', 'error').messages({
+    'any.only': 'Статус должен быть одним из: free, busy, blocked, error'
+  }),
+  projectId: Joi.number().integer().allow(null).messages({
+    'number.base': 'ID проекта должен быть числом',
+    'number.integer': 'ID проекта должен быть целым числом'
+  }),
+  notes: Joi.string().allow('', null).max(1000).messages({
+    'string.max': 'Заметки не могут быть длиннее 1000 символов'
   })
 });
 

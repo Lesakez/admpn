@@ -1,28 +1,3 @@
-const onSubmit = async (data) => {
-    try {
-      // Очищаем пустые значения
-      const cleanData = Object.fromEntries(
-        Object.entries(data).filter(([_, value]) => value !== '' && value !== null)
-      )
-
-      if (isEdit) {
-        await updateMutation.mutateAsync({ id: profile.id, data: cleanData })
-      } else {
-        // Для создания профиля отправляем массив
-        await createMutation.mutateAsync([cleanData])
-      }
-      
-      reset()
-      onClose()
-    } catch (error) {
-      console.error('Form submission error:', error)
-    }
-  }
-
-  const handleClose = () => {
-    reset()
-    onClose()
-  }// frontend/src/components/modals/ProfileFormModal.js
 import React from 'react'
 import {
   CModal,
@@ -39,21 +14,39 @@ import {
   CRow,
   CCol,
   CSpinner,
+  CInputGroup,
+  CInputGroupText,
   CBadge,
+  CCard,
+  CCardBody,
+  CCardHeader,
+  CAlert,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
-import { cilSave, cilX } from '@coreui/icons'
+import {
+  cilUser,
+  cilSettings,
+  cilTask,
+  cilPeople,
+  cilFolder,
+  cilDevices,
+} from '@coreui/icons'
 import { useForm } from 'react-hook-form'
-import { useCreateProfiles, useUpdateProfile, useFolders } from '../../hooks/useProfiles'
-import { useEntityStatuses } from '../../hooks/useStatuses' // ДОБАВЛЕНО
+import { useEntityCRUD } from '../../hooks/useEntityCRUD'
+import { profilesService } from '../../services/profilesService'
 
 const ProfileFormModal = ({ visible, onClose, profile = null, isEdit = false }) => {
-  const createMutation = useCreateProfiles()
-  const updateMutation = useUpdateProfile()
-  const { data: folders } = useFolders()
-  
-  // ДОБАВЛЕНО: Загружаем статусы для профилей динамически
-  const { data: profileStatuses, isLoading: statusesLoading } = useEntityStatuses('profile')
+  // Используем универсальный хук для CRUD операций
+  const { 
+    createMutation, 
+    updateMutation,
+    isLoading 
+  } = useEntityCRUD('profiles', profilesService, {
+    successMessages: {
+      create: 'Профиль создан успешно',
+      update: 'Профиль обновлен успешно'
+    }
+  })
   
   const {
     register,
@@ -63,19 +56,51 @@ const ProfileFormModal = ({ visible, onClose, profile = null, isEdit = false }) 
     watch,
   } = useForm({
     defaultValues: {
-      profileId: profile?.profileId || '',
-      name: profile?.name || '',
-      folderId: profile?.folderId || '',
+      profileName: profile?.profileName || '',
       folderName: profile?.folderName || '',
       workspaceId: profile?.workspaceId || '',
       workspaceName: profile?.workspaceName || '',
-      proxy: profile?.proxy || 'none',
       userId: profile?.userId || '',
-      status: profile?.status || 'created',
+      status: profile?.status || 'active',
+      notes: profile?.notes || ''
     }
   })
 
-  const isLoading = createMutation.isLoading || updateMutation.isLoading
+  const watchedStatus = watch('status')
+
+  const onSubmit = async (data) => {
+    try {
+      // Очищаем пустые значения
+      const cleanData = Object.fromEntries(
+        Object.entries(data).filter(([_, value]) => value !== '' && value !== null)
+      )
+
+      if (isEdit) {
+        await updateMutation.mutateAsync({ id: profile.id, data: cleanData })
+      } else {
+        await createMutation.mutateAsync(cleanData)
+      }
+      
+      reset()
+      onClose()
+    } catch (error) {
+      console.error('Form submission error:', error)
+    }
+  }
+
+  const handleClose = () => {
+    reset()
+    onClose()
+  }
+
+  // Предопределенные статусы профилей
+  const profileStatuses = [
+    { value: 'active', label: 'Активный' },
+    { value: 'inactive', label: 'Неактивный' },
+    { value: 'blocked', label: 'Заблокирован' },
+    { value: 'error', label: 'Ошибка' },
+    { value: 'maintenance', label: 'На обслуживании' }
+  ]
 
   return (
     <CModal 
@@ -85,45 +110,36 @@ const ProfileFormModal = ({ visible, onClose, profile = null, isEdit = false }) 
       fullscreen="md"
     >
       <CModalHeader>
-        <CModalTitle>{isEdit ? 'Редактировать профиль' : 'Создать профиль'}</CModalTitle>
+        <CModalTitle>
+          <CIcon icon={cilUser} className="me-2" />
+          {isEdit ? 'Редактировать профиль' : 'Создать профиль'}
+        </CModalTitle>
       </CModalHeader>
-      
+
       <CForm onSubmit={handleSubmit(onSubmit)}>
         <CModalBody>
           <CRow>
-            {/* Основная информация */}
-            <CCol md={6} sm={12}>
+            {/* Название профиля */}
+            <CCol md={6}>
               <div className="mb-3">
-                <CFormLabel htmlFor="profileId">Profile ID *</CFormLabel>
-                <CFormInput
-                  id="profileId"
-                  placeholder="profile_001"
-                  invalid={!!errors.profileId}
-                  {...register('profileId', { 
-                    required: 'Profile ID обязателен',
-                    minLength: { value: 1, message: 'Минимум 1 символ' }
-                  })}
-                />
-                {errors.profileId && (
-                  <div className="invalid-feedback">{errors.profileId.message}</div>
-                )}
-              </div>
-            </CCol>
-
-            <CCol md={6} sm={12}>
-              <div className="mb-3">
-                <CFormLabel htmlFor="name">Название профиля *</CFormLabel>
-                <CFormInput
-                  id="name"
-                  placeholder="Мой профиль"
-                  invalid={!!errors.name}
-                  {...register('name', { 
-                    required: 'Название профиля обязательно',
-                    minLength: { value: 1, message: 'Минимум 1 символ' }
-                  })}
-                />
-                {errors.name && (
-                  <div className="invalid-feedback">{errors.name.message}</div>
+                <CFormLabel htmlFor="profileName">Название профиля *</CFormLabel>
+                <CInputGroup>
+                  <CInputGroupText>
+                    <CIcon icon={cilUser} />
+                  </CInputGroupText>
+                  <CFormInput
+                    id="profileName"
+                    placeholder="Profile_001"
+                    invalid={!!errors.profileName}
+                    {...register('profileName', { 
+                      required: 'Название профиля обязательно',
+                      minLength: { value: 1, message: 'Минимум 1 символ' },
+                      maxLength: { value: 255, message: 'Максимум 255 символов' }
+                    })}
+                  />
+                </CInputGroup>
+                {errors.profileName && (
+                  <div className="invalid-feedback d-block">{errors.profileName.message}</div>
                 )}
               </div>
             </CCol>
@@ -131,59 +147,54 @@ const ProfileFormModal = ({ visible, onClose, profile = null, isEdit = false }) 
             {/* Папка */}
             <CCol md={6}>
               <div className="mb-3">
-                <CFormLabel htmlFor="folderId">Folder ID *</CFormLabel>
-                <CFormInput
-                  id="folderId"
-                  placeholder="folder_001"
-                  invalid={!!errors.folderId}
-                  {...register('folderId', { 
-                    required: 'Folder ID обязателен',
-                    minLength: { value: 1, message: 'Минимум 1 символ' }
-                  })}
-                />
-                {errors.folderId && (
-                  <div className="invalid-feedback">{errors.folderId.message}</div>
-                )}
-              </div>
-            </CCol>
-
-            <CCol md={6}>
-              <div className="mb-3">
                 <CFormLabel htmlFor="folderName">Название папки *</CFormLabel>
-                <CFormInput
-                  id="folderName"
-                  placeholder="Моя папка"
-                  invalid={!!errors.folderName}
-                  {...register('folderName', { 
-                    required: 'Название папки обязательно',
-                    minLength: { value: 1, message: 'Минимум 1 символ' }
-                  })}
-                />
+                <CInputGroup>
+                  <CInputGroupText>
+                    <CIcon icon={cilFolder} />
+                  </CInputGroupText>
+                  <CFormInput
+                    id="folderName"
+                    placeholder="folder_001"
+                    invalid={!!errors.folderName}
+                    {...register('folderName', { 
+                      required: 'Название папки обязательно',
+                      minLength: { value: 1, message: 'Минимум 1 символ' },
+                      maxLength: { value: 255, message: 'Максимум 255 символов' }
+                    })}
+                  />
+                </CInputGroup>
                 {errors.folderName && (
-                  <div className="invalid-feedback">{errors.folderName.message}</div>
+                  <div className="invalid-feedback d-block">{errors.folderName.message}</div>
                 )}
               </div>
             </CCol>
 
-            {/* Workspace */}
+            {/* Workspace ID */}
             <CCol md={6}>
               <div className="mb-3">
                 <CFormLabel htmlFor="workspaceId">Workspace ID *</CFormLabel>
-                <CFormInput
-                  id="workspaceId"
-                  placeholder="workspace_001"
-                  invalid={!!errors.workspaceId}
-                  {...register('workspaceId', { 
-                    required: 'Workspace ID обязателен',
-                    minLength: { value: 1, message: 'Минимум 1 символ' }
-                  })}
-                />
+                <CInputGroup>
+                  <CInputGroupText>
+                    <CIcon icon={cilDevices} />
+                  </CInputGroupText>
+                  <CFormInput
+                    id="workspaceId"
+                    placeholder="workspace_001"
+                    invalid={!!errors.workspaceId}
+                    {...register('workspaceId', { 
+                      required: 'Workspace ID обязателен',
+                      minLength: { value: 1, message: 'Минимум 1 символ' },
+                      maxLength: { value: 255, message: 'Максимум 255 символов' }
+                    })}
+                  />
+                </CInputGroup>
                 {errors.workspaceId && (
-                  <div className="invalid-feedback">{errors.workspaceId.message}</div>
+                  <div className="invalid-feedback d-block">{errors.workspaceId.message}</div>
                 )}
               </div>
             </CCol>
 
+            {/* Workspace Name */}
             <CCol md={6}>
               <div className="mb-3">
                 <CFormLabel htmlFor="workspaceName">Название Workspace *</CFormLabel>
@@ -193,11 +204,12 @@ const ProfileFormModal = ({ visible, onClose, profile = null, isEdit = false }) 
                   invalid={!!errors.workspaceName}
                   {...register('workspaceName', { 
                     required: 'Название workspace обязательно',
-                    minLength: { value: 1, message: 'Минимум 1 символ' }
+                    minLength: { value: 1, message: 'Минимум 1 символ' },
+                    maxLength: { value: 255, message: 'Максимум 255 символов' }
                   })}
                 />
                 {errors.workspaceName && (
-                  <div className="invalid-feedback">{errors.workspaceName.message}</div>
+                  <div className="invalid-feedback d-block">{errors.workspaceName.message}</div>
                 )}
               </div>
             </CCol>
@@ -209,8 +221,13 @@ const ProfileFormModal = ({ visible, onClose, profile = null, isEdit = false }) 
                 <CFormInput
                   id="userId"
                   placeholder="user_123"
-                  {...register('userId')}
+                  {...register('userId', {
+                    maxLength: { value: 255, message: 'Максимум 255 символов' }
+                  })}
                 />
+                {errors.userId && (
+                  <div className="invalid-feedback d-block">{errors.userId.message}</div>
+                )}
               </div>
             </CCol>
 
@@ -218,74 +235,97 @@ const ProfileFormModal = ({ visible, onClose, profile = null, isEdit = false }) 
             <CCol md={6}>
               <div className="mb-3">
                 <CFormLabel htmlFor="status">Статус</CFormLabel>
-                
-                {/* ИЗМЕНЕНО: Динамическая загрузка статусов */}
-                {statusesLoading ? (
-                  <div className="d-flex align-items-center">
-                    <CSpinner size="sm" className="me-2" />
-                    <span className="text-muted">Загрузка статусов...</span>
-                  </div>
-                ) : (
-                  <CFormSelect id="status" {...register('status')}>
-                    {profileStatuses && Object.values(profileStatuses).map(status => (
-                      <option key={status} value={status}>
-                        {status === 'created' && '🆕 Создан'}
-                        {status === 'active' && '🟢 Активный'}
-                        {status === 'inactive' && '⚪ Неактивный'}
-                        {status === 'working' && '🟡 В работе'}
-                        {status === 'banned' && '🔴 Заблокирован'}
-                        {status === 'warming' && '🔥 Прогрев'}
-                        {status === 'ready' && '✅ Готов'}
-                        {status === 'error' && '❌ Ошибка'}
-                        {!['created', 'active', 'inactive', 'working', 'banned', 'warming', 'ready', 'error'].includes(status) && `⚪ ${status}`}
-                      </option>
-                    ))}
-                  </CFormSelect>
+                <CFormSelect
+                  id="status"
+                  {...register('status')}
+                  invalid={!!errors.status}
+                >
+                  <option value="">Выберите статус</option>
+                  {profileStatuses.map(status => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
+                    </option>
+                  ))}
+                </CFormSelect>
+                {errors.status && (
+                  <div className="invalid-feedback d-block">{errors.status.message}</div>
                 )}
               </div>
             </CCol>
 
-            {/* Прокси настройки */}
-            <CCol xs={12}>
+            {/* Заметки */}
+            <CCol md={12}>
               <div className="mb-3">
-                <CFormLabel htmlFor="proxy">Прокси настройки *</CFormLabel>
+                <CFormLabel htmlFor="notes">Заметки</CFormLabel>
                 <CFormTextarea
-                  id="proxy"
+                  id="notes"
                   rows={3}
-                  placeholder="none, socks5://127.0.0.1:1080, http://user:pass@proxy.com:8080"
-                  invalid={!!errors.proxy}
-                  {...register('proxy', { 
-                    required: 'Прокси настройки обязательны'
+                  placeholder="Дополнительная информация о профиле..."
+                  {...register('notes', {
+                    maxLength: { value: 1000, message: 'Максимум 1000 символов' }
                   })}
                 />
-                {errors.proxy && (
-                  <div className="invalid-feedback">{errors.proxy.message}</div>
+                {errors.notes && (
+                  <div className="invalid-feedback d-block">{errors.notes.message}</div>
                 )}
-                <div className="form-text">
-                  Укажите настройки прокси: none (без прокси), socks5://IP:PORT, http://login:pass@IP:PORT
-                </div>
               </div>
             </CCol>
           </CRow>
+
+          {/* Информация о статусе */}
+          {watchedStatus && (
+            <CAlert color="info" className="d-flex align-items-center">
+              <CIcon icon={cilTask} className="me-2" />
+              <div>
+                <strong>Статус: {profileStatuses.find(s => s.value === watchedStatus)?.label || watchedStatus}</strong>
+                <div className="small">
+                  {watchedStatus === 'active' && 'Профиль готов к использованию'}
+                  {watchedStatus === 'inactive' && 'Профиль временно отключен'}
+                  {watchedStatus === 'blocked' && 'Профиль заблокирован'}
+                  {watchedStatus === 'error' && 'Профиль содержит ошибки'}
+                  {watchedStatus === 'maintenance' && 'Профиль на техническом обслуживании'}
+                </div>
+              </div>
+            </CAlert>
+          )}
+
+          {/* Информация о редактировании */}
+          {isEdit && profile && (
+            <CCard className="mt-3">
+              <CCardHeader>
+                <small>Информация о профиле</small>
+              </CCardHeader>
+              <CCardBody>
+                <CRow>
+                  <CCol sm={6}>
+                    <small className="text-muted">ID профиля:</small>
+                    <div>{profile.id}</div>
+                  </CCol>
+                  <CCol sm={6}>
+                    <small className="text-muted">Создан:</small>
+                    <div>{profile.createdAt ? new Date(profile.createdAt).toLocaleString() : 'Неизвестно'}</div>
+                  </CCol>
+                </CRow>
+              </CCardBody>
+            </CCard>
+          )}
         </CModalBody>
 
         <CModalFooter>
-          <CButton color="secondary" onClick={handleClose} disabled={isLoading}>
-            <CIcon icon={cilX} className="me-2" />
+          <CButton 
+            color="secondary" 
+            onClick={handleClose} 
+            disabled={isLoading}
+          >
             Отмена
           </CButton>
-          <CButton color="primary" type="submit" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <CSpinner size="sm" className="me-2" />
-                {isEdit ? 'Сохранение...' : 'Создание...'}
-              </>
-            ) : (
-              <>
-                <CIcon icon={cilSave} className="me-2" />
-                {isEdit ? 'Сохранить' : 'Создать'}
-              </>
-            )}
+          <CButton 
+            color="primary" 
+            type="submit" 
+            disabled={isLoading}
+          >
+            {isLoading && <CSpinner component="span" size="sm" className="me-2" />}
+            {isEdit ? 'Обновить' : 'Создать'}
           </CButton>
         </CModalFooter>
       </CForm>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   CCard,
   CCardBody,
@@ -23,6 +23,11 @@ import {
   CAlert,
   CProgress,
   CWidgetStatsA,
+  CDropdown,
+  CDropdownToggle,
+  CDropdownMenu,
+  CDropdownItem,
+  CFormCheck,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -35,34 +40,113 @@ import {
   cilFolder,
   cilDevices,
   cilGlobeAlt,
+  cilOptions,
+  cilCloudDownload,
 } from '@coreui/icons'
-import { useProjects, useDeleteProject } from '../../hooks/useProjects'
+import { useEntityList, useEntityCRUD, useEntityBulkOperations } from '../../hooks/useEntityCRUD'
+import { projectsService } from '../../services/projectsService'
 import { ProjectFormModal } from '../../components/forms'
 
 const Projects = () => {
-  const [filters, setFilters] = useState({ page: 1, limit: 20 })
+  const [filters, setFilters] = useState({ 
+    page: 1, 
+    limit: 20,
+    search: '',
+    sortBy: 'created_at', // ИСПРАВЛЕНО: используем snake_case как в БД
+    sortOrder: 'DESC'
+  })
   const [showModal, setShowModal] = useState(false)
   const [editingProject, setEditingProject] = useState(null)
+  const [selectedProjects, setSelectedProjects] = useState([])
 
-  // Загрузка данных
-  const { data, isLoading, error, refetch } = useProjects(filters)
-  const deleteMutation = useDeleteProject()
+  // Используем новые оптимизированные хуки
+  const { 
+    data, 
+    isLoading, 
+    error, 
+    refetch 
+  } = useEntityList('projects', projectsService, filters, {
+    keepPreviousData: true, // Сохраняем предыдущие данные при пагинации
+    staleTime: 2 * 60 * 1000 // 2 минуты
+  })
 
+  const { 
+    deleteMutation
+  } = useEntityCRUD('projects', projectsService, {
+    successMessages: {
+      delete: 'Проект удален. Связанные ресурсы отвязаны.'
+    }
+  })
+
+  const {
+    bulkDeleteMutation,
+    isBulkDeleting
+  } = useEntityBulkOperations('projects', projectsService)
+
+  // Мемоизируем вычисления для производительности
+  const projects = useMemo(() => data?.projects || [], [data])
+  const pagination = useMemo(() => data?.pagination || {}, [data])
+
+  // Вычисляем общую статистику
+  const totalStats = useMemo(() => {
+    return projects.reduce((acc, project) => {
+      if (project.stats) {
+        acc.totalProxies += project.stats.proxies?.total || 0
+        acc.freeProxies += project.stats.proxies?.free || 0
+        acc.totalPhones += project.stats.phones?.total || 0
+        acc.freePhones += project.stats.phones?.free || 0
+        acc.totalProfiles += project.stats.profiles?.total || 0
+        acc.activeProfiles += project.stats.profiles?.active || 0
+      }
+      return acc
+    }, { 
+      totalProxies: 0, 
+      freeProxies: 0, 
+      totalPhones: 0, 
+      freePhones: 0,
+      totalProfiles: 0,
+      activeProfiles: 0
+    })
+  }, [projects])
+
+  // Обработчики событий
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
       ...prev,
       [key]: value,
-      page: 1
+      page: key !== 'page' ? 1 : value // Сбрасываем страницу при изменении фильтров
     }))
   }
 
-  const handlePageChange = (page) => {
-    setFilters(prev => ({ ...prev, page }))
+  const handleSearch = (value) => {
+    // Debounce поиска
+    clearTimeout(window.searchTimeout)
+    window.searchTimeout = setTimeout(() => {
+      handleFilterChange('search', value)
+    }, 300)
   }
 
   const handleDelete = async (id) => {
     if (window.confirm('Удалить проект? Все связанные ресурсы будут отвязаны.')) {
-      await deleteMutation.mutateAsync(id)
+      try {
+        await deleteMutation.mutateAsync(id)
+      } catch (error) {
+        // Ошибка уже обработана в хуке
+        console.error('Delete error:', error)
+      }
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedProjects.length === 0) return
+    
+    if (window.confirm(`Удалить ${selectedProjects.length} проектов? Все связанные ресурсы будут отвязаны.`)) {
+      try {
+        await bulkDeleteMutation.mutateAsync(selectedProjects)
+        setSelectedProjects([])
+      } catch (error) {
+        console.error('Bulk delete error:', error)
+      }
     }
   }
 
@@ -81,25 +165,47 @@ const Projects = () => {
     setEditingProject(null)
   }
 
-  const projects = data?.projects || []
-  const pagination = data?.pagination || {}
+  const handleSelectProject = (projectId) => {
+    setSelectedProjects(prev => 
+      prev.includes(projectId)
+        ? prev.filter(id => id !== projectId)
+        : [...prev, projectId]
+    )
+  }
 
-  // Считаем общую статистику
-  const totalStats = projects.reduce((acc, project) => {
-    if (project.stats) {
-      acc.totalProxies += project.stats.proxies?.total || 0
-      acc.freeProxies += project.stats.proxies?.free || 0
-      acc.totalPhones += project.stats.phones?.total || 0
-      acc.freePhones += project.stats.phones?.free || 0
+  const handleSelectAll = () => {
+    if (selectedProjects.length === projects.length) {
+      setSelectedProjects([])
+    } else {
+      setSelectedProjects(projects.map(p => p.id))
     }
-    return acc
-  }, { totalProxies: 0, freeProxies: 0, totalPhones: 0, freePhones: 0 })
+  }
 
+  const getStatusBadge = (stats) => {
+    const totalResources = (stats?.proxies?.total || 0) + (stats?.phones?.total || 0) + (stats?.profiles?.total || 0)
+    if (totalResources === 0) return <CBadge color="secondary">Пустой</CBadge>
+    if (totalResources < 10) return <CBadge color="warning">Малый</CBadge>
+    if (totalResources < 50) return <CBadge color="info">Средний</CBadge>
+    return <CBadge color="success">Большой</CBadge>
+  }
+
+  // Рендер состояния загрузки
+  if (isLoading && !data) {
+    return (
+      <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '400px' }}>
+        <CSpinner size="lg" />
+      </div>
+    )
+  }
+
+  // Рендер ошибки
   if (error) {
     return (
       <CAlert color="danger">
-        Ошибка загрузки данных: {error.message}
-        <CButton color="link" onClick={() => refetch()}>
+        <h4>Ошибка загрузки данных</h4>
+        <p>{error.message}</p>
+        <CButton color="outline-danger" onClick={() => refetch()}>
+          <CIcon icon={cilReload} className="me-2" />
           Попробовать снова
         </CButton>
       </CAlert>
@@ -161,14 +267,51 @@ const Projects = () => {
         <CCol xs={12}>
           <CCard className="mb-4">
             <CCardHeader>
-              <CRow>
+              <CRow className="align-items-center">
                 <CCol sm={6}>
                   <h4 className="mb-0">Проекты</h4>
                   <small className="text-muted">
                     Всего: {pagination.total || 0}
+                    {selectedProjects.length > 0 && (
+                      <span className="ms-2">
+                        | Выбрано: {selectedProjects.length}
+                      </span>
+                    )}
                   </small>
                 </CCol>
-                <CCol sm={6} className="d-flex justify-content-end">
+                <CCol sm={6} className="d-flex justify-content-end gap-2">
+                  {/* Поиск */}
+                  <CInputGroup style={{ maxWidth: '300px' }}>
+                    <CInputGroupText>
+                      <CIcon icon={cilSearch} />
+                    </CInputGroupText>
+                    <CFormInput
+                      placeholder="Поиск проектов..."
+                      defaultValue={filters.search}
+                      onChange={(e) => handleSearch(e.target.value)}
+                    />
+                  </CInputGroup>
+
+                  {/* Массовые операции */}
+                  {selectedProjects.length > 0 && (
+                    <CDropdown>
+                      <CDropdownToggle color="secondary" variant="outline">
+                        <CIcon icon={cilOptions} className="me-2" />
+                        Действия ({selectedProjects.length})
+                      </CDropdownToggle>
+                      <CDropdownMenu>
+                        <CDropdownItem 
+                          onClick={handleBulkDelete}
+                          disabled={isBulkDeleting}
+                        >
+                          <CIcon icon={cilTrash} className="me-2" />
+                          Удалить выбранные
+                        </CDropdownItem>
+                      </CDropdownMenu>
+                    </CDropdown>
+                  )}
+
+                  {/* Основные действия */}
                   <CButtonGroup>
                     <CButton 
                       color="primary" 
@@ -183,222 +326,197 @@ const Projects = () => {
                       onClick={() => refetch()}
                       disabled={isLoading}
                     >
-                      <CIcon icon={cilReload} className={isLoading ? 'fa-spin' : ''} />
+                      <CIcon 
+                        icon={cilReload} 
+                        className={isLoading ? 'fa-spin me-2' : 'me-2'} 
+                      />
+                      Обновить
                     </CButton>
                   </CButtonGroup>
                 </CCol>
               </CRow>
             </CCardHeader>
 
-            <CCardBody>
-              {/* Фильтры */}
-              <CRow className="mb-3">
-                <CCol md={6}>
-                  <CInputGroup>
-                    <CInputGroupText>
-                      <CIcon icon={cilSearch} />
-                    </CInputGroupText>
-                    <CFormInput
-                      placeholder="Поиск по названию проекта..."
-                      value={filters.search || ''}
-                      onChange={(e) => handleFilterChange('search', e.target.value)}
-                    />
-                  </CInputGroup>
-                </CCol>
-                <CCol md={3}>
-                  <label className="form-label text-muted small">На странице:</label>
-                  <select
-                    className="form-select"
-                    value={filters.limit || 20}
-                    onChange={(e) => handleFilterChange('limit', parseInt(e.target.value))}
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                    <option value={100}>100</option>
-                  </select>
-                </CCol>
-              </CRow>
-
-              {/* Таблица */}
-              {isLoading ? (
-                <div className="text-center">
-                  <CSpinner color="primary" />
-                  <div className="mt-2">Загрузка...</div>
+            <CCardBody className="p-0">
+              {projects.length === 0 ? (
+                <div className="text-center py-5">
+                  <CIcon icon={cilFolder} size="3xl" className="text-muted mb-3" />
+                  <h5 className="text-muted">Проекты не найдены</h5>
+                  <p className="text-muted mb-4">
+                    {filters.search ? 
+                      'Попробуйте изменить критерии поиска' : 
+                      'Создайте первый проект для начала работы'
+                    }
+                  </p>
+                  {!filters.search && (
+                    <CButton color="primary" onClick={handleCreate}>
+                      <CIcon icon={cilPlus} className="me-2" />
+                      Создать первый проект
+                    </CButton>
+                  )}
                 </div>
               ) : (
                 <>
-                  <CTable align="middle" className="mb-0 border" hover responsive>
-                    <CTableHead color="light">
+                  <CTable hover responsive striped>
+                    <CTableHead>
                       <CTableRow>
-                        <CTableHeaderCell>ID</CTableHeaderCell>
+                        <CTableHeaderCell style={{ width: '50px' }}>
+                          <CFormCheck
+                            checked={selectedProjects.length === projects.length && projects.length > 0}
+                            indeterminate={selectedProjects.length > 0 && selectedProjects.length < projects.length}
+                            onChange={handleSelectAll}
+                          />
+                        </CTableHeaderCell>
                         <CTableHeaderCell>Название</CTableHeaderCell>
                         <CTableHeaderCell>Описание</CTableHeaderCell>
+                        <CTableHeaderCell>Статус</CTableHeaderCell>
                         <CTableHeaderCell>Прокси</CTableHeaderCell>
                         <CTableHeaderCell>Устройства</CTableHeaderCell>
+                        <CTableHeaderCell>Профили</CTableHeaderCell>
                         <CTableHeaderCell>Создан</CTableHeaderCell>
-                        <CTableHeaderCell>Действия</CTableHeaderCell>
+                        <CTableHeaderCell style={{ width: '120px' }}>Действия</CTableHeaderCell>
                       </CTableRow>
                     </CTableHead>
                     <CTableBody>
-                      {projects.length === 0 ? (
-                        <CTableRow>
-                          <CTableDataCell colSpan={7} className="text-center">
-                            Нет проектов для отображения
+                      {projects.map((project) => (
+                        <CTableRow key={project.id}>
+                          <CTableDataCell>
+                            <CFormCheck
+                              checked={selectedProjects.includes(project.id)}
+                              onChange={() => handleSelectProject(project.id)}
+                            />
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <div className="fw-semibold">{project.name}</div>
+                            <small className="text-muted">ID: {project.id}</small>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <div style={{ maxWidth: '200px' }} className="text-truncate">
+                              {project.description || <span className="text-muted">Без описания</span>}
+                            </div>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            {getStatusBadge(project.stats)}
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <div className="d-flex align-items-center">
+                              <span className="me-2">
+                                {project.stats?.proxies?.total || 0}
+                              </span>
+                              {(project.stats?.proxies?.total || 0) > 0 && (
+                                <CProgress
+                                  value={((project.stats?.proxies?.free || 0) / project.stats.proxies.total) * 100}
+                                  height={4}
+                                  className="flex-grow-1"
+                                  color="success"
+                                />
+                              )}
+                            </div>
+                            <small className="text-muted">
+                              Свободно: {project.stats?.proxies?.free || 0}
+                            </small>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <div className="d-flex align-items-center">
+                              <span className="me-2">
+                                {project.stats?.phones?.total || 0}
+                              </span>
+                              {(project.stats?.phones?.total || 0) > 0 && (
+                                <CProgress
+                                  value={((project.stats?.phones?.free || 0) / project.stats.phones.total) * 100}
+                                  height={4}
+                                  className="flex-grow-1"
+                                  color="info"
+                                />
+                              )}
+                            </div>
+                            <small className="text-muted">
+                              Свободно: {project.stats?.phones?.free || 0}
+                            </small>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <div className="d-flex align-items-center">
+                              <span className="me-2">
+                                {project.stats?.profiles?.total || 0}
+                              </span>
+                              {(project.stats?.profiles?.total || 0) > 0 && (
+                                <CProgress
+                                  value={((project.stats?.profiles?.active || 0) / project.stats.profiles.total) * 100}
+                                  height={4}
+                                  className="flex-grow-1"
+                                  color="warning"
+                                />
+                              )}
+                            </div>
+                            <small className="text-muted">
+                              Активно: {project.stats?.profiles?.active || 0}
+                            </small>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <div>{new Date(project.createdAt).toLocaleDateString()}</div>
+                            <small className="text-muted">
+                              {new Date(project.createdAt).toLocaleTimeString()}
+                            </small>
+                          </CTableDataCell>
+                          <CTableDataCell>
+                            <CButtonGroup size="sm">
+                              <CButton
+                                color="info"
+                                variant="outline"
+                                onClick={() => handleEdit(project)}
+                                disabled={deleteMutation.isLoading}
+                              >
+                                <CIcon icon={cilPencil} />
+                              </CButton>
+                              <CButton
+                                color="danger"
+                                variant="outline"
+                                onClick={() => handleDelete(project.id)}
+                                disabled={deleteMutation.isLoading}
+                              >
+                                <CIcon icon={cilTrash} />
+                              </CButton>
+                            </CButtonGroup>
                           </CTableDataCell>
                         </CTableRow>
-                      ) : (
-                        projects.map((project) => (
-                          <CTableRow key={project.id}>
-                            <CTableDataCell>
-                              <strong>{project.id}</strong>
-                            </CTableDataCell>
-                            <CTableDataCell>
-                              <div>
-                                <strong>{project.name}</strong>
-                                {project.transliterateName && (
-                                  <div className="text-muted small">
-                                    {project.transliterateName}
-                                  </div>
-                                )}
-                              </div>
-                            </CTableDataCell>
-                            <CTableDataCell>
-                              <div 
-                                className="text-truncate" 
-                                style={{ maxWidth: '200px' }}
-                                title={project.description}
-                              >
-                                {project.description || 'Без описания'}
-                              </div>
-                            </CTableDataCell>
-                            <CTableDataCell>
-                              {project.stats?.proxies ? (
-                                <div>
-                                  <CBadge color="primary" className="me-1">
-                                    {project.stats.proxies.total}
-                                  </CBadge>
-                                  <CBadge color="success" className="me-1">
-                                    {project.stats.proxies.free} свободных
-                                  </CBadge>
-                                  <CBadge color="warning">
-                                    {project.stats.proxies.busy} занятых
-                                  </CBadge>
-                                  {project.stats.proxies.total > 0 && (
-                                    <CProgress 
-                                      thin 
-                                      color="success" 
-                                      value={(project.stats.proxies.free / project.stats.proxies.total) * 100}
-                                      className="mt-1"
-                                    />
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-muted">Нет данных</span>
-                              )}
-                            </CTableDataCell>
-                            <CTableDataCell>
-                              {project.stats?.phones ? (
-                                <div>
-                                  <CBadge color="primary" className="me-1">
-                                    {project.stats.phones.total}
-                                  </CBadge>
-                                  <CBadge color="success" className="me-1">
-                                    {project.stats.phones.free} свободных
-                                  </CBadge>
-                                  <CBadge color="warning">
-                                    {project.stats.phones.busy} занятых
-                                  </CBadge>
-                                  {project.stats.phones.total > 0 && (
-                                    <CProgress 
-                                      thin 
-                                      color="success" 
-                                      value={(project.stats.phones.free / project.stats.phones.total) * 100}
-                                      className="mt-1"
-                                    />
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-muted">Нет данных</span>
-                              )}
-                            </CTableDataCell>
-                            <CTableDataCell>
-                              {project.createdAt ? 
-                                new Date(project.createdAt).toLocaleDateString('ru-RU') : 
-                                'N/A'
-                              }
-                            </CTableDataCell>
-                            <CTableDataCell>
-                              <CButtonGroup size="sm">
-                                <CButton
-                                  color="info"
-                                  variant="outline"
-                                  onClick={() => handleEdit(project)}
-                                  title="Редактировать"
-                                >
-                                  <CIcon icon={cilPencil} />
-                                </CButton>
-                                <CButton
-                                  color="warning"
-                                  variant="outline"
-                                  title="Статистика"
-                                >
-                                  <CIcon icon={cilChart} />
-                                </CButton>
-                                <CButton
-                                  color="danger"
-                                  variant="outline"
-                                  onClick={() => handleDelete(project.id)}
-                                  disabled={deleteMutation.isLoading}
-                                  title="Удалить"
-                                >
-                                  <CIcon icon={cilTrash} />
-                                </CButton>
-                              </CButtonGroup>
-                            </CTableDataCell>
-                          </CTableRow>
-                        ))
-                      )}
+                      ))}
                     </CTableBody>
                   </CTable>
 
                   {/* Пагинация */}
-                  {pagination.pages > 1 && (
-                    <div className="d-flex justify-content-between align-items-center mt-3">
+                  {pagination.totalPages > 1 && (
+                    <div className="d-flex justify-content-between align-items-center p-3">
                       <div>
-                        Показано {projects.length} из {pagination.total} записей
+                        <small className="text-muted">
+                          Показано {projects.length} из {pagination.total} записей
+                        </small>
                       </div>
                       <CPagination>
                         <CPaginationItem
                           disabled={pagination.page <= 1}
-                          onClick={() => handlePageChange(pagination.page - 1)}
+                          onClick={() => handleFilterChange('page', pagination.page - 1)}
                         >
                           Предыдущая
                         </CPaginationItem>
                         
-                        {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                          const page = Math.max(1, Math.min(
-                            pagination.pages - 4,
-                            pagination.page - 2
-                          )) + i
+                        {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                          const pageNum = Math.max(1, pagination.page - 2) + i
+                          if (pageNum > pagination.totalPages) return null
                           
-                          if (page <= pagination.pages) {
-                            return (
-                              <CPaginationItem
-                                key={page}
-                                active={page === pagination.page}
-                                onClick={() => handlePageChange(page)}
-                              >
-                                {page}
-                              </CPaginationItem>
-                            )
-                          }
-                          return null
+                          return (
+                            <CPaginationItem
+                              key={pageNum}
+                              active={pageNum === pagination.page}
+                              onClick={() => handleFilterChange('page', pageNum)}
+                            >
+                              {pageNum}
+                            </CPaginationItem>
+                          )
                         })}
                         
                         <CPaginationItem
-                          disabled={pagination.page >= pagination.pages}
-                          onClick={() => handlePageChange(pagination.page + 1)}
+                          disabled={pagination.page >= pagination.totalPages}
+                          onClick={() => handleFilterChange('page', pagination.page + 1)}
                         >
                           Следующая
                         </CPaginationItem>
@@ -413,12 +531,14 @@ const Projects = () => {
       </CRow>
 
       {/* Модальное окно */}
-      <ProjectFormModal
-        visible={showModal}
-        onClose={handleCloseModal}
-        project={editingProject}
-        isEdit={!!editingProject}
-      />
+      {showModal && (
+        <ProjectFormModal
+          visible={showModal}
+          onClose={handleCloseModal}
+          project={editingProject}
+          isEdit={!!editingProject}
+        />
+      )}
     </>
   )
 }

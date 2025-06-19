@@ -7,6 +7,9 @@ const router = express.Router();
 // GET /api/profiles - получить список профилей
 router.get('/', profileController.getProfiles);
 
+// GET /api/profiles/stats - статистика профилей
+router.get('/stats', profileController.getProfileStats);
+
 // GET /api/profiles/:id - получить профиль по ID
 router.get('/:id', profileController.getProfile);
 
@@ -21,5 +24,11 @@ router.post('/update', validateProfiles, profileController.updateProfiles);
 
 // DELETE /api/profiles/:id - удалить профиль
 router.delete('/:id', profileController.deleteProfile);
+
+// POST /api/profiles/bulk-delete - массовое удаление
+router.post('/bulk-delete', profileController.bulkDeleteProfiles);
+
+// POST /api/profiles/bulk-update-status - массовое обновление статуса
+router.post('/bulk-update-status', profileController.bulkUpdateStatus);
 
 module.exports = router;

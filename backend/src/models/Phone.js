@@ -3,94 +3,90 @@ const { DataTypes } = require('sequelize');
 module.exports = (sequelize) => {
   const Phone = sequelize.define('Phone', {
     id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.BIGINT.UNSIGNED,
       primaryKey: true,
       autoIncrement: true
     },
     model: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Модель телефона'
+      comment: 'Модель устройства'
     },
     device: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Устройство'
+      comment: 'Идентификатор устройства'
+    },
+    name: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Название устройства'
     },
     androidVersion: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.TEXT,
       allowNull: true,
       field: 'android_version',
       comment: 'Версия Android'
     },
-    ipAddress: {
-      type: DataTypes.STRING(45),
-      allowNull: true,
-      field: 'ip_address',
-      comment: 'IP адрес устройства'
-    },
-    macAddress: {
-      type: DataTypes.STRING(17),
-      allowNull: true,
-      field: 'mac_address',
-      comment: 'MAC адрес устройства'
-    },
-    dateSetStatusFree: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      field: 'date_set_status_free',
-      comment: 'Дата установки статуса "свободен"'
-    },
     dateSetStatusBusy: {
-      type: DataTypes.DATE,
+      type: DataTypes.DATE(3),
       allowNull: true,
       field: 'date_set_status_busy',
       comment: 'Дата установки статуса "занят"'
     },
+    dateSetStatusFree: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'date_set_status_free',
+      comment: 'Дата установки статуса "свободен"'
+    },
     dateLastReboot: {
-      type: DataTypes.DATE,
+      type: DataTypes.DATE(3),
       allowNull: true,
       field: 'date_last_reboot',
       comment: 'Дата последней перезагрузки'
     },
     status: {
-      type: DataTypes.ENUM('free', 'busy', 'inactive', 'maintenance'),
-      defaultValue: 'free',
+      type: DataTypes.TEXT,
+      allowNull: true,
       comment: 'Статус устройства'
     },
     projectId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.BIGINT.UNSIGNED,
       allowNull: true,
       field: 'project_id',
       comment: 'ID проекта'
     },
-    createdAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'created_at'
+    // Виртуальные поля для совместимости с кодом
+    ipAddress: {
+      type: DataTypes.VIRTUAL,
+      get() {
+        return this.getDataValue('ip_address') || null;
+      }
     },
-    updatedAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-      field: 'updated_at'
+    macAddress: {
+      type: DataTypes.VIRTUAL,
+      get() {
+        return this.getDataValue('mac_address') || null;
+      }
+    },
+    notes: {
+      type: DataTypes.VIRTUAL,
+      get() {
+        return this.getDataValue('notes') || null;
+      }
+    },
+    // Виртуальное поле для created_at чтобы избежать ошибок сортировки
+    createdAt: {
+      type: DataTypes.VIRTUAL,
+      get() {
+        return this.getDataValue('id') ? new Date() : null;
+      }
     }
   }, {
     tableName: 'phones',
-    timestamps: true,
-    underscored: true,
-    indexes: [
-      {
-        fields: ['status']
-      },
-      {
-        fields: ['project_id']
-      },
-      {
-        fields: ['model']
-      }
-    ]
+    timestamps: false, // Отключаем автоматические timestamps
+    underscored: true
   });
 
   Phone.associate = (models) => {

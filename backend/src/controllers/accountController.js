@@ -1,23 +1,14 @@
-const { Account, Activity, sequelize } = require('../models');
-const logger = require('../utils/logger');
+const { Account } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
-// Создать аккаунт
+// Создать новый аккаунт
 const createAccount = async (req, res, next) => {
   try {
     const account = await Account.create(req.body);
     
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Создан аккаунт: ${account.login}`,
-      entityType: 'account',
-      entityId: account.id,
-      actionType: 'create'
-    });
-
-    logger.info('Account created', { accountId: account.id, login: account.login });
-
+    logger.info('Account created successfully', { accountId: account.id });
+    
     res.status(201).json({
       success: true,
       data: account
@@ -27,7 +18,7 @@ const createAccount = async (req, res, next) => {
   }
 };
 
-// Получить список аккаунтов
+// Получить список аккаунтов с фильтрацией и пагинацией
 const getAccounts = async (req, res, next) => {
   try {
     const {
@@ -35,52 +26,30 @@ const getAccounts = async (req, res, next) => {
       limit = 20,
       status,
       source,
-      userId,
       search,
-      dateFrom,
-      dateTo
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
     } = req.query;
 
     const offset = (page - 1) * limit;
     const where = {};
 
     // Фильтры
-    if (status) {
-      where.status = Array.isArray(status) ? { [Op.in]: status } : status;
-    }
-
-    if (source) {
-      where.source = Array.isArray(source) ? { [Op.in]: source } : source;
-    }
-
-    if (userId) {
-      where.userId = Array.isArray(userId) ? { [Op.in]: userId } : userId;
-    }
-
+    if (status) where.status = status;
+    if (source) where.source = source;
     if (search) {
       where[Op.or] = [
         { login: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
-        { userId: { [Op.like]: `%${search}%` } }
+        { email: { [Op.like]: `%${search}%` } }
       ];
-    }
-
-    if (dateFrom) {
-      where.createdAt = { [Op.gte]: new Date(dateFrom) };
-    }
-
-    if (dateTo) {
-      where.createdAt = { 
-        ...where.createdAt,
-        [Op.lte]: new Date(dateTo) 
-      };
     }
 
     const { count, rows } = await Account.findAndCountAll({
       where,
       limit: parseInt(limit),
       offset: parseInt(offset),
-      order: [['createdAt', 'DESC']]
+      order: [[sortBy, sortOrder]],
+      attributes: { exclude: ['password'] } // Исключаем пароль из ответа
     });
 
     res.json({
@@ -91,7 +60,7 @@ const getAccounts = async (req, res, next) => {
           total: count,
           page: parseInt(page),
           limit: parseInt(limit),
-          pages: Math.ceil(count / limit)
+          totalPages: Math.ceil(count / limit)
         }
       }
     });
@@ -105,8 +74,10 @@ const getAccount = async (req, res, next) => {
   try {
     const { id } = req.params;
     
-    const account = await Account.findByPk(id);
-    
+    const account = await Account.findByPk(id, {
+      attributes: { exclude: ['password'] }
+    });
+
     if (!account) {
       return res.status(404).json({
         success: false,
@@ -129,7 +100,6 @@ const updateAccount = async (req, res, next) => {
     const { id } = req.params;
     
     const account = await Account.findByPk(id);
-    
     if (!account) {
       return res.status(404).json({
         success: false,
@@ -137,23 +107,9 @@ const updateAccount = async (req, res, next) => {
       });
     }
 
-    const oldData = { ...account.dataValues };
     await account.update(req.body);
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Обновлен аккаунт: ${account.login}`,
-      entityType: 'account',
-      entityId: account.id,
-      actionType: 'update',
-      metadata: {
-        oldData: oldData,
-        newData: req.body
-      }
-    });
-
-    logger.info('Account updated', { accountId: account.id, login: account.login });
+    
+    logger.info('Account updated successfully', { accountId: id });
 
     res.json({
       success: true,
@@ -170,7 +126,6 @@ const deleteAccount = async (req, res, next) => {
     const { id } = req.params;
     
     const account = await Account.findByPk(id);
-    
     if (!account) {
       return res.status(404).json({
         success: false,
@@ -178,20 +133,9 @@ const deleteAccount = async (req, res, next) => {
       });
     }
 
-    const deletedData = { login: account.login, id: account.id };
-
     await account.destroy();
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Удален аккаунт: ${deletedData.login}`,
-      entityType: 'account',
-      entityId: deletedData.id,
-      actionType: 'delete'
-    });
-
-    logger.info('Account deleted', { accountId: deletedData.id, login: deletedData.login });
+    
+    logger.info('Account deleted successfully', { accountId: id });
 
     res.json({
       success: true,
@@ -216,7 +160,6 @@ const changeAccountStatus = async (req, res, next) => {
     }
 
     const account = await Account.findByPk(id);
-    
     if (!account) {
       return res.status(404).json({
         success: false,
@@ -224,28 +167,9 @@ const changeAccountStatus = async (req, res, next) => {
       });
     }
 
-    const oldStatus = account.status;
     await account.update({ status });
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Изменен статус аккаунта ${account.login} с "${oldStatus}" на "${status}"`,
-      entityType: 'account',
-      entityId: account.id,
-      actionType: 'status_change',
-      metadata: {
-        oldStatus,
-        newStatus: status
-      }
-    });
-
-    logger.info('Account status changed', { 
-      accountId: account.id, 
-      login: account.login,
-      oldStatus,
-      newStatus: status 
-    });
+    
+    logger.info('Account status changed', { accountId: id, newStatus: status });
 
     res.json({
       success: true,
@@ -256,29 +180,28 @@ const changeAccountStatus = async (req, res, next) => {
   }
 };
 
-// Статистика аккаунтов
+// Получить статистику аккаунтов
 const getAccountStats = async (req, res, next) => {
   try {
     const stats = await Account.findAll({
       attributes: [
         'status',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+        [Account.sequelize.fn('COUNT', Account.sequelize.col('id')), 'count']
       ],
-      group: ['status']
+      group: ['status'],
+      raw: true
     });
 
-    const totalCount = await Account.count();
-
-    const statsObject = stats.reduce((acc, stat) => {
-      acc[stat.status] = parseInt(stat.dataValues.count);
-      return acc;
-    }, {});
+    const total = await Account.count();
 
     res.json({
       success: true,
       data: {
-        total: totalCount,
-        byStatus: statsObject
+        total,
+        byStatus: stats.reduce((acc, stat) => {
+          acc[stat.status] = parseInt(stat.count);
+          return acc;
+        }, {})
       }
     });
   } catch (error) {
@@ -289,7 +212,7 @@ const getAccountStats = async (req, res, next) => {
 // Импорт аккаунтов из текста
 const importAccountsFromText = async (req, res, next) => {
   try {
-    const { text, format = 'login:password', source = 'import' } = req.body;
+    const { text, format = 'login:password', delimiter = '\n' } = req.body;
 
     if (!text) {
       return res.status(400).json({
@@ -298,74 +221,56 @@ const importAccountsFromText = async (req, res, next) => {
       });
     }
 
-    const lines = text.split('\n').filter(line => line.trim());
+    const lines = text.split(delimiter).filter(line => line.trim());
     const accounts = [];
     const errors = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
-      if (!line) continue;
-
       try {
-        const parts = line.split(':');
-        
-        if (format === 'login:password' && parts.length >= 2) {
-          accounts.push({
-            login: parts[0],
-            password: parts[1],
-            source: source
-          });
-        } else if (format === 'login:password:email' && parts.length >= 3) {
-          accounts.push({
-            login: parts[0],
-            password: parts[1],
-            email: parts[2],
-            source: source
-          });
-        } else {
-          errors.push(`Строка ${i + 1}: неверный формат`);
+        let accountData = {};
+
+        if (format === 'login:password') {
+          const [login, password] = line.split(':');
+          if (!login || !password) {
+            throw new Error('Неверный формат строки');
+          }
+          accountData = { login, password };
+        } else if (format === 'email:password') {
+          const [email, password] = line.split(':');
+          if (!email || !password) {
+            throw new Error('Неверный формат строки');
+          }
+          accountData = { email, password };
         }
+
+        accountData.source = 'import';
+        accountData.status = 'active';
+
+        const account = await Account.create(accountData);
+        accounts.push(account);
       } catch (error) {
-        errors.push(`Строка ${i + 1}: ${error.message}`);
+        errors.push({
+          line: i + 1,
+          text: line,
+          error: error.message
+        });
       }
     }
-
-    if (accounts.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Не удалось обработать ни одного аккаунта',
-        details: errors
-      });
-    }
-
-    const createdAccounts = await Account.bulkCreate(accounts, {
-      ignoreDuplicates: true
-    });
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Импортировано ${createdAccounts.length} аккаунтов`,
-      entityType: 'account',
-      entityId: 0,
-      actionType: 'bulk_import',
-      metadata: {
-        count: createdAccounts.length,
-        source: source,
-        format: format
-      }
-    });
 
     logger.info('Accounts imported', { 
-      count: createdAccounts.length,
+      total: lines.length, 
+      success: accounts.length, 
       errors: errors.length 
     });
 
     res.json({
       success: true,
       data: {
-        imported: createdAccounts.length,
-        errors: errors
+        imported: accounts.length,
+        errors: errors.length,
+        accounts,
+        importErrors: errors
       }
     });
   } catch (error) {
@@ -387,29 +292,18 @@ const bulkDeleteAccounts = async (req, res, next) => {
 
     const deletedCount = await Account.destroy({
       where: {
-        id: { [Op.in]: ids }
+        id: {
+          [Op.in]: ids
+        }
       }
     });
 
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Массово удалено ${deletedCount} аккаунтов`,
-      entityType: 'account',
-      entityId: 0,
-      actionType: 'bulk_delete',
-      metadata: {
-        count: deletedCount,
-        ids: ids
-      }
-    });
-
-    logger.info('Accounts bulk deleted', { count: deletedCount });
+    logger.info('Bulk delete accounts', { count: deletedCount });
 
     res.json({
       success: true,
       data: {
-        deleted: deletedCount
+        deletedCount
       }
     });
   } catch (error) {
@@ -440,34 +334,19 @@ const bulkUpdateStatus = async (req, res, next) => {
       { status },
       {
         where: {
-          id: { [Op.in]: ids }
+          id: {
+            [Op.in]: ids
+          }
         }
       }
     );
 
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Массово обновлен статус ${updatedCount} аккаунтов на "${status}"`,
-      entityType: 'account',
-      entityId: 0,
-      actionType: 'bulk_status_update',
-      metadata: {
-        count: updatedCount,
-        status: status,
-        ids: ids
-      }
-    });
-
-    logger.info('Accounts bulk status updated', { 
-      count: updatedCount, 
-      status: status 
-    });
+    logger.info('Bulk update account status', { count: updatedCount, status });
 
     res.json({
       success: true,
       data: {
-        updated: updatedCount
+        updatedCount
       }
     });
   } catch (error) {
@@ -475,104 +354,104 @@ const bulkUpdateStatus = async (req, res, next) => {
   }
 };
 
-// Экспорт в JSON
+// Экспорт аккаунтов в JSON
 const exportAccountsJSON = async (req, res, next) => {
   try {
-    const {
-      status,
-      source,
-      userId,
-      search,
-      dateFrom,
-      dateTo
-    } = req.query;
-
+    const { filters = {} } = req.query;
     const where = {};
 
-    // Применяем те же фильтры что и в getAccounts
-    if (status) where.status = Array.isArray(status) ? { [Op.in]: status } : status;
-    if (source) where.source = Array.isArray(source) ? { [Op.in]: source } : source;
-    if (userId) where.userId = Array.isArray(userId) ? { [Op.in]: userId } : userId;
-    if (search) {
-      where[Op.or] = [
-        { login: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } },
-        { userId: { [Op.like]: `%${search}%` } }
-      ];
-    }
-    if (dateFrom) where.createdAt = { [Op.gte]: new Date(dateFrom) };
-    if (dateTo) where.createdAt = { ...where.createdAt, [Op.lte]: new Date(dateTo) };
+    if (filters.status) where.status = filters.status;
+    if (filters.source) where.source = filters.source;
 
-    const accounts = await Account.findAll({ where });
+    const accounts = await Account.findAll({ 
+      where,
+      attributes: { exclude: ['password'] }
+    });
 
-    const filename = `accounts_export_${new Date().toISOString().split('T')[0]}.json`;
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    
-    res.json(accounts);
+    res.json({
+      success: true,
+      data: accounts
+    });
   } catch (error) {
     next(error);
   }
 };
 
-// Экспорт в CSV
+// Экспорт аккаунтов в CSV
 const exportAccountsCSV = async (req, res, next) => {
   try {
-    const accounts = await Account.findAll();
-    
-    const fields = ['id', 'login', 'password', 'email', 'status', 'source', 'createdAt'];
-    const csv = [
-      fields.join(','),
-      ...accounts.map(account => 
-        fields.map(field => `"${account[field] || ''}"`).join(',')
-      )
-    ].join('\n');
+    const { filters = {} } = req.query;
+    const where = {};
 
-    const filename = `accounts_export_${new Date().toISOString().split('T')[0]}.csv`;
+    if (filters.status) where.status = filters.status;
+    if (filters.source) where.source = filters.source;
+
+    const accounts = await Account.findAll({ 
+      where,
+      attributes: ['login', 'email', 'status', 'source', 'createdAt']
+    });
+
+    // Формируем CSV
+    const headers = ['Login', 'Email', 'Status', 'Source', 'Created At'];
+    const rows = accounts.map(account => [
+      account.login || '',
+      account.email || '',
+      account.status || '',
+      account.source || '',
+      account.createdAt ? account.createdAt.toISOString() : ''
+    ]);
+
+    const csv = [headers, ...rows]
+      .map(row => row.map(field => `"${field}"`).join(','))
+      .join('\n');
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    
+    res.setHeader('Content-Disposition', 'attachment; filename=accounts.csv');
     res.send(csv);
   } catch (error) {
     next(error);
   }
 };
 
-// Экспорт в TXT
+// Экспорт аккаунтов в TXT
 const exportAccountsTXT = async (req, res, next) => {
   try {
-    const { format = 'login:password' } = req.query;
-    const accounts = await Account.findAll();
-    
-    let txt = '';
-    
-    accounts.forEach(account => {
-      switch (format) {
-        case 'login:password':
-          txt += `${account.login}:${account.password}\n`;
-          break;
-        case 'login:password:email':
-          txt += `${account.login}:${account.password}:${account.email || ''}\n`;
-          break;
-        default:
-          txt += `${account.login}:${account.password}\n`;
-      }
+    const { 
+      format = 'login:password',
+      filters = {}
+    } = req.query;
+
+    const where = {};
+    if (filters.status) where.status = filters.status;
+    if (filters.source) where.source = filters.source;
+
+    const accounts = await Account.findAll({ 
+      where,
+      attributes: ['login', 'password', 'email']
     });
 
-    const filename = `accounts_export_${new Date().toISOString().split('T')[0]}.txt`;
+    let txt = '';
+    if (format === 'login:password') {
+      txt = accounts
+        .filter(account => account.login && account.password)
+        .map(account => `${account.login}:${account.password}`)
+        .join('\n');
+    } else if (format === 'email:password') {
+      txt = accounts
+        .filter(account => account.email && account.password)
+        .map(account => `${account.email}:${account.password}`)
+        .join('\n');
+    }
 
     res.setHeader('Content-Type', 'text/plain');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    
+    res.setHeader('Content-Disposition', 'attachment; filename=accounts.txt');
     res.send(txt);
   } catch (error) {
     next(error);
   }
 };
 
-// Кастомный экспорт
+// Кастомный экспорт аккаунтов
 const exportAccountsCustom = async (req, res, next) => {
   try {
     const { 
@@ -581,6 +460,14 @@ const exportAccountsCustom = async (req, res, next) => {
       template,
       filters = {}
     } = req.body;
+
+    // Валидация
+    if (!Array.isArray(fields) || fields.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Массив полей обязателен и не может быть пустым'
+      });
+    }
 
     const where = {};
     if (filters.status) where.status = filters.status;
@@ -596,12 +483,14 @@ const exportAccountsCustom = async (req, res, next) => {
       const txt = accounts.map(account => {
         let line = template;
         fields.forEach(field => {
-          line = line.replace(`{${field}}`, account[field] || '');
+          const value = account[field] || '';
+          line = line.replace(`{${field}}`, value);
         });
         return line;
       }).join('\n');
 
       res.setHeader('Content-Type', 'text/plain');
+      res.setHeader('Content-Disposition', 'attachment; filename=accounts_custom.txt');
       res.send(txt);
     } else {
       res.json({
