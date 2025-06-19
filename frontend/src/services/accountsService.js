@@ -1,3 +1,4 @@
+// frontend/src/services/accountsService.js
 import api from './api'
 
 export const accountsService = {
@@ -21,7 +22,7 @@ export const accountsService = {
   // Получить аккаунт по ID (без пароля)
   getById: (id) => api.get(`/accounts/${id}`),
 
-  // НОВЫЙ МЕТОД: Получить полные данные аккаунта (включая пароль)
+  // Получить полные данные аккаунта (включая пароль)
   getByIdWithPassword: (id) => api.get(`/accounts/${id}/full`),
 
   // Создать новый аккаунт
@@ -36,6 +37,9 @@ export const accountsService = {
   // Получить статистику
   getStats: () => api.get('/accounts/stats'),
 
+  // Получить доступные поля для экспорта
+  getFields: () => api.get('/accounts/fields'),
+
   // Изменить статус
   changeStatus: (id, status) => api.post(`/accounts/${id}/status`, { status }),
 
@@ -45,7 +49,73 @@ export const accountsService = {
 
   // Импорт/Экспорт
   importFromText: (data) => api.post('/accounts/import-text', data),
-  exportJSON: (filters = {}) => api.get('/accounts/export/json', { params: filters }),
-  exportCSV: (filters = {}) => api.get('/accounts/export/csv', { params: filters, responseType: 'blob' }),
-  exportTXT: (filters = {}) => api.get('/accounts/export/txt', { params: filters, responseType: 'blob' }),
+  
+  // Экспорт методы
+  exportJSON: (params = {}) => {
+    const searchParams = new URLSearchParams()
+    
+    // Обрабатываем параметры экспорта
+    Object.entries(params).forEach(([key, value]) => {
+      if (key === 'fields' && Array.isArray(value)) {
+        searchParams.append('fields', value.join(','))
+      } else if (key === 'filters' && typeof value === 'object') {
+        Object.entries(value).forEach(([filterKey, filterValue]) => {
+          if (filterValue !== '' && filterValue != null) {
+            searchParams.append(`filters[${filterKey}]`, filterValue)
+          }
+        })
+      } else if (value !== '' && value != null) {
+        searchParams.append(key, value)
+      }
+    })
+    
+    return api.get(`/accounts/export/json?${searchParams.toString()}`)
+  },
+
+  exportCSV: (params = {}) => {
+    const searchParams = new URLSearchParams()
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (key === 'fields' && Array.isArray(value)) {
+        searchParams.append('fields', value.join(','))
+      } else if (key === 'filters' && typeof value === 'object') {
+        Object.entries(value).forEach(([filterKey, filterValue]) => {
+          if (filterValue !== '' && filterValue != null) {
+            searchParams.append(`filters[${filterKey}]`, filterValue)
+          }
+        })
+      } else if (value !== '' && value != null) {
+        searchParams.append(key, value)
+      }
+    })
+    
+    return api.get(`/accounts/export/csv?${searchParams.toString()}`, { 
+      responseType: 'blob' 
+    })
+  },
+
+  exportTXT: (params = {}) => {
+    const searchParams = new URLSearchParams()
+    
+    Object.entries(params).forEach(([key, value]) => {
+      if (key === 'filters' && typeof value === 'object') {
+        Object.entries(value).forEach(([filterKey, filterValue]) => {
+          if (filterValue !== '' && filterValue != null) {
+            searchParams.append(`filters[${filterKey}]`, filterValue)
+          }
+        })
+      } else if (value !== '' && value != null) {
+        searchParams.append(key, value)
+      }
+    })
+    
+    return api.get(`/accounts/export/txt?${searchParams.toString()}`, { 
+      responseType: 'blob' 
+    })
+  },
+
+  // Кастомный экспорт через POST для сложных параметров
+  exportCustom: (data) => api.post('/accounts/export/custom', data, {
+    responseType: data.format === 'template' ? 'blob' : 'json'
+  })
 }

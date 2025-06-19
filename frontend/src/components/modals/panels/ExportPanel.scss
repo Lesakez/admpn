@@ -1,0 +1,292 @@
+// frontend/src/components/modals/panels/ExportPanel.scss
+
+.export-panel {
+  
+  // Описание
+  &__description {
+    margin-bottom: 1.5rem;
+    
+    .alert-info {
+      border-color: var(--cui-info-border-subtle);
+      background-color: var(--cui-info-bg-subtle);
+    }
+  }
+
+  // Формат экспорта
+  &__format {
+    margin-bottom: 1.5rem;
+  }
+
+  // Оценка количества
+  &__estimate {
+    margin-bottom: 1.5rem;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--cui-border-color-translucent);
+    border-radius: var(--cui-border-radius);
+    background: var(--cui-light-bg);
+    
+    strong {
+      color: var(--cui-emphasis-color);
+    }
+  }
+
+  // Расширенные настройки
+  &__advanced {
+    margin-bottom: 1.5rem;
+  }
+
+  &__advanced-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    
+    .ms-2 {
+      margin-left: auto !important;
+      margin-right: 0 !important;
+    }
+  }
+
+  &__advanced-card {
+    border: 1px solid var(--cui-border-color-translucent);
+    background: var(--cui-tertiary-bg);
+    
+    .card-body {
+      padding: 1rem;
+    }
+  }
+
+  // Фильтры
+  &__filters {
+    margin-bottom: 1.5rem;
+  }
+
+  &__filters-toggle {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+    
+    .ms-2 {
+      margin-left: auto !important;
+      margin-right: 0 !important;
+    }
+  }
+
+  &__filters-card {
+    border: 1px solid var(--cui-border-color-translucent);
+    background: var(--cui-light-bg);
+    
+    .card-body {
+      padding: 1rem;
+    }
+  }
+
+  &__filters-actions {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--cui-border-color-translucent);
+    text-align: center;
+  }
+
+  // Выбор полей для экспорта
+  &__fields {
+    margin-bottom: 1.5rem;
+  }
+
+  &__fields-card {
+    border: 1px solid var(--cui-border-color-translucent);
+    background: var(--cui-tertiary-bg);
+    max-height: 300px;
+    overflow-y: auto;
+    
+    .card-body {
+      padding: 1rem;
+    }
+    
+    .form-check {
+      margin-bottom: 0.5rem;
+    }
+    
+    .form-check-label {
+      font-weight: 500;
+      color: var(--cui-body-color);
+    }
+    
+    .form-text {
+      margin-top: 0.25rem;
+      font-size: 0.75rem;
+      color: var(--cui-secondary-color);
+    }
+  }
+
+  // Загрузка статусов
+  .form-text {
+    .badge {
+      font-size: 0.6875rem;
+      padding: 0.25rem 0.5rem;
+      margin-right: 0.25rem;
+      margin-bottom: 0.25rem;
+    }
+  }
+  // Кнопка отправки
+  &__submit {
+    text-align: center;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--cui-border-color-translucent);
+  }
+
+  // Состояния формы
+  .form-label {
+    font-weight: 600;
+    color: var(--cui-emphasis-color);
+    margin-bottom: 0.5rem;
+  }
+
+  .form-select,
+  .form-control {
+    border-color: var(--cui-border-color);
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    
+    &:focus {
+      border-color: var(--cui-primary);
+      box-shadow: 0 0 0 0.25rem rgba(var(--cui-primary-rgb), 0.25);
+    }
+  }
+
+  .form-text {
+    font-size: 0.8125rem;
+    color: var(--cui-secondary-color);
+    margin-top: 0.25rem;
+  }
+
+  // Мультиселект
+  .form-select[multiple] {
+    min-height: 80px;
+    
+    option {
+      padding: 0.375rem 0.75rem;
+      
+      &:checked {
+        background: var(--cui-primary);
+        color: var(--cui-primary-text);
+      }
+    }
+  }
+
+  // Кнопки состояний
+  .btn-outline-secondary {
+    border-color: var(--cui-border-color);
+    color: var(--cui-body-color);
+    
+    &:hover {
+      background: var(--cui-secondary-bg);
+      border-color: var(--cui-secondary);
+    }
+  }
+
+  // Адаптивность
+  @media (max-width: 768px) {
+    &__estimate {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+    }
+    
+    &__advanced-toggle,
+    &__filters-toggle {
+      font-size: 0.875rem;
+      padding: 0.5rem 0.75rem;
+    }
+    
+    &__advanced-card,
+    &__filters-card {
+      .card-body {
+        padding: 0.75rem;
+      }
+    }
+    
+    &__submit {
+      margin-top: 1rem;
+      padding-top: 1rem;
+    }
+    
+    .form-select[multiple] {
+      min-height: 60px;
+      font-size: 0.875rem;
+    }
+  }
+
+  // Темная тема
+  [data-coreui-theme="dark"] & {
+    &__estimate {
+      background: var(--cui-dark-bg-subtle);
+      border-color: var(--cui-border-color);
+    }
+
+    &__advanced-card {
+      background: var(--cui-dark-bg);
+      border-color: var(--cui-border-color);
+    }
+
+    &__filters-card {
+      background: var(--cui-dark-bg-subtle);
+      border-color: var(--cui-border-color);
+    }
+
+    .form-select,
+    .form-control {
+      background: var(--cui-dark-bg);
+      border-color: var(--cui-border-color);
+      color: var(--cui-body-color);
+      
+      &:focus {
+        background: var(--cui-dark-bg);
+        border-color: var(--cui-primary);
+      }
+    }
+
+    .form-select[multiple] {
+      option {
+        background: var(--cui-dark-bg);
+        color: var(--cui-body-color);
+        
+        &:checked {
+          background: var(--cui-primary);
+          color: var(--cui-primary-text);
+        }
+      }
+    }
+  }
+
+  // Анимации
+  .collapse {
+    transition: height 0.3s ease;
+  }
+
+  .btn {
+    transition: all 0.15s ease-in-out;
+  }
+
+  // Улучшенные badges
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
+    border-radius: var(--cui-border-radius-sm);
+    
+    &.bg-primary {
+      background-color: var(--cui-primary) !important;
+    }
+    
+    &.bg-success {
+      background-color: var(--cui-success) !important;
+    }
+    
+    &.bg-warning {
+      background-color: var(--cui-warning) !important;
+      color: var(--cui-dark) !important;
+    }
+  }
+}

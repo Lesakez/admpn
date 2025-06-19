@@ -1,3 +1,10 @@
+// backend/src/routes/accounts.js
+// ДОБАВИТЬ этот роут к существующим:
+
+// GET /api/accounts/fields - получить доступные поля для экспорта
+router.get('/fields', accountController.getAccountFields);
+
+// Полный файл должен выглядеть так:
 const express = require('express');
 const accountController = require('../controllers/accountController');
 const { validateAccount, validateAccountUpdate } = require('../validators/accountValidator');
@@ -9,6 +16,9 @@ router.get('/', accountController.getAccounts);
 
 // GET /api/accounts/stats - статистика аккаунтов
 router.get('/stats', accountController.getAccountStats);
+
+// GET /api/accounts/fields - получить доступные поля для экспорта
+router.get('/fields', accountController.getAccountFields);
 
 // GET /api/accounts/:id - получить аккаунт по ID (без пароля)
 router.get('/:id', accountController.getAccount);

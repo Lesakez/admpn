@@ -1,0 +1,269 @@
+// frontend/src/components/modals/panels/ImportPanel.scss
+
+.import-panel {
+  
+  // Drag & Drop зона
+  &__drag-zone {
+    border: 2px dashed var(--cui-border-color);
+    border-radius: var(--cui-border-radius);
+    padding: 2rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--cui-body-bg);
+    margin-bottom: 1rem;
+
+    &:hover,
+    &--active {
+      border-color: var(--cui-primary);
+      background: var(--cui-primary-bg-subtle);
+      
+      .import-panel__drag-icon {
+        color: var(--cui-primary);
+      }
+    }
+  }
+
+  &__drag-icon {
+    margin-bottom: 0.5rem;
+    color: var(--cui-secondary);
+    transition: color 0.2s ease;
+  }
+
+  &__drag-title {
+    margin-bottom: 0.5rem;
+    color: var(--cui-body-color);
+  }
+
+  &__drag-subtitle {
+    color: var(--cui-secondary-color);
+    font-size: 0.875rem;
+    margin-bottom: 0;
+  }
+
+  // Скрытый input для файлов
+  &__file-input {
+    display: none;
+  }
+
+  // Кнопки управления
+  &__controls {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+
+  // Textarea
+  &__textarea {
+    font-family: var(--cui-font-monospace);
+    font-size: 0.875rem;
+    line-height: 1.4;
+    resize: vertical;
+    min-height: 200px;
+  }
+
+  // Предпросмотр данных
+  &__preview {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--cui-border-color-translucent);
+    
+    .card-body {
+      padding: 1rem;
+    }
+  }
+
+  &__preview-title {
+    color: var(--cui-body-color);
+    margin-bottom: 1rem;
+    font-weight: 600;
+  }
+
+  &__preview-stats {
+    margin-bottom: 1rem;
+    
+    .badge {
+      font-size: 0.75rem;
+      padding: 0.375rem 0.75rem;
+    }
+  }
+
+  &__preview-table {
+    margin-bottom: 0;
+    
+    th {
+      background: var(--cui-tertiary-bg);
+      font-weight: 600;
+      font-size: 0.8125rem;
+      border-bottom: 1px solid var(--cui-border-color);
+    }
+    
+    td {
+      vertical-align: middle;
+      font-size: 0.8125rem;
+    }
+  }
+
+  &__code {
+    background: var(--cui-secondary-bg);
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--cui-body-color);
+    border: 1px solid var(--cui-border-color-translucent);
+    word-break: break-all;
+    max-width: 200px;
+    display: inline-block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // Прогресс импорта
+  &__progress {
+    margin-bottom: 1.5rem;
+  }
+
+  &__progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--cui-body-color);
+  }
+
+  // Результат импорта
+  &__result {
+    margin-bottom: 1.5rem;
+    border: 1px solid var(--cui-border-color-translucent);
+    
+    .card-body {
+      padding: 1.25rem;
+    }
+  }
+
+  &__result-title {
+    color: var(--cui-body-color);
+    margin-bottom: 1.25rem;
+    font-weight: 600;
+  }
+
+  &__result-stat {
+    text-align: center;
+    padding: 0.75rem;
+    background: var(--cui-tertiary-bg);
+    border-radius: var(--cui-border-radius);
+    border: 1px solid var(--cui-border-color-translucent);
+  }
+
+  &__result-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--cui-primary);
+    margin-bottom: 0.25rem;
+  }
+
+  &__result-label {
+    font-size: 0.8125rem;
+    color: var(--cui-secondary-color);
+    font-weight: 500;
+  }
+
+  // Ошибки
+  &__errors {
+    margin-top: 1rem;
+    
+    h6 {
+      margin-bottom: 0.75rem;
+      font-weight: 600;
+    }
+  }
+
+  &__errors-list {
+    margin-bottom: 0;
+    padding-left: 1.25rem;
+    
+    li {
+      font-size: 0.875rem;
+      margin-bottom: 0.25rem;
+      
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+  }
+
+  // Кнопка отправки
+  &__submit {
+    text-align: center;
+    margin-top: 1.5rem;
+  }
+
+  // Адаптивность
+  @media (max-width: 768px) {
+    &__drag-zone {
+      padding: 1.5rem 1rem;
+    }
+    
+    &__controls {
+      justify-content: center;
+    }
+    
+    &__textarea {
+      font-size: 0.8125rem;
+      min-height: 150px;
+    }
+    
+    &__preview-table {
+      font-size: 0.75rem;
+    }
+    
+    &__code {
+      max-width: 150px;
+    }
+    
+    &__result-stat {
+      margin-bottom: 0.75rem;
+    }
+    
+    &__result-value {
+      font-size: 1.25rem;
+    }
+  }
+
+  // Темная тема
+  [data-coreui-theme="dark"] & {
+    &__drag-zone {
+      background: var(--cui-dark-bg-subtle);
+      border-color: var(--cui-border-color);
+      
+      &:hover,
+      &--active {
+        background: var(--cui-primary-bg-subtle);
+        border-color: var(--cui-primary);
+      }
+    }
+
+    &__code {
+      background: var(--cui-dark-bg);
+      border-color: var(--cui-border-color);
+      color: var(--cui-body-color);
+    }
+
+    &__preview {
+      background: var(--cui-dark-bg-subtle);
+      border-color: var(--cui-border-color);
+    }
+
+    &__result {
+      background: var(--cui-dark-bg-subtle);
+      border-color: var(--cui-border-color);
+    }
+
+    &__result-stat {
+      background: var(--cui-dark-bg);
+      border-color: var(--cui-border-color);
+    }
+  }
+}

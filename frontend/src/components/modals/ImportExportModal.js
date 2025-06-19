@@ -1,6 +1,4 @@
 // frontend/src/components/modals/ImportExportModal.js
-// Единственный компонент для всех типов импорта/экспорта
-
 import React, { useState, useEffect, useMemo } from 'react'
 import {
   CModal,
@@ -23,8 +21,8 @@ import {
   cilCloudDownload,
   cilX,
 } from '@coreui/icons'
-import { ImportPanel } from './panels/ImportPanel'
-import { ExportPanel } from './panels/ExportPanel'
+import ImportPanel from './panels/ImportPanel'
+import ExportPanel from './panels/ExportPanel'
 import { useImportExportConfig } from '../../hooks/useImportExportConfig'
 
 const ImportExportModal = ({ 
@@ -169,98 +167,3 @@ const ImportExportModal = ({
 }
 
 export default ImportExportModal
-
-// ===== ХУКИ ДЛЯ ПРОСТОГО ИСПОЛЬЗОВАНИЯ =====
-
-// frontend/src/hooks/useImportExportModal.js
-import { useState } from 'react'
-
-export const useImportExportModal = () => {
-  const [modalState, setModalState] = useState({
-    visible: false,
-    type: 'accounts',
-    mode: 'both'
-  })
-
-  const openImport = (type = 'accounts') => {
-    setModalState({
-      visible: true,
-      type,
-      mode: 'import'
-    })
-  }
-
-  const openExport = (type = 'accounts') => {
-    setModalState({
-      visible: true,
-      type,
-      mode: 'export'
-    })
-  }
-
-  const openBoth = (type = 'accounts') => {
-    setModalState({
-      visible: true,
-      type,
-      mode: 'both'
-    })
-  }
-
-  const close = () => {
-    setModalState(prev => ({ ...prev, visible: false }))
-  }
-
-  return {
-    modalState,
-    openImport,
-    openExport,
-    openBoth,
-    close
-  }
-}
-
-// ===== КОНФИГУРАЦИОННЫЙ ХУК =====
-
-// frontend/src/hooks/useImportExportConfig.js
-import { useState, useEffect } from 'react'
-
-const configCache = new Map()
-
-export const useImportExportConfig = (type) => {
-  const [config, setConfig] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState(null)
-
-  useEffect(() => {
-    const loadConfig = async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
-
-        // Проверяем кеш
-        if (configCache.has(type)) {
-          setConfig(configCache.get(type))
-          setIsLoading(false)
-          return
-        }
-
-        // Ленивая загрузка конфигурации
-        const configModule = await import(`../config/${type}ImportExportConfig.js`)
-        const loadedConfig = configModule.default || configModule.config
-
-        // Кешируем
-        configCache.set(type, loadedConfig)
-        setConfig(loadedConfig)
-      } catch (err) {
-        setError(err)
-        console.error(`Failed to load config for ${type}:`, err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadConfig()
-  }, [type])
-
-  return { config, isLoading, error }
-}
