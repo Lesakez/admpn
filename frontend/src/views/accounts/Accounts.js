@@ -19,6 +19,7 @@ import {
   CDropdownToggle,
   CDropdownMenu,
   CDropdownItem,
+  CDropdownDivider,
   CContainer,
   COffcanvas,
   COffcanvasHeader,
@@ -74,6 +75,7 @@ import toast from 'react-hot-toast'
 
 const Accounts = () => {
   const [filters, setFilters] = useState({ page: 1, limit: 12 })
+  console.log('Initial filters:', filters);
   const [showModal, setShowModal] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
@@ -82,14 +84,21 @@ const Accounts = () => {
 
   // Загрузка данных
   const { data, isLoading, error, refetch } = useAccounts(filters)
+  console.log('Accounts data:', data);
+  console.log('Accounts isLoading:', isLoading);
+  console.log('Accounts error:', error);
   const { data: stats } = useAccountsStats()
+  console.log('Accounts stats:', stats);
   const deleteAccountMutation = useDeleteAccount()
   const updateAccountMutation = useUpdateAccount()
   const bulkDeleteMutation = useBulkDeleteAccounts()
   
   // Загрузка статусов динамически
   const { data: accountStatuses, isLoading: statusesLoading } = useEntityStatuses('account')
+  console.log('Account statuses:', accountStatuses);
+  console.log('Statuses loading:', statusesLoading);
   const { data: statusConfig } = useStatusConfig()
+  console.log('Status config:', statusConfig);
 
   // Модальные окна
   const {
@@ -99,12 +108,16 @@ const Accounts = () => {
     changeStatus,
     bulkAction
   } = useModals()
+  console.log('Modals state:', modals);
 
   const accounts = data?.accounts || []
+  console.log('Processed accounts array:', accounts);
   const pagination = data?.pagination || { page: 1, pages: 1, total: 0 }
+  console.log('Pagination data:', pagination);
 
   // === ОБРАБОТЧИКИ ===
   const handleFilterChange = (key, value) => {
+    console.log(`Filter change - key: ${key}, value: ${value}, current filters:`, filters);
     setFilters(prev => ({
       ...prev,
       [key]: value,
@@ -113,15 +126,18 @@ const Accounts = () => {
   }
 
   const handlePageChange = (page) => {
+    console.log(`Page change to: ${page}, current filters:`, filters);
     setFilters(prev => ({ ...prev, page }))
   }
 
   const handleEdit = (account) => {
+    console.log('Edit account:', account);
     setEditingAccount(account)
     setShowModal(true)
   }
 
   const handleDelete = (account) => {
+    console.log('Delete account:', account);
     confirmDelete(account, {
       title: "Удалить аккаунт",
       message: "Это действие нельзя отменить. Все данные аккаунта будут потеряны.",
@@ -132,6 +148,7 @@ const Accounts = () => {
           closeModal('delete')
           refetch()
         } catch (error) {
+          console.error('Delete error:', error);
           toast.error('Ошибка при удалении аккаунта')
         }
       }
@@ -139,6 +156,7 @@ const Accounts = () => {
   }
 
   const handleStatusChange = (account) => {
+    console.log('Status change for account:', account);
     changeStatus(account, 'account', {
       onConfirm: async (newStatus, reason) => {
         try {
@@ -146,12 +164,12 @@ const Accounts = () => {
             id: account.id,
             data: { status: newStatus }
           })
-          
           const statusDescription = statusConfig?.descriptions?.[newStatus] || newStatus
           toast.success(`Статус изменён на "${statusDescription}"`)
           closeModal('statusChange')
           refetch()
         } catch (error) {
+          console.error('Status change error:', error);
           toast.error('Ошибка при изменении статуса')
         }
       }
@@ -159,11 +177,13 @@ const Accounts = () => {
   }
 
   const handleCloseModal = () => {
+    console.log('Closing modal, editingAccount:', editingAccount);
     setShowModal(false)
     setEditingAccount(null)
   }
 
   const handleSelectAccount = (accountId, checked) => {
+    console.log(`Select account - id: ${accountId}, checked: ${checked}, selectedAccounts:`, selectedAccounts);
     if (checked) {
       setSelectedAccounts(prev => [...prev, accountId])
     } else {
@@ -173,6 +193,7 @@ const Accounts = () => {
   }
 
   const handleSelectAll = (checked) => {
+    console.log(`Select all - checked: ${checked}, accounts length: ${accounts.length}`);
     setSelectAll(checked)
     if (checked) {
       setSelectedAccounts(accounts.map(account => account.id))
@@ -182,10 +203,10 @@ const Accounts = () => {
   }
 
   const handleBulkDelete = () => {
+    console.log('Bulk delete, selectedAccounts:', selectedAccounts);
     const selectedAccountsData = accounts.filter(account => 
       selectedAccounts.includes(account.id)
     )
-    
     bulkAction(selectedAccountsData, 'delete', {
       entityType: 'account',
       onConfirm: async () => {
@@ -197,6 +218,7 @@ const Accounts = () => {
           setSelectAll(false)
           refetch()
         } catch (error) {
+          console.error('Bulk delete error:', error);
           toast.error('Ошибка при массовом удалении')
         }
       }
@@ -204,17 +226,16 @@ const Accounts = () => {
   }
 
   const handleBulkStatusChange = () => {
+    console.log('Bulk status change, selectedAccounts:', selectedAccounts);
     const selectedAccountsData = accounts.filter(account => 
       selectedAccounts.includes(account.id)
     )
-    
     bulkAction(selectedAccountsData, 'status_change', {
       entityType: 'account',
       onConfirm: async (action, params) => {
         try {
           const { newStatus } = params
           await accountsService.bulkUpdateStatus(selectedAccounts, newStatus)
-          
           const statusDescription = statusConfig?.descriptions?.[newStatus] || newStatus
           toast.success(`Статус изменён для ${selectedAccounts.length} аккаунтов на "${statusDescription}"`)
           closeModal('bulkAction')
@@ -222,6 +243,7 @@ const Accounts = () => {
           setSelectAll(false)
           refetch()
         } catch (error) {
+          console.error('Bulk status change error:', error);
           toast.error('Ошибка при массовом изменении статуса')
         }
       }
@@ -237,10 +259,8 @@ const Accounts = () => {
         </CBadge>
       )
     }
-
     const description = statusConfig.descriptions?.[status] || status
     const color = statusConfig.colors?.[status] || '#6b7280'
-    
     const getBootstrapColor = (hexColor) => {
       const colorMap = {
         '#10b981': 'success',
@@ -254,7 +274,6 @@ const Accounts = () => {
       }
       return colorMap[hexColor] || 'secondary'
     }
-
     const getStatusIcon = (status) => {
       const icons = {
         'active': cilCheck,
@@ -270,7 +289,6 @@ const Accounts = () => {
       }
       return icons[status] || cilX
     }
-    
     return (
       <CBadge 
         color={getBootstrapColor(color)}
@@ -294,7 +312,6 @@ const Accounts = () => {
 
   const getStatusOptions = () => {
     if (!accountStatuses) return []
-    
     return Object.values(accountStatuses).map(status => {
       const description = statusConfig?.descriptions?.[status] || status
       return { value: status, label: description }
@@ -303,6 +320,7 @@ const Accounts = () => {
 
   // === РЕНДЕР ===
   if (error) {
+    console.log('Render error state:', error);
     return (
       <CAlert color="danger" className="m-4">
         Ошибка загрузки аккаунтов: {error.message}
@@ -311,7 +329,7 @@ const Accounts = () => {
   }
 
   return (
-    <CContainer fluid className="px-4 py-3">
+    <CContainer fluid className="px-2 py-2"> {/* Уменьшено с px-4 py-3 */}
       {/* Header */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -356,7 +374,7 @@ const Accounts = () => {
                   <CIcon icon={cilSwapHorizontal} className="me-2 text-info" />
                   <span>Изменить статус</span>
                 </CDropdownItem>
-                <CDropdownItem divider />
+                <CDropdownDivider />
                 <CDropdownItem onClick={handleBulkDelete} className="py-2 px-3 d-flex align-items-center text-danger">
                   <CIcon icon={cilTrash} className="me-2" />
                   <span>Удалить все</span>
@@ -397,7 +415,7 @@ const Accounts = () => {
                 <CIcon icon={cilCloudDownload} className="me-2 text-primary" />
                 <span>Экспорт</span>
               </CDropdownItem>
-              <CDropdownItem divider />
+              <CDropdownDivider />
               <CDropdownItem className="py-2 px-3 d-flex align-items-center">
                 <CIcon icon={cilSettings} className="me-2 text-secondary" />
                 <span>Настройки</span>
@@ -497,12 +515,12 @@ const Accounts = () => {
                         onChange={(e) => handleSelectAll(e.target.checked)}
                       />
                     </CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Логин</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Email</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">ID</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Статус</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Источник</CTableHeaderCell>
-                    <CTableHeaderCell scope="col">Создан</CTableHeaderCell>
+                    <CTableHeaderCell scope="col" style={{ width: '150px' }}>Логин</CTableHeaderCell>
+                    <CTableHeaderCell scope="col" style={{ width: '200px', whiteSpace: 'nowrap' }}>Email</CTableHeaderCell>
+                    <CTableHeaderCell scope="col" style={{ width: '120px' }}>ID</CTableHeaderCell>
+                    <CTableHeaderCell scope="col" style={{ width: '150px' }}>Статус</CTableHeaderCell>
+                    <CTableHeaderCell scope="col" style={{ width: '150px' }}>Источник</CTableHeaderCell>
+                    <CTableHeaderCell scope="col" style={{ width: '120px' }}>Создан</CTableHeaderCell>
                     <CTableHeaderCell scope="col" style={{ width: '120px' }}>Действия</CTableHeaderCell>
                   </CTableRow>
                 </CTableHead>
@@ -516,7 +534,9 @@ const Accounts = () => {
                         />
                       </CTableDataCell>
                       <CTableDataCell>{account.login}</CTableDataCell>
-                      <CTableDataCell>{account.email || '-'}</CTableDataCell>
+                      <CTableDataCell style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {account.email || '-'}
+                      </CTableDataCell>
                       <CTableDataCell>{account.userId || '-'}</CTableDataCell>
                       <CTableDataCell>{getStatusBadge(account.status)}</CTableDataCell>
                       <CTableDataCell>{account.source || 'manual'}</CTableDataCell>
@@ -546,7 +566,7 @@ const Accounts = () => {
                               <CIcon icon={cilSwapHorizontal} className="me-2 text-info" />
                               <span>Изменить статус</span>
                             </CDropdownItem>
-                            <CDropdownItem divider />
+                            <CDropdownDivider />
                             <CDropdownItem
                               onClick={() => handleDelete(account)}
                               className="py-2 px-3 d-flex align-items-center text-danger"
@@ -584,7 +604,6 @@ const Accounts = () => {
                     const start = Math.max(1, pagination.page - 2)
                     page = Math.min(start + i, pagination.pages)
                   }
-                  
                   return (
                     <CPaginationItem
                       key={page}
