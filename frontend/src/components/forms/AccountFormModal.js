@@ -1,4 +1,3 @@
-// frontend/src/components/forms/AccountFormModal.js
 import React, { useState, useEffect } from 'react'
 import {
   CModal,
@@ -41,20 +40,17 @@ import { useEntityStatuses } from '../../hooks/useStatuses'
 
 const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) => {
   const [activeTab, setActiveTab] = useState('basic')
-  const [showPasswords, setShowPasswords] = useState(false)
-  
+
   const createMutation = useCreateAccount()
   const updateMutation = useUpdateAccount()
-  
-  // Загружаем статусы для аккаунтов динамически
+
   const { data: accountStatuses, isLoading: statusesLoading } = useEntityStatuses('account')
-  
+
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
-    watch,
   } = useForm({
     defaultValues: {
       login: '',
@@ -91,46 +87,47 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
     }
   })
 
-  // Обновляем форму когда приходят данные аккаунта
   useEffect(() => {
     if (visible && account && isEdit) {
       const formData = {
-        login: account.login || '',
-        password: account.password || '',
-        email: account.email || '',
-        emailPassword: account.emailPassword || '',
-        emailRecovery: account.emailRecovery || '',
-        emailPasswordRecovery: account.emailPasswordRecovery || '',
-        userAgent: account.userAgent || '',
-        twoFA: account.twoFA || '',
+        login: account.login ?? '',
+        password: account.password ?? '',
+        email: account.email ?? '',
+        emailPassword: account.emailPassword ?? '',
+        emailRecovery: account.emailRecovery ?? '',
+        emailPasswordRecovery: account.emailPasswordRecovery ?? '',
+        userAgent: account.userAgent ?? '',
+        twoFA: account.twoFA ?? '',
         dob: account.dob ? account.dob.split('T')[0] : '',
-        nameProfiles: account.nameProfiles || '',
-        userId: account.userId || '',
-        cookies: account.cookies || '',
-        status: account.status || 'active',
-        friendsCounts: account.friendsCounts || '',
-        note: account.note || '',
-        statusCheck: account.statusCheck || '',
-        eaab: account.eaab || '',
-        namePage: account.namePage || '',
-        data: account.data || '',
+        nameProfiles: account.nameProfiles ?? '',
+        userId: account.userId ?? '',
+        cookies: account.cookies ?? '',
+        status: account.status ?? 'active',
+        friendsCounts: account.friendsCounts ? String(account.friendsCounts) : '',
+        note: account.note ?? '',
+        statusCheck: account.statusCheck ?? '',
+        eaab: account.eaab ?? '',
+        namePage: account.namePage ?? '',
+        data: account.data ?? '',
         dataRegistration: account.dataRegistration ? account.dataRegistration.split('T')[0] : '',
-        idActive: account.idActive || '',
-        counter: account.counter || '',
-        code: account.code || '',
-        device: account.device || '',
-        emailJsonData: account.emailJsonData || '',
-        lsposedJson: account.lsposedJson || '',
-        accessToken: account.accessToken || '',
-        clientId: account.clientId || '',
-        refreshToken: account.refreshToken || '',
-        source: account.source || 'manual',
+        idActive: account.idActive ?? '',
+        counter: account.counter ? String(account.counter) : '',
+        code: account.code ?? '',
+        device: account.device ?? '',
+        emailJsonData: account.emailJsonData ?? '',
+        lsposedJson: account.lsposedJson ?? '',
+        accessToken: account.accessToken ?? '',
+        clientId: account.clientId ?? '',
+        refreshToken: account.refreshToken ?? '',
+        source: account.source ?? 'manual',
         importDate: account.importDate ? account.importDate.split('T')[0] : '',
       }
-      
+
+      // Логирование для диагностики
+      console.log('Form data for edit:', formData)
+
       reset(formData)
     } else if (visible && !isEdit) {
-      // Сбрасываем форму для создания нового аккаунта
       reset({
         login: '',
         password: '',
@@ -176,9 +173,9 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
       if (isEdit) {
         await updateMutation.mutateAsync({ id: account.id, data: cleanData })
       } else {
-        await createMutation.mutateAsync(cleanData)
+        await createMutation.mutateAsync(cleanData )
       }
-      
+
       handleClose()
     } catch (error) {
       console.error('Form submission error:', error)
@@ -194,9 +191,9 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
   const isLoading = createMutation.isLoading || updateMutation.isLoading
 
   return (
-    <CModal 
-      visible={visible} 
-      onClose={handleClose} 
+    <CModal
+      visible={visible}
+      onClose={handleClose}
       size="lg"
       fullscreen="md"
     >
@@ -206,7 +203,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
           {isEdit ? 'Редактировать аккаунт' : 'Добавить аккаунт'}
         </CModalTitle>
       </CModalHeader>
-      
+
       <CForm onSubmit={handleSubmit(onSubmit)}>
         <CModalBody className="pb-2">
           <CNav variant="tabs" role="tablist">
@@ -269,7 +266,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                         id="login"
                         placeholder="Логин аккаунта"
                         invalid={!!errors.login}
-                        {...register('login', { 
+                        {...register('login', {
                           required: 'Логин обязателен',
                           minLength: { value: 1, message: 'Минимум 1 символ' }
                         })}
@@ -292,21 +289,14 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                       </CInputGroupText>
                       <CFormInput
                         id="password"
-                        type={showPasswords ? 'text' : 'password'}
+                        type="text"
                         placeholder="Пароль аккаунта"
                         invalid={!!errors.password}
-                        {...register('password', { 
+                        {...register('password', {
                           required: 'Пароль обязателен',
                           minLength: { value: 1, message: 'Минимум 1 символ' }
                         })}
                       />
-                      <CButton
-                        type="button"
-                        color="outline-secondary"
-                        onClick={() => setShowPasswords(!showPasswords)}
-                      >
-                        <CIcon icon={cilLockLocked} />
-                      </CButton>
                     </CInputGroup>
                     {errors.password && (
                       <div className="invalid-feedback d-block">{errors.password.message}</div>
@@ -317,15 +307,14 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                 <CCol md={6}>
                   <div className="mb-3">
                     <CFormLabel htmlFor="status" className="fw-semibold">Статус</CFormLabel>
-                    
                     {statusesLoading ? (
                       <div className="d-flex align-items-center">
                         <CSpinner size="sm" className="me-2" />
                         <span className="text-muted">Загрузка...</span>
                       </div>
                     ) : (
-                      <CFormSelect 
-                        id="status" 
+                      <CFormSelect
+                        id="status"
                         {...register('status')}
                       >
                         {accountStatuses && Object.values(accountStatuses).map(status => (
@@ -430,7 +419,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                     <CFormLabel htmlFor="emailPassword" className="fw-semibold">Пароль от Email</CFormLabel>
                     <CFormInput
                       id="emailPassword"
-                      type={showPasswords ? 'text' : 'password'}
+                      type="text"
                       placeholder="Пароль от почты"
                       {...register('emailPassword')}
                     />
@@ -454,7 +443,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                     <CFormLabel htmlFor="emailPasswordRecovery" className="fw-semibold">Пароль резервного Email</CFormLabel>
                     <CFormInput
                       id="emailPasswordRecovery"
-                      type={showPasswords ? 'text' : 'password'}
+                      type="text"
                       placeholder="Пароль от резервной почты"
                       {...register('emailPasswordRecovery')}
                     />

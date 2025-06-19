@@ -3,7 +3,7 @@ const { DataTypes } = require('sequelize');
 module.exports = (sequelize) => {
   const Account = sequelize.define('Account', {
     id: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.BIGINT.UNSIGNED,
       primaryKey: true,
       autoIncrement: true
     },
@@ -28,87 +28,17 @@ module.exports = (sequelize) => {
       field: 'email_password',
       comment: 'Пароль от email'
     },
-    phone: {
+    emailRecovery: {
       type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Номер телефона'
+      field: 'email_recovery',
+      comment: 'Резервный email'
     },
-    status: {
-      type: DataTypes.ENUM('active', 'inactive', 'blocked', 'deleted'),
-      allowNull: false,
-      defaultValue: 'active',
-      comment: 'Статус аккаунта'
-    },
-    birthDate: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      field: 'birth_date',
-      comment: 'Дата рождения'
-    },
-    gender: {
-      type: DataTypes.ENUM('male', 'female', 'other'),
-      allowNull: true,
-      comment: 'Пол'
-    },
-    firstName: {
+    emailPasswordRecovery: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'first_name',
-      comment: 'Имя'
-    },
-    lastName: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'last_name',
-      comment: 'Фамилия'
-    },
-    country: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Страна'
-    },
-    city: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Город'
-    },
-    avatar: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Ссылка на аватар'
-    },
-    bio: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Биография'
-    },
-    followers: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      defaultValue: 0,
-      comment: 'Количество подписчиков'
-    },
-    following: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      defaultValue: 0,
-      comment: 'Количество подписок'
-    },
-    posts: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      defaultValue: 0,
-      comment: 'Количество постов'
-    },
-    cookies: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Куки'
-    },
-    token: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Токен'
+      field: 'email_password_recovery',
+      comment: 'Пароль от резервного email'
     },
     userAgent: {
       type: DataTypes.TEXT,
@@ -116,91 +46,88 @@ module.exports = (sequelize) => {
       field: 'user_agent',
       comment: 'User Agent'
     },
-    proxy: {
+    twoFA: {
       type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Прокси'
+      field: 'two_fa',
+      comment: '2FA ключ'
     },
-    notes: {
+    dob: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      comment: 'Дата рождения'
+    },
+    nameProfiles: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'name_profiles',
+      comment: 'Имя профиля'
+    },
+    userId: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'user_id',
+      comment: 'ID пользователя'
+    },
+    cookies: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Cookies'
+    },
+    status: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Статус аккаунта'
+    },
+    friendsCounts: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      field: 'friends_counts',
+      comment: 'Количество друзей'
+    },
+    note: {
       type: DataTypes.TEXT,
       allowNull: true,
       comment: 'Заметки'
     },
-    lastActivity: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      field: 'last_activity',
-      comment: 'Последняя активность'
-    },
-    lastLogin: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      field: 'last_login',
-      comment: 'Последний вход'
-    },
-    twoFactorSecret: {
+    statusCheck: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'two_factor_secret',
-      comment: 'Секрет для 2FA'
+      field: 'status_check',
+      comment: 'Статус проверки'
     },
-    backupCodes: {
+    eaab: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'backup_codes',
-      comment: 'Резервные коды'
+      comment: 'EAAB токен'
     },
-    sessionId: {
+    namePage: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'session_id',
-      comment: 'ID сессии'
+      field: 'name_page',
+      comment: 'Имя страницы'
     },
-    csrfToken: {
+    data: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'csrf_token',
-      comment: 'CSRF токен'
+      comment: 'Дополнительные данные'
     },
-    instagramId: {
+    dataRegistration: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'data_registration',
+      comment: 'Дата регистрации аккаунта'
+    },
+    idActive: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'instagram_id',
-      comment: 'Instagram ID'
+      field: 'id_active',
+      comment: 'ID активности'
     },
-    facebookId: {
-      type: DataTypes.TEXT,
+    counter: {
+      type: DataTypes.BIGINT,
       allowNull: true,
-      field: 'facebook_id',
-      comment: 'Facebook ID'
-    },
-    linkedData: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'linked_data',
-      comment: 'Связанные данные'
-    },
-    recoveryEmail: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'recovery_email',
-      comment: 'Email для восстановления'
-    },
-    phoneNumber: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      field: 'phone_number',
-      comment: 'Номер телефона'
-    },
-    challenge: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Челлендж'
-    },
-    checkpoint: {
-      type: DataTypes.TEXT,
-      allowNull: true,
-      comment: 'Чекпоинт'
+      comment: 'Счетчик'
     },
     code: {
       type: DataTypes.TEXT,
@@ -221,7 +148,7 @@ module.exports = (sequelize) => {
     lsposedJson: {
       type: DataTypes.TEXT,
       allowNull: true,
-      field: 'lsposed_json', // ИСПРАВЛЕНО: правильное название поля
+      field: 'ls_posed_json',
       comment: 'LSPosed JSON данные'
     },
     accessToken: {
@@ -255,19 +182,17 @@ module.exports = (sequelize) => {
     },
     createdAt: {
       type: DataTypes.DATE(3),
-      allowNull: false,
-      field: 'created_at',
-      defaultValue: DataTypes.NOW
+      allowNull: true,
+      field: 'created_at'
     },
     updatedAt: {
       type: DataTypes.DATE(3),
-      allowNull: false,
-      field: 'updated_at',
-      defaultValue: DataTypes.NOW
+      allowNull: true,
+      field: 'updated_at'
     }
   }, {
     tableName: 'old_accounts',
-    timestamps: true,
+    timestamps: false, // Отключаем автоматические timestamps так как поля nullable
     underscored: true,
     indexes: [
       {
@@ -290,8 +215,6 @@ module.exports = (sequelize) => {
 
   Account.associate = (models) => {
     // Связи можно добавить позже при необходимости
-    // Account.belongsTo(models.Project, { foreignKey: 'projectId', as: 'project' });
-    // Account.hasMany(models.Activity, { foreignKey: 'entityId', constraints: false });
   };
 
   return Account;

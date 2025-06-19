@@ -5,6 +5,7 @@ services:
   mysql:
     image: mysql:8.0
     container_name: adminpanel_mysql_dev
+    platform: linux/arm64
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: password
@@ -27,6 +28,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: adminpanel_redis_dev
+    platform: linux/arm64
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -47,6 +49,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.dev
     container_name: adminpanel_backend_dev
+    platform: linux/arm64
     restart: unless-stopped
     environment:
       NODE_ENV: development
@@ -58,7 +61,6 @@ services:
       DB_PASSWORD: password
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      # Дополнительные переменные для вашего приложения
       JWT_SECRET: your-jwt-secret-key
       RATE_LIMIT_WINDOW_MS: 900000
       RATE_LIMIT_MAX_REQUESTS: 100
@@ -67,7 +69,7 @@ services:
     volumes:
       - ./backend:/app
       - /app/node_modules
-      - ./backend/logs:/app/logs  # Для логов Winston
+      - ./backend/logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -83,18 +85,15 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     container_name: adminpanel_frontend_dev
+    platform: linux/arm64
     restart: unless-stopped
     environment:
-      # Create React App использует порт 3000 по умолчанию
       PORT: 3000
-      # Переменные для проксирования к бэкенду
       REACT_APP_API_URL: http://localhost:3000/api
-      # Отключаем автоматическое открытие браузера
       BROWSER: none
-      # Включаем горячую перезагрузку
       FAST_REFRESH: true
     ports:
-      - "3001:3000"  # Изменил на 3001, так как 3000 занят бэкендом
+      - "3001:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -104,6 +103,30 @@ services:
       - backend
     stdin_open: true
     tty: true
+
+  # Adminer
+  adminer:
+    image: adminer:latest
+    container_name: adminpanel_adminer_dev
+    platform: linux/arm64
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: mysql
+      ADMINER_DEFAULT_USERNAME: adminpanel
+      ADMINER_DEFAULT_PASSWORD: password
+      ADMINER_DEFAULT_DATABASE: adminpanel
+    ports:
+      - "8080:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - adminpanel_network
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   mysql_data_dev:
