@@ -14,6 +14,31 @@ export function useAccounts(filters = {}) {
   })
 }
 
+// Получить аккаунт по ID (без пароля)
+export function useAccount(id) {
+  return useQuery({
+    queryKey: ['account', id],
+    queryFn: async () => {
+      const response = await accountsService.getById(id)
+      return response.data.data
+    },
+    enabled: !!id,
+  })
+}
+
+// НОВЫЙ ХУК: Получить полные данные аккаунта (включая пароль)
+export function useAccountWithPassword(id) {
+  return useQuery({
+    queryKey: ['account', id, 'full'],
+    queryFn: async () => {
+      const response = await accountsService.getByIdWithPassword(id)
+      return response.data.data
+    },
+    enabled: !!id,
+    staleTime: 0, // Не кешировать данные с паролем
+  })
+}
+
 // Получить статистику аккаунтов
 export function useAccountsStats() {
   return useQuery({
@@ -36,6 +61,7 @@ export function useCreateAccount() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['accounts'])
+      queryClient.invalidateQueries(['accounts', 'stats'])
       toast.success('Аккаунт создан успешно')
     },
     onError: (error) => {
@@ -53,8 +79,11 @@ export function useUpdateAccount() {
       const response = await accountsService.update(id, data)
       return response.data.data
     },
-    onSuccess: () => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries(['accounts'])
+      queryClient.invalidateQueries(['account', variables.id])
+      queryClient.invalidateQueries(['account', variables.id, 'full'])
+      queryClient.invalidateQueries(['accounts', 'stats'])
       toast.success('Аккаунт обновлен успешно')
     },
     onError: (error) => {
@@ -74,6 +103,7 @@ export function useDeleteAccount() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['accounts'])
+      queryClient.invalidateQueries(['accounts', 'stats'])
       toast.success('Аккаунт удален успешно')
     },
     onError: (error) => {
@@ -93,7 +123,8 @@ export function useBulkDeleteAccounts() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries(['accounts'])
-      toast.success(`Удалено ${data.deleted} аккаунтов`)
+      queryClient.invalidateQueries(['accounts', 'stats'])
+      toast.success(`Удалено ${data.deletedCount} аккаунтов`)
     },
     onError: (error) => {
       toast.error(error.response?.data?.error || 'Ошибка массового удаления')

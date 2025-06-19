@@ -49,7 +49,7 @@ const getAccounts = async (req, res, next) => {
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [[sortBy, sortOrder]],
-      attributes: { exclude: ['password'] } // Исключаем пароль из ответа
+      attributes: { exclude: ['password'] } // Исключаем пароль из списка
     });
 
     res.json({
@@ -60,6 +60,7 @@ const getAccounts = async (req, res, next) => {
           total: count,
           page: parseInt(page),
           limit: parseInt(limit),
+          pages: Math.ceil(count / limit), // Исправлено: pages вместо totalPages
           totalPages: Math.ceil(count / limit)
         }
       }
@@ -69,7 +70,7 @@ const getAccounts = async (req, res, next) => {
   }
 };
 
-// Получить аккаунт по ID
+// Получить аккаунт по ID (без пароля)
 const getAccount = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -77,6 +78,29 @@ const getAccount = async (req, res, next) => {
     const account = await Account.findByPk(id, {
       attributes: { exclude: ['password'] }
     });
+
+    if (!account) {
+      return res.status(404).json({
+        success: false,
+        error: 'Аккаунт не найден'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: account
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// НОВЫЙ МЕТОД: Получить полные данные аккаунта по ID (включая пароль)
+const getAccountWithPassword = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const account = await Account.findByPk(id);
 
     if (!account) {
       return res.status(404).json({
@@ -110,7 +134,7 @@ const updateAccount = async (req, res, next) => {
     await account.update(req.body);
     
     logger.info('Account updated successfully', { accountId: id });
-
+    
     res.json({
       success: true,
       data: account
@@ -136,10 +160,10 @@ const deleteAccount = async (req, res, next) => {
     await account.destroy();
     
     logger.info('Account deleted successfully', { accountId: id });
-
+    
     res.json({
       success: true,
-      message: 'Аккаунт успешно удален'
+      message: 'Аккаунт успешно удалён'
     });
   } catch (error) {
     next(error);
@@ -169,8 +193,8 @@ const changeAccountStatus = async (req, res, next) => {
 
     await account.update({ status });
     
-    logger.info('Account status changed', { accountId: id, newStatus: status });
-
+    logger.info('Account status changed', { accountId: id, status });
+    
     res.json({
       success: true,
       data: account
@@ -183,170 +207,18 @@ const changeAccountStatus = async (req, res, next) => {
 // Получить статистику аккаунтов
 const getAccountStats = async (req, res, next) => {
   try {
-    const stats = await Account.findAll({
-      attributes: [
-        'status',
-        [Account.sequelize.fn('COUNT', Account.sequelize.col('id')), 'count']
-      ],
-      group: ['status'],
-      raw: true
-    });
-
     const total = await Account.count();
+    const active = await Account.count({ where: { status: 'active' } });
+    const blocked = await Account.count({ where: { status: 'blocked' } });
+    const suspended = await Account.count({ where: { status: 'suspended' } });
 
     res.json({
       success: true,
       data: {
         total,
-        byStatus: stats.reduce((acc, stat) => {
-          acc[stat.status] = parseInt(stat.count);
-          return acc;
-        }, {})
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Импорт аккаунтов из текста
-const importAccountsFromText = async (req, res, next) => {
-  try {
-    const { text, format = 'login:password', delimiter = '\n' } = req.body;
-
-    if (!text) {
-      return res.status(400).json({
-        success: false,
-        error: 'Текст для импорта обязателен'
-      });
-    }
-
-    const lines = text.split(delimiter).filter(line => line.trim());
-    const accounts = [];
-    const errors = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      try {
-        let accountData = {};
-
-        if (format === 'login:password') {
-          const [login, password] = line.split(':');
-          if (!login || !password) {
-            throw new Error('Неверный формат строки');
-          }
-          accountData = { login, password };
-        } else if (format === 'email:password') {
-          const [email, password] = line.split(':');
-          if (!email || !password) {
-            throw new Error('Неверный формат строки');
-          }
-          accountData = { email, password };
-        }
-
-        accountData.source = 'import';
-        accountData.status = 'active';
-
-        const account = await Account.create(accountData);
-        accounts.push(account);
-      } catch (error) {
-        errors.push({
-          line: i + 1,
-          text: line,
-          error: error.message
-        });
-      }
-    }
-
-    logger.info('Accounts imported', { 
-      total: lines.length, 
-      success: accounts.length, 
-      errors: errors.length 
-    });
-
-    res.json({
-      success: true,
-      data: {
-        imported: accounts.length,
-        errors: errors.length,
-        accounts,
-        importErrors: errors
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Массовое удаление аккаунтов
-const bulkDeleteAccounts = async (req, res, next) => {
-  try {
-    const { ids } = req.body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Массив ID обязателен'
-      });
-    }
-
-    const deletedCount = await Account.destroy({
-      where: {
-        id: {
-          [Op.in]: ids
-        }
-      }
-    });
-
-    logger.info('Bulk delete accounts', { count: deletedCount });
-
-    res.json({
-      success: true,
-      data: {
-        deletedCount
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Массовое обновление статуса
-const bulkUpdateStatus = async (req, res, next) => {
-  try {
-    const { ids, status } = req.body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Массив ID обязателен'
-      });
-    }
-
-    if (!status) {
-      return res.status(400).json({
-        success: false,
-        error: 'Статус обязателен'
-      });
-    }
-
-    const [updatedCount] = await Account.update(
-      { status },
-      {
-        where: {
-          id: {
-            [Op.in]: ids
-          }
-        }
-      }
-    );
-
-    logger.info('Bulk update account status', { count: updatedCount, status });
-
-    res.json({
-      success: true,
-      data: {
-        updatedCount
+        active,
+        blocked,
+        suspended
       }
     });
   } catch (error) {
@@ -503,10 +375,156 @@ const exportAccountsCustom = async (req, res, next) => {
   }
 };
 
+// Импорт аккаунтов из текста
+const importAccountsFromText = async (req, res, next) => {
+  try {
+    const { text, format = 'login:password', delimiter = '\n' } = req.body;
+
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Текст для импорта обязателен'
+      });
+    }
+
+    const lines = text.split(delimiter).filter(line => line.trim());
+    const accounts = [];
+    const errors = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      try {
+        let accountData = {};
+
+        if (format === 'login:password') {
+          const [login, password] = line.split(':');
+          if (!login || !password) {
+            throw new Error('Неверный формат строки');
+          }
+          accountData = { login, password };
+        } else if (format === 'email:password') {
+          const [email, password] = line.split(':');
+          if (!email || !password) {
+            throw new Error('Неверный формат строки');
+          }
+          accountData = { email, password };
+        }
+
+        accountData.source = 'import';
+        accountData.status = 'active';
+
+        const account = await Account.create(accountData);
+        accounts.push(account);
+      } catch (error) {
+        errors.push({
+          line: i + 1,
+          text: line,
+          error: error.message
+        });
+      }
+    }
+
+    logger.info('Accounts imported', { 
+      total: lines.length, 
+      success: accounts.length, 
+      errors: errors.length 
+    });
+
+    res.json({
+      success: true,
+      data: {
+        imported: accounts.length,
+        errors: errors.length,
+        accounts,
+        importErrors: errors
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Массовое удаление аккаунтов
+const bulkDeleteAccounts = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Массив ID обязателен'
+      });
+    }
+
+    const deletedCount = await Account.destroy({
+      where: {
+        id: {
+          [Op.in]: ids
+        }
+      }
+    });
+
+    logger.info('Bulk delete accounts', { count: deletedCount });
+
+    res.json({
+      success: true,
+      data: {
+        deletedCount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Массовое обновление статуса
+const bulkUpdateStatus = async (req, res, next) => {
+  try {
+    const { ids, status } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Массив ID обязателен'
+      });
+    }
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        error: 'Статус обязателен'
+      });
+    }
+
+    const [updatedCount] = await Account.update(
+      { status },
+      {
+        where: {
+          id: {
+            [Op.in]: ids
+          }
+        }
+      }
+    );
+
+    logger.info('Bulk update account status', { count: updatedCount, status });
+
+    res.json({
+      success: true,
+      data: {
+        updatedCount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   createAccount,
   getAccounts,
   getAccount,
+  getAccountWithPassword, // НОВЫЙ МЕТОД
   updateAccount,
   deleteAccount,
   changeAccountStatus,

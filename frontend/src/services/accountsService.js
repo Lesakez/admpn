@@ -18,8 +18,11 @@ export const accountsService = {
     return api.get(`/accounts?${searchParams.toString()}`)
   },
 
-  // Получить аккаунт по ID
+  // Получить аккаунт по ID (без пароля)
   getById: (id) => api.get(`/accounts/${id}`),
+
+  // НОВЫЙ МЕТОД: Получить полные данные аккаунта (включая пароль)
+  getByIdWithPassword: (id) => api.get(`/accounts/${id}/full`),
 
   // Создать новый аккаунт
   create: (data) => api.post('/accounts', data),
@@ -42,7 +45,7 @@ export const accountsService = {
 
   // Импорт/Экспорт
   importFromText: (data) => api.post('/accounts/import-text', data),
-  exportJSON: (filters = {}) => api.get('/accounts/export-json', { params: filters }),
-  exportCSV: (filters = {}) => api.get('/accounts/export-csv', { params: filters, responseType: 'blob' }),
-  exportTXT: (filters = {}) => api.get('/accounts/export-txt', { params: filters, responseType: 'blob' }),
+  exportJSON: (filters = {}) => api.get('/accounts/export/json', { params: filters }),
+  exportCSV: (filters = {}) => api.get('/accounts/export/csv', { params: filters, responseType: 'blob' }),
+  exportTXT: (filters = {}) => api.get('/accounts/export/txt', { params: filters, responseType: 'blob' }),
 }

@@ -35,7 +35,7 @@ import {
   cilX,
 } from '@coreui/icons'
 import { useForm } from 'react-hook-form'
-import { useCreateAccount, useUpdateAccount } from '../../hooks/useAccounts'
+import { useCreateAccount, useUpdateAccount, useAccountWithPassword } from '../../hooks/useAccounts'
 import { useEntityStatuses } from '../../hooks/useStatuses'
 
 const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) => {
@@ -44,7 +44,12 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
   const createMutation = useCreateAccount()
   const updateMutation = useUpdateAccount()
 
-  const { data: accountStatuses, isLoading: statusesLoading } = useEntityStatuses('account')
+  // ВАЖНО: Используем новый хук для получения полных данных с паролем
+  const { data: accountWithPassword, isLoading: accountLoading } = useAccountWithPassword(
+    isEdit && account?.id ? account.id : null
+  )
+
+  const { data: statusesResponse, isLoading: statusesLoading } = useEntityStatuses('account')
 
   const {
     register,
@@ -87,45 +92,64 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
     }
   })
 
+  // Обработка статусов
+  const getStatusOptions = () => {
+    console.log('Status response data:', statusesResponse)
+    
+    if (!statusesResponse?.data) return []
+    
+    const statuses = statusesResponse.data.statuses || statusesResponse.data
+    console.log('Extracted statuses:', statuses)
+    
+    if (Array.isArray(statuses)) {
+      return statuses
+    }
+    
+    if (typeof statuses === 'object') {
+      return Object.values(statuses)
+    }
+    
+    // Fallback статусы если ничего не получили
+    return ['active', 'inactive', 'blocked', 'suspended']
+  }
+
   useEffect(() => {
-    if (visible && account && isEdit) {
+    if (visible && isEdit && accountWithPassword) {
       const formData = {
-        login: account.login ?? '',
-        password: account.password ?? '',
-        email: account.email ?? '',
-        emailPassword: account.emailPassword ?? '',
-        emailRecovery: account.emailRecovery ?? '',
-        emailPasswordRecovery: account.emailPasswordRecovery ?? '',
-        userAgent: account.userAgent ?? '',
-        twoFA: account.twoFA ?? '',
-        dob: account.dob ? account.dob.split('T')[0] : '',
-        nameProfiles: account.nameProfiles ?? '',
-        userId: account.userId ?? '',
-        cookies: account.cookies ?? '',
-        status: account.status ?? 'active',
-        friendsCounts: account.friendsCounts ? String(account.friendsCounts) : '',
-        note: account.note ?? '',
-        statusCheck: account.statusCheck ?? '',
-        eaab: account.eaab ?? '',
-        namePage: account.namePage ?? '',
-        data: account.data ?? '',
-        dataRegistration: account.dataRegistration ? account.dataRegistration.split('T')[0] : '',
-        idActive: account.idActive ?? '',
-        counter: account.counter ? String(account.counter) : '',
-        code: account.code ?? '',
-        device: account.device ?? '',
-        emailJsonData: account.emailJsonData ?? '',
-        lsposedJson: account.lsposedJson ?? '',
-        accessToken: account.accessToken ?? '',
-        clientId: account.clientId ?? '',
-        refreshToken: account.refreshToken ?? '',
-        source: account.source ?? 'manual',
-        importDate: account.importDate ? account.importDate.split('T')[0] : '',
+        login: accountWithPassword.login ?? '',
+        password: accountWithPassword.password ?? '', // Теперь пароль будет загружен
+        email: accountWithPassword.email ?? '',
+        emailPassword: accountWithPassword.emailPassword ?? '',
+        emailRecovery: accountWithPassword.emailRecovery ?? '',
+        emailPasswordRecovery: accountWithPassword.emailPasswordRecovery ?? '',
+        userAgent: accountWithPassword.userAgent ?? '',
+        twoFA: accountWithPassword.twoFA ?? '',
+        dob: accountWithPassword.dob ? accountWithPassword.dob.split('T')[0] : '',
+        nameProfiles: accountWithPassword.nameProfiles ?? '',
+        userId: accountWithPassword.userId ?? '',
+        cookies: accountWithPassword.cookies ?? '',
+        status: accountWithPassword.status ?? 'active',
+        friendsCounts: accountWithPassword.friendsCounts ? String(accountWithPassword.friendsCounts) : '',
+        note: accountWithPassword.note ?? '',
+        statusCheck: accountWithPassword.statusCheck ?? '',
+        eaab: accountWithPassword.eaab ?? '',
+        namePage: accountWithPassword.namePage ?? '',
+        data: accountWithPassword.data ?? '',
+        dataRegistration: accountWithPassword.dataRegistration ? accountWithPassword.dataRegistration.split('T')[0] : '',
+        idActive: accountWithPassword.idActive ?? '',
+        counter: accountWithPassword.counter ? String(accountWithPassword.counter) : '',
+        code: accountWithPassword.code ?? '',
+        device: accountWithPassword.device ?? '',
+        emailJsonData: accountWithPassword.emailJsonData ?? '',
+        lsposedJson: accountWithPassword.lsposedJson ?? '',
+        accessToken: accountWithPassword.accessToken ?? '',
+        clientId: accountWithPassword.clientId ?? '',
+        refreshToken: accountWithPassword.refreshToken ?? '',
+        source: accountWithPassword.source ?? 'manual',
+        importDate: accountWithPassword.importDate ? accountWithPassword.importDate.split('T')[0] : '',
       }
 
-      // Логирование для диагностики
-      console.log('Form data for edit:', formData)
-
+      console.log('Form data for edit with password:', formData)
       reset(formData)
     } else if (visible && !isEdit) {
       reset({
@@ -162,7 +186,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
         importDate: '',
       })
     }
-  }, [visible, account, isEdit, reset])
+  }, [visible, accountWithPassword, isEdit, reset])
 
   const onSubmit = async (data) => {
     try {
@@ -173,7 +197,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
       if (isEdit) {
         await updateMutation.mutateAsync({ id: account.id, data: cleanData })
       } else {
-        await createMutation.mutateAsync(cleanData )
+        await createMutation.mutateAsync(cleanData)
       }
 
       handleClose()
@@ -188,7 +212,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
     onClose()
   }
 
-  const isLoading = createMutation.isLoading || updateMutation.isLoading
+  const isLoading = createMutation.isLoading || updateMutation.isLoading || accountLoading
 
   return (
     <CModal
@@ -308,28 +332,25 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                   <div className="mb-3">
                     <CFormLabel htmlFor="status" className="fw-semibold">Статус</CFormLabel>
                     {statusesLoading ? (
-                      <div className="d-flex align-items-center">
-                        <CSpinner size="sm" className="me-2" />
-                        <span className="text-muted">Загрузка...</span>
-                      </div>
+                      <CFormSelect disabled>
+                        <option>Загрузка статусов...</option>
+                      </CFormSelect>
                     ) : (
-                      <CFormSelect
-                        id="status"
-                        {...register('status')}
-                      >
-                        {accountStatuses && Object.values(accountStatuses).map(status => (
+                      <CFormSelect id="status" {...register('status')}>
+                        {getStatusOptions().map((status) => (
                           <option key={status} value={status}>
                             {status === 'active' && '🟢 Активный'}
-                            {status === 'inactive' && '⚪ Неактивный'}
-                            {status === 'banned' && '🔴 Заблокирован'}
-                            {status === 'working' && '🟡 В работе'}
-                            {status === 'free' && '🔵 Свободный'}
-                            {status === 'busy' && '🟠 Занятый'}
-                            {status === 'pending' && '⏳ Ожидает'}
-                            {status === 'suspended' && '⏸️ Приостановлен'}
-                            {status === 'verified' && '✅ Верифицирован'}
-                            {status === 'unverified' && '❌ Не верифицирован'}
-                            {!['active', 'inactive', 'banned', 'working', 'free', 'busy', 'pending', 'suspended', 'verified', 'unverified'].includes(status) && `⚪ ${status}`}
+                            {status === 'inactive' && '⚫ Неактивный'}
+                            {status === 'blocked' && '🔴 Заблокирован'}
+                            {status === 'suspended' && '🟡 Приостановлен'}
+                            {status === 'banned' && '🔴 Забанен'}
+                            {status === 'free' && '🟢 Свободный'}
+                            {status === 'busy' && '🟡 Занят'}
+                            {status === 'working' && '🔵 Работает'}
+                            {status === 'pending' && '🟡 Ожидает'}
+                            {status === 'verified' && '✅ Проверен'}
+                            {status === 'unverified' && '❌ Не проверен'}
+                            {!['active', 'inactive', 'blocked', 'suspended', 'banned', 'free', 'busy', 'working', 'pending', 'verified', 'unverified'].includes(status) && `⚪ ${status}`}
                           </option>
                         ))}
                       </CFormSelect>
@@ -400,12 +421,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                         type="email"
                         placeholder="user@example.com"
                         invalid={!!errors.email}
-                        {...register('email', {
-                          pattern: {
-                            value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                            message: 'Некорректный формат email'
-                          }
-                        })}
+                        {...register('email')}
                       />
                     </CInputGroup>
                     {errors.email && (
@@ -416,23 +432,28 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
 
                 <CCol md={6}>
                   <div className="mb-3">
-                    <CFormLabel htmlFor="emailPassword" className="fw-semibold">Пароль от Email</CFormLabel>
-                    <CFormInput
-                      id="emailPassword"
-                      type="text"
-                      placeholder="Пароль от почты"
-                      {...register('emailPassword')}
-                    />
+                    <CFormLabel htmlFor="emailPassword" className="fw-semibold">Пароль email</CFormLabel>
+                    <CInputGroup>
+                      <CInputGroupText>
+                        <CIcon icon={cilLockLocked} />
+                      </CInputGroupText>
+                      <CFormInput
+                        id="emailPassword"
+                        type="text"
+                        placeholder="Пароль от email"
+                        {...register('emailPassword')}
+                      />
+                    </CInputGroup>
                   </div>
                 </CCol>
 
                 <CCol md={6}>
                   <div className="mb-3">
-                    <CFormLabel htmlFor="emailRecovery" className="fw-semibold">Резервный Email</CFormLabel>
+                    <CFormLabel htmlFor="emailRecovery" className="fw-semibold">Резервный email</CFormLabel>
                     <CFormInput
                       id="emailRecovery"
                       type="email"
-                      placeholder="backup@example.com"
+                      placeholder="recovery@example.com"
                       {...register('emailRecovery')}
                     />
                   </div>
@@ -440,11 +461,11 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
 
                 <CCol md={6}>
                   <div className="mb-3">
-                    <CFormLabel htmlFor="emailPasswordRecovery" className="fw-semibold">Пароль резервного Email</CFormLabel>
+                    <CFormLabel htmlFor="emailPasswordRecovery" className="fw-semibold">Пароль резервного email</CFormLabel>
                     <CFormInput
                       id="emailPasswordRecovery"
                       type="text"
-                      placeholder="Пароль от резервной почты"
+                      placeholder="Пароль от резервного email"
                       {...register('emailPasswordRecovery')}
                     />
                   </div>
@@ -452,7 +473,7 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
 
                 <CCol xs={12}>
                   <div className="mb-3">
-                    <CFormLabel htmlFor="emailJsonData" className="fw-semibold">JSON данные Email</CFormLabel>
+                    <CFormLabel htmlFor="emailJsonData" className="fw-semibold">JSON данные email</CFormLabel>
                     <CFormTextarea
                       id="emailJsonData"
                       rows={4}
@@ -534,6 +555,51 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                   </div>
                 </CCol>
 
+                <CCol md={6}>
+                  <div className="mb-3">
+                    <CFormLabel htmlFor="statusCheck" className="fw-semibold">Проверка статуса</CFormLabel>
+                    <CFormInput
+                      id="statusCheck"
+                      placeholder="Статус проверки"
+                      {...register('statusCheck')}
+                    />
+                  </div>
+                </CCol>
+
+                <CCol md={6}>
+                  <div className="mb-3">
+                    <CFormLabel htmlFor="idActive" className="fw-semibold">ID активности</CFormLabel>
+                    <CFormInput
+                      id="idActive"
+                      placeholder="ID активности"
+                      {...register('idActive')}
+                    />
+                  </div>
+                </CCol>
+
+                <CCol md={6}>
+                  <div className="mb-3">
+                    <CFormLabel htmlFor="counter" className="fw-semibold">Счетчик</CFormLabel>
+                    <CFormInput
+                      id="counter"
+                      type="number"
+                      placeholder="0"
+                      {...register('counter')}
+                    />
+                  </div>
+                </CCol>
+
+                <CCol md={6}>
+                  <div className="mb-3">
+                    <CFormLabel htmlFor="namePage" className="fw-semibold">Имя страницы</CFormLabel>
+                    <CFormInput
+                      id="namePage"
+                      placeholder="Имя страницы"
+                      {...register('namePage')}
+                    />
+                  </div>
+                </CCol>
+
                 <CCol xs={12}>
                   <div className="mb-3">
                     <CFormLabel htmlFor="userAgent" className="fw-semibold">User Agent</CFormLabel>
@@ -552,15 +618,39 @@ const AccountFormModal = ({ visible, onClose, account = null, isEdit = false }) 
                     <CFormTextarea
                       id="cookies"
                       rows={4}
-                      placeholder="Cookies данные..."
+                      placeholder="Cookies в формате JSON или строки..."
                       {...register('cookies')}
+                    />
+                  </div>
+                </CCol>
+
+                <CCol xs={12}>
+                  <div className="mb-3">
+                    <CFormLabel htmlFor="data" className="fw-semibold">Дополнительные данные</CFormLabel>
+                    <CFormTextarea
+                      id="data"
+                      rows={4}
+                      placeholder="Дополнительные данные..."
+                      {...register('data')}
+                    />
+                  </div>
+                </CCol>
+
+                <CCol xs={12}>
+                  <div className="mb-3">
+                    <CFormLabel htmlFor="eaab" className="fw-semibold">EAAB</CFormLabel>
+                    <CFormTextarea
+                      id="eaab"
+                      rows={3}
+                      placeholder="EAAB данные..."
+                      {...register('eaab')}
                     />
                   </div>
                 </CCol>
               </CRow>
             </CTabPane>
 
-            {/* Токены и API */}
+            {/* Токены */}
             <CTabPane visible={activeTab === 'tokens'}>
               <CRow>
                 <CCol md={6}>

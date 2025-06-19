@@ -1,5 +1,6 @@
 // frontend/src/views/accounts/Accounts.js
 import React, { useState } from 'react'
+import './Accounts.scss'
 import {
   CCard,
   CCardBody,
@@ -32,6 +33,7 @@ import {
   CTableHeaderCell,
   CTableBody,
   CTableDataCell,
+  CButtonGroup,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -53,6 +55,8 @@ import {
   cilClock,
   cilSwapHorizontal,
   cilLayers,
+  cilEyedropper,
+  cilInfo,
 } from '@coreui/icons'
 import { 
   useAccounts, 
@@ -65,59 +69,46 @@ import { useEntityStatuses, useStatusConfig } from '../../hooks/useStatuses'
 import { useModals } from '../../hooks/useModals'
 import { 
   DeleteModal, 
-  ConfirmModal, 
   StatusChangeModal, 
   BulkActionModal 
 } from '../../components/common/modals'
 import { AccountFormModal } from '../../components/forms'
+import ImportExportModal from '../../components/modals/ImportExportModal'
+import { useImportExportModal } from '../../hooks/useImportExportModal'
 import { accountsService } from '../../services/accountsService'
 import toast from 'react-hot-toast'
 
 const Accounts = () => {
+  // Состояние компонента
   const [filters, setFilters] = useState({ page: 1, limit: 12 })
-  console.log('Initial filters:', filters);
   const [showModal, setShowModal] = useState(false)
   const [editingAccount, setEditingAccount] = useState(null)
   const [showFilters, setShowFilters] = useState(false)
   const [selectedAccounts, setSelectedAccounts] = useState([])
   const [selectAll, setSelectAll] = useState(false)
 
-  // Загрузка данных
+  // Хуки для данных
   const { data, isLoading, error, refetch } = useAccounts(filters)
-  console.log('Accounts data:', data);
-  console.log('Accounts isLoading:', isLoading);
-  console.log('Accounts error:', error);
   const { data: stats } = useAccountsStats()
-  console.log('Accounts stats:', stats);
   const deleteAccountMutation = useDeleteAccount()
   const updateAccountMutation = useUpdateAccount()
   const bulkDeleteMutation = useBulkDeleteAccounts()
   
-  // Загрузка статусов динамически
-  const { data: accountStatuses, isLoading: statusesLoading } = useEntityStatuses('account')
-  console.log('Account statuses:', accountStatuses);
-  console.log('Statuses loading:', statusesLoading);
+  // Хуки для статусов
+  const { data: statusesResponse, isLoading: statusesLoading } = useEntityStatuses('account')
   const { data: statusConfig } = useStatusConfig()
-  console.log('Status config:', statusConfig);
 
-  // Модальные окна
-  const {
-    modals,
-    closeModal,
-    confirmDelete,
-    changeStatus,
-    bulkAction
-  } = useModals()
-  console.log('Modals state:', modals);
+  // Хуки для модальных окон
+  const { modals, closeModal, confirmDelete, changeStatus, bulkAction } = useModals()
+  const { modalState, openImport, openExport, close: closeImportExport } = useImportExportModal()
 
+  // Обработанные данные
   const accounts = data?.accounts || []
-  console.log('Processed accounts array:', accounts);
   const pagination = data?.pagination || { page: 1, pages: 1, total: 0 }
-  console.log('Pagination data:', pagination);
 
-  // === ОБРАБОТЧИКИ ===
+  // ===== ОБРАБОТЧИКИ СОБЫТИЙ =====
+
   const handleFilterChange = (key, value) => {
-    console.log(`Filter change - key: ${key}, value: ${value}, current filters:`, filters);
     setFilters(prev => ({
       ...prev,
       [key]: value,
@@ -126,18 +117,15 @@ const Accounts = () => {
   }
 
   const handlePageChange = (page) => {
-    console.log(`Page change to: ${page}, current filters:`, filters);
     setFilters(prev => ({ ...prev, page }))
   }
 
   const handleEdit = (account) => {
-    console.log('Edit account:', account);
     setEditingAccount(account)
     setShowModal(true)
   }
 
   const handleDelete = (account) => {
-    console.log('Delete account:', account);
     confirmDelete(account, {
       title: "Удалить аккаунт",
       message: "Это действие нельзя отменить. Все данные аккаунта будут потеряны.",
@@ -148,7 +136,6 @@ const Accounts = () => {
           closeModal('delete')
           refetch()
         } catch (error) {
-          console.error('Delete error:', error);
           toast.error('Ошибка при удалении аккаунта')
         }
       }
@@ -156,7 +143,6 @@ const Accounts = () => {
   }
 
   const handleStatusChange = (account) => {
-    console.log('Status change for account:', account);
     changeStatus(account, 'account', {
       onConfirm: async (newStatus, reason) => {
         try {
@@ -169,7 +155,6 @@ const Accounts = () => {
           closeModal('statusChange')
           refetch()
         } catch (error) {
-          console.error('Status change error:', error);
           toast.error('Ошибка при изменении статуса')
         }
       }
@@ -177,13 +162,11 @@ const Accounts = () => {
   }
 
   const handleCloseModal = () => {
-    console.log('Closing modal, editingAccount:', editingAccount);
     setShowModal(false)
     setEditingAccount(null)
   }
 
   const handleSelectAccount = (accountId, checked) => {
-    console.log(`Select account - id: ${accountId}, checked: ${checked}, selectedAccounts:`, selectedAccounts);
     if (checked) {
       setSelectedAccounts(prev => [...prev, accountId])
     } else {
@@ -193,7 +176,6 @@ const Accounts = () => {
   }
 
   const handleSelectAll = (checked) => {
-    console.log(`Select all - checked: ${checked}, accounts length: ${accounts.length}`);
     setSelectAll(checked)
     if (checked) {
       setSelectedAccounts(accounts.map(account => account.id))
@@ -203,7 +185,6 @@ const Accounts = () => {
   }
 
   const handleBulkDelete = () => {
-    console.log('Bulk delete, selectedAccounts:', selectedAccounts);
     const selectedAccountsData = accounts.filter(account => 
       selectedAccounts.includes(account.id)
     )
@@ -218,7 +199,6 @@ const Accounts = () => {
           setSelectAll(false)
           refetch()
         } catch (error) {
-          console.error('Bulk delete error:', error);
           toast.error('Ошибка при массовом удалении')
         }
       }
@@ -226,7 +206,6 @@ const Accounts = () => {
   }
 
   const handleBulkStatusChange = () => {
-    console.log('Bulk status change, selectedAccounts:', selectedAccounts);
     const selectedAccountsData = accounts.filter(account => 
       selectedAccounts.includes(account.id)
     )
@@ -243,37 +222,23 @@ const Accounts = () => {
           setSelectAll(false)
           refetch()
         } catch (error) {
-          console.error('Bulk status change error:', error);
           toast.error('Ошибка при массовом изменении статуса')
         }
       }
     })
   }
 
-  // === УТИЛИТАРНЫЕ ФУНКЦИИ ===
+  const handleImportExportSuccess = (result, mode, type) => {
+    if (mode === 'import') {
+      refetch() // Обновляем данные после импорта
+    }
+  }
+
+  // ===== УТИЛИТАРНЫЕ ФУНКЦИИ =====
+
   const getStatusBadge = (status) => {
-    if (!statusConfig) {
-      return (
-        <CBadge color="secondary" shape="rounded-pill" className="px-3 py-1">
-          {status}
-        </CBadge>
-      )
-    }
-    const description = statusConfig.descriptions?.[status] || status
-    const color = statusConfig.colors?.[status] || '#6b7280'
-    const getBootstrapColor = (hexColor) => {
-      const colorMap = {
-        '#10b981': 'success',
-        '#ef4444': 'danger', 
-        '#f59e0b': 'warning',
-        '#3b82f6': 'primary',
-        '#6b7280': 'secondary',
-        '#059669': 'success',
-        '#f97316': 'warning',
-        '#8b5cf6': 'info'
-      }
-      return colorMap[hexColor] || 'secondary'
-    }
+    const description = statusConfig?.descriptions?.[status] || status
+    
     const getStatusIcon = (status) => {
       const icons = {
         'active': cilCheck,
@@ -287,13 +252,30 @@ const Accounts = () => {
         'verified': cilCheck,
         'unverified': cilX
       }
-      return icons[status] || cilX
+      return icons[status] || cilEyedropper
     }
+    
+    const getStatusColor = (status) => {
+      const colors = {
+        'active': 'success',
+        'inactive': 'secondary',
+        'banned': 'danger',
+        'working': 'primary',
+        'free': 'success',
+        'busy': 'warning',
+        'pending': 'warning',
+        'suspended': 'danger',
+        'verified': 'success',
+        'unverified': 'secondary'
+      }
+      return colors[status] || 'secondary'
+    }
+    
     return (
       <CBadge 
-        color={getBootstrapColor(color)}
+        color={getStatusColor(status)}
         shape="rounded-pill"
-        className="d-inline-flex align-items-center gap-1 px-3 py-1"
+        className="d-inline-flex align-items-center gap-1 px-2 py-1 small fw-medium"
       >
         <CIcon icon={getStatusIcon(status)} size="sm" />
         {description}
@@ -311,287 +293,393 @@ const Accounts = () => {
   }
 
   const getStatusOptions = () => {
-    if (!accountStatuses) return []
-    return Object.values(accountStatuses).map(status => {
-      const description = statusConfig?.descriptions?.[status] || status
-      return { value: status, label: description }
-    })
+    if (!statusesResponse?.data) return []
+    
+    const statuses = statusesResponse.data.statuses || statusesResponse.data
+    
+    if (Array.isArray(statuses)) {
+      return statuses
+    }
+    
+    if (typeof statuses === 'object') {
+      return Object.values(statuses)
+    }
+    
+    return ['active', 'inactive', 'blocked', 'suspended']
   }
 
-  // === РЕНДЕР ===
+  // ===== РЕНДЕР =====
+
   if (error) {
-    console.log('Render error state:', error);
     return (
-      <CAlert color="danger" className="m-4">
-        Ошибка загрузки аккаунтов: {error.message}
-      </CAlert>
+      <CContainer fluid className="px-4 py-3">
+        <CAlert color="danger" className="d-flex align-items-center">
+          <CIcon icon={cilInfo} className="me-2" />
+          <div>
+            <h6 className="alert-heading mb-1">Ошибка загрузки</h6>
+            <div className="small">{error.message}</div>
+          </div>
+        </CAlert>
+      </CContainer>
     )
   }
 
   return (
-    <CContainer fluid className="px-2 py-2"> {/* Уменьшено с px-4 py-3 */}
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1 className="h2 mb-2">Аккаунты</h1>
-          <div className="d-flex align-items-center gap-3 flex-wrap">
-            <span className="text-body-secondary">
-              Всего: <strong className="text-body">{pagination.total}</strong>
-            </span>
-            {selectedAccounts.length > 0 && (
-              <span className="text-primary">
-                Выбрано: <strong>{selectedAccounts.length}</strong>
-              </span>
-            )}
-            {stats && (
-              <>
-                <div className="d-flex align-items-center gap-1">
-                  <div className="w-2 h-2 bg-success rounded-circle"></div>
-                  <span className="small">Активных: {stats.byStatus?.active || 0}</span>
-                </div>
-                <div className="d-flex align-items-center gap-1">
-                  <div className="w-2 h-2 bg-warning rounded-circle"></div>
-                  <span className="small">В работе: {stats.byStatus?.working || 0}</span>
-                </div>
-                <div className="d-flex align-items-center gap-1">
-                  <div className="w-2 h-2 bg-danger rounded-circle"></div>
-                  <span className="small">Заблокированных: {stats.byStatus?.banned || 0}</span>
-                </div>
-              </>
-            )}
+    <CContainer fluid className="px-4 py-3">
+      {/* ===== ЗАГОЛОВОК И СТАТИСТИКА ===== */}
+      <CRow className="mb-4">
+        <CCol>
+          <div className="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3">
+            <div>
+              <div className="d-flex align-items-center gap-2 mb-2">
+                <h1 className="h3 mb-0 fw-bold text-body-emphasis">Аккаунты</h1>
+                <CBadge color="primary" shape="rounded-pill" className="px-2 py-1">
+                  {pagination.total}
+                </CBadge>
+              </div>
+              
+              <div className="d-flex align-items-center gap-4 flex-wrap">
+                {selectedAccounts.length > 0 && (
+                  <div className="d-flex align-items-center gap-1 text-primary">
+                    <CIcon icon={cilCheck} size="sm" />
+                    <span className="fw-medium">Выбрано: {selectedAccounts.length}</span>
+                  </div>
+                )}
+                
+                {stats && (
+                  <div className="d-flex align-items-center gap-4">
+                    <div className="d-flex align-items-center gap-1">
+                      <div className="rounded-circle bg-success" style={{ width: '8px', height: '8px' }}></div>
+                      <span className="text-muted small">Активных: <span className="fw-medium">{stats.byStatus?.active || 0}</span></span>
+                    </div>
+                    <div className="d-flex align-items-center gap-1">
+                      <div className="rounded-circle bg-warning" style={{ width: '8px', height: '8px' }}></div>
+                      <span className="text-muted small">В работе: <span className="fw-medium">{stats.byStatus?.working || 0}</span></span>
+                    </div>
+                    <div className="d-flex align-items-center gap-1">
+                      <div className="rounded-circle bg-danger" style={{ width: '8px', height: '8px' }}></div>
+                      <span className="text-muted small">Заблокированных: <span className="fw-medium">{stats.byStatus?.banned || 0}</span></span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            {/* ===== КНОПКИ ДЕЙСТВИЙ ===== */}
+            <div className="d-flex gap-2 flex-wrap">
+              {selectedAccounts.length > 0 && (
+                <CDropdown placement="bottom-end">
+                  <CDropdownToggle 
+                    color="warning" 
+                    variant="outline"
+                    className="d-flex align-items-center gap-2 border-2 fw-medium"
+                  >
+                    <CIcon icon={cilLayers} size="sm" />
+                    Действия ({selectedAccounts.length})
+                  </CDropdownToggle>
+                  <CDropdownMenu className="shadow border-0" style={{ minWidth: '200px' }}>
+                    <CDropdownItem 
+                      onClick={handleBulkStatusChange} 
+                      className="py-2 px-3 d-flex align-items-center"
+                    >
+                      <CIcon icon={cilSwapHorizontal} className="me-2 text-info" />
+                      <span>Изменить статус</span>
+                    </CDropdownItem>
+                    <CDropdownDivider />
+                    <CDropdownItem 
+                      onClick={handleBulkDelete} 
+                      className="py-2 px-3 d-flex align-items-center text-danger"
+                    >
+                      <CIcon icon={cilTrash} className="me-2" />
+                      <span>Удалить выбранные</span>
+                    </CDropdownItem>
+                  </CDropdownMenu>
+                </CDropdown>
+              )}
+              
+              <CButton 
+                color="light" 
+                variant="outline"
+                onClick={() => setShowFilters(true)}
+                className="d-flex align-items-center gap-2 border-2"
+              >
+                <CIcon icon={cilFilter} size="sm" />
+                Фильтры
+              </CButton>
+              
+              <CButton 
+                color="primary" 
+                onClick={() => setShowModal(true)}
+                className="d-flex align-items-center gap-2 fw-medium px-3"
+              >
+                <CIcon icon={cilUserPlus} size="sm" />
+                Создать
+              </CButton>
+              
+              <CDropdown placement="bottom-end">
+                <CDropdownToggle 
+                  color="light" 
+                  variant="outline" 
+                  className="border-2 px-3"
+                >
+                  <CIcon icon={cilMenu} />
+                </CDropdownToggle>
+                <CDropdownMenu className="shadow border-0" style={{ minWidth: '180px' }}>
+                  <CDropdownItem 
+                    onClick={() => openImport('accounts')}
+                    className="py-2 px-3 d-flex align-items-center"
+                  >
+                    <CIcon icon={cilCloudUpload} className="me-2 text-success" />
+                    <span>Импорт</span>
+                  </CDropdownItem>
+                  <CDropdownItem 
+                    onClick={() => openExport('accounts')}
+                    className="py-2 px-3 d-flex align-items-center"
+                  >
+                    <CIcon icon={cilCloudDownload} className="me-2 text-primary" />
+                    <span>Экспорт</span>
+                  </CDropdownItem>
+                  <CDropdownDivider />
+                  <CDropdownItem className="py-2 px-3 d-flex align-items-center">
+                    <CIcon icon={cilSettings} className="me-2 text-secondary" />
+                    <span>Настройки</span>
+                  </CDropdownItem>
+                </CDropdownMenu>
+              </CDropdown>
+            </div>
           </div>
-        </div>
-        
-        <div className="d-flex gap-2">
-          {selectedAccounts.length > 0 && (
-            <CDropdown placement="bottom-end">
-              <CDropdownToggle color="warning" size="sm" className="epic-btn epic-btn--primary">
-                <CIcon icon={cilLayers} className="me-1" />
-                Действия ({selectedAccounts.length})
-              </CDropdownToggle>
-              <CDropdownMenu className="shadow-lg border-0">
-                <CDropdownItem onClick={handleBulkStatusChange} className="py-2 px-3 d-flex align-items-center">
-                  <CIcon icon={cilSwapHorizontal} className="me-2 text-info" />
-                  <span>Изменить статус</span>
-                </CDropdownItem>
-                <CDropdownDivider />
-                <CDropdownItem onClick={handleBulkDelete} className="py-2 px-3 d-flex align-items-center text-danger">
-                  <CIcon icon={cilTrash} className="me-2" />
-                  <span>Удалить все</span>
-                </CDropdownItem>
-              </CDropdownMenu>
-            </CDropdown>
-          )}
-          
-          <CButton 
-            color="light" 
-            variant="outline"
-            onClick={() => setShowFilters(true)}
-            className="epic-btn epic-btn--secondary"
-          >
-            <CIcon icon={cilFilter} size="sm" className="me-2" />
-            Фильтры
-          </CButton>
-          
-          <CButton 
-            color="primary" 
-            onClick={() => setShowModal(true)}
-            className="epic-btn epic-btn--primary"
-          >
-            <CIcon icon={cilUserPlus} size="sm" className="me-2" />
-            Создать
-          </CButton>
-          
-          <CDropdown placement="bottom-end">
-            <CDropdownToggle color="light" variant="outline" className="epic-btn epic-btn--secondary">
-              <CIcon icon={cilMenu} />
-            </CDropdownToggle>
-            <CDropdownMenu className="shadow-lg border-0">
-              <CDropdownItem className="py-2 px-3 d-flex align-items-center">
-                <CIcon icon={cilCloudUpload} className="me-2 text-success" />
-                <span>Импорт</span>
-              </CDropdownItem>
-              <CDropdownItem className="py-2 px-3 d-flex align-items-center">
-                <CIcon icon={cilCloudDownload} className="me-2 text-primary" />
-                <span>Экспорт</span>
-              </CDropdownItem>
-              <CDropdownDivider />
-              <CDropdownItem className="py-2 px-3 d-flex align-items-center">
-                <CIcon icon={cilSettings} className="me-2 text-secondary" />
-                <span>Настройки</span>
-              </CDropdownItem>
-            </CDropdownMenu>
-          </CDropdown>
-        </div>
-      </div>
+        </CCol>
+      </CRow>
 
-      {/* Quick Search */}
-      <div className="mb-4">
-        <CInputGroup className="compact-form__group shadow-sm" style={{ maxWidth: '400px' }}>
-          <CInputGroupText className="bg-body border-end-0">
-            <CIcon icon={cilSearch} className="text-body-secondary" />
-          </CInputGroupText>
-          <CFormInput
-            placeholder="Поиск аккаунтов..."
-            value={filters.search || ''}
-            onChange={(e) => handleFilterChange('search', e.target.value)}
-            className="compact-form__input border-start-0"
-          />
-        </CInputGroup>
-      </div>
+      {/* ===== ПОИСК ===== */}
+      <CRow className="mb-4">
+        <CCol lg={6}>
+          <CInputGroup className="shadow-sm">
+            <CInputGroupText className="bg-white border-end-0">
+              <CIcon icon={cilSearch} className="text-muted" />
+            </CInputGroupText>
+            <CFormInput
+              placeholder="Поиск по логину, email или ID..."
+              value={filters.search || ''}
+              onChange={(e) => handleFilterChange('search', e.target.value)}
+              className="border-start-0 bg-white"
+            />
+          </CInputGroup>
+        </CCol>
+      </CRow>
 
-      {/* Content */}
+      {/* ===== КОНТЕНТ ===== */}
       {isLoading ? (
-        <div className="epic-loading">
-          <div className="epic-loading__content">
-            <CSpinner color="primary" className="epic-loading__spinner" style={{ width: '3rem', height: '3rem' }} />
-            <div className="epic-loading__text">Загрузка аккаунтов...</div>
-            <div className="epic-loading__subtext">Это может занять несколько секунд</div>
-          </div>
-        </div>
+        <CCard className="border-0 shadow-sm">
+          <CCardBody className="text-center py-5">
+            <CSpinner color="primary" className="mb-3" style={{ width: '3rem', height: '3rem' }} />
+            <h5 className="text-muted mb-2">Загрузка аккаунтов...</h5>
+            <p className="text-muted small mb-0">Это может занять несколько секунд</p>
+          </CCardBody>
+        </CCard>
       ) : accounts.length === 0 ? (
-        <div className="text-center py-5">
-          <div 
-            className="mx-auto mb-4 rounded-circle d-flex align-items-center justify-content-center text-body-secondary"
-            style={{ width: '80px', height: '80px', background: 'var(--cui-tertiary-bg)' }}
-          >
-            <CIcon icon={cilUser} size="2xl" />
-          </div>
-          <h4 className="text-body-secondary mb-2">Аккаунты не найдены</h4>
-          <p className="text-body-secondary mb-4">
-            Попробуйте изменить параметры поиска или создайте новый аккаунт
-          </p>
-          <CButton color="primary" onClick={() => setShowModal(true)} className="epic-btn epic-btn--primary">
-            <CIcon icon={cilUserPlus} className="me-2" />
-            Создать первый аккаунт
-          </CButton>
-        </div>
+        <CCard className="border-0 shadow-sm">
+          <CCardBody className="text-center py-5">
+            <div 
+              className="mx-auto mb-4 rounded-circle d-flex align-items-center justify-content-center text-muted"
+              style={{ width: '80px', height: '80px', backgroundColor: 'var(--cui-gray-100)' }}
+            >
+              <CIcon icon={cilUser} size="2xl" />
+            </div>
+            <h4 className="text-muted mb-2">Аккаунты не найдены</h4>
+            <p className="text-muted mb-4">
+              {filters.search ? 'Попробуйте изменить параметры поиска' : 'Создайте первый аккаунт для начала работы'}
+            </p>
+            <CButton 
+              color="primary" 
+              onClick={() => setShowModal(true)}
+              className="d-flex align-items-center gap-2 mx-auto fw-medium"
+            >
+              <CIcon icon={cilUserPlus} />
+              Создать аккаунт
+            </CButton>
+          </CCardBody>
+        </CCard>
       ) : (
         <>
-          {/* Bulk Actions Bar */}
+          {/* ===== ПАНЕЛЬ МАССОВОГО ВЫБОРА ===== */}
           {accounts.length > 0 && (
-            <div className="d-flex align-items-center justify-content-between mb-4 p-3 bg-body-tertiary rounded">
-              <CFormCheck
-                checked={selectAll}
-                onChange={(e) => handleSelectAll(e.target.checked)}
-                label={`Выбрать все (${accounts.length})`}
-                className="form-check-lg"
-              />
-              
-              {selectedAccounts.length > 0 && (
-                <div className="d-flex gap-2">
-                  <CButton 
-                    color="outline-primary" 
-                    size="sm"
-                    onClick={handleBulkStatusChange}
-                    className="epic-btn epic-btn--secondary"
-                  >
-                    <CIcon icon={cilSwapHorizontal} className="me-1" />
-                    Изменить статус
-                  </CButton>
-                  <CButton 
-                    color="outline-danger" 
-                    size="sm"
-                    onClick={handleBulkDelete}
-                    className="epic-btn epic-btn--danger"
-                  >
-                    <CIcon icon={cilTrash} className="me-1" />
-                    Удалить
-                  </CButton>
+            <CCard className="border-0 shadow-sm mb-4">
+              <CCardBody className="py-3">
+                <div className="d-flex align-items-center justify-content-between">
+                  <CFormCheck
+                    checked={selectAll}
+                    onChange={(e) => handleSelectAll(e.target.checked)}
+                    label={`Выбрать все аккаунты (${accounts.length})`}
+                    className="fw-medium"
+                  />
+                  
+                  {selectedAccounts.length > 0 && (
+                    <CButtonGroup size="sm">
+                      <CButton 
+                        color="outline-primary" 
+                        onClick={handleBulkStatusChange}
+                        className="d-flex align-items-center gap-1"
+                      >
+                        <CIcon icon={cilSwapHorizontal} size="sm" />
+                        Статус
+                      </CButton>
+                      <CButton 
+                        color="outline-danger" 
+                        onClick={handleBulkDelete}
+                        className="d-flex align-items-center gap-1"
+                      >
+                        <CIcon icon={cilTrash} size="sm" />
+                        Удалить
+                      </CButton>
+                    </CButtonGroup>
+                  )}
                 </div>
-              )}
-            </div>
+              </CCardBody>
+            </CCard>
           )}
 
-          {/* Table */}
-          <CCard className="modern-table">
-            <CCardBody>
-              <CTable hover responsive>
-                <CTableHead>
-                  <CTableRow>
-                    <CTableHeaderCell scope="col" style={{ width: '50px' }}>
-                      <CFormCheck
-                        checked={selectAll}
-                        onChange={(e) => handleSelectAll(e.target.checked)}
-                      />
-                    </CTableHeaderCell>
-                    <CTableHeaderCell scope="col" style={{ width: '150px' }}>Логин</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" style={{ width: '200px', whiteSpace: 'nowrap' }}>Email</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" style={{ width: '120px' }}>ID</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" style={{ width: '150px' }}>Статус</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" style={{ width: '150px' }}>Источник</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" style={{ width: '120px' }}>Создан</CTableHeaderCell>
-                    <CTableHeaderCell scope="col" style={{ width: '120px' }}>Действия</CTableHeaderCell>
-                  </CTableRow>
-                </CTableHead>
-                <CTableBody>
-                  {accounts.map((account) => (
-                    <CTableRow key={account.id} className="animate-slide-in-up">
-                      <CTableDataCell>
+          {/* ===== ОСНОВНАЯ ТАБЛИЦА ===== */}
+          <CCard className="border-0 shadow-sm">
+            <CCardBody className="p-0">
+              <div className="table-responsive">
+                <CTable hover className="mb-0">
+                  <CTableHead className="bg-light">
+                    <CTableRow>
+                      <CTableHeaderCell scope="col" className="border-bottom-0 ps-4" style={{ width: '50px' }}>
                         <CFormCheck
-                          checked={selectedAccounts.includes(account.id)}
-                          onChange={(e) => handleSelectAccount(account.id, e.target.checked)}
+                          checked={selectAll}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
                         />
-                      </CTableDataCell>
-                      <CTableDataCell>{account.login}</CTableDataCell>
-                      <CTableDataCell style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {account.email || '-'}
-                      </CTableDataCell>
-                      <CTableDataCell>{account.userId || '-'}</CTableDataCell>
-                      <CTableDataCell>{getStatusBadge(account.status)}</CTableDataCell>
-                      <CTableDataCell>{account.source || 'manual'}</CTableDataCell>
-                      <CTableDataCell>{formatDate(account.createdAt)}</CTableDataCell>
-                      <CTableDataCell>
-                        <CDropdown placement="bottom-end">
-                          <CDropdownToggle
-                            color="light"
-                            variant="ghost"
-                            size="sm"
-                            className="epic-btn epic-btn--secondary"
-                          >
-                            <CIcon icon={cilMenu} size="sm" />
-                          </CDropdownToggle>
-                          <CDropdownMenu className="shadow-lg border-0">
-                            <CDropdownItem
-                              onClick={() => handleEdit(account)}
-                              className="py-2 px-3 d-flex align-items-center"
-                            >
-                              <CIcon icon={cilPencil} className="me-2 text-primary" />
-                              <span>Редактировать</span>
-                            </CDropdownItem>
-                            <CDropdownItem
-                              onClick={() => handleStatusChange(account)}
-                              className="py-2 px-3 d-flex align-items-center"
-                            >
-                              <CIcon icon={cilSwapHorizontal} className="me-2 text-info" />
-                              <span>Изменить статус</span>
-                            </CDropdownItem>
-                            <CDropdownDivider />
-                            <CDropdownItem
-                              onClick={() => handleDelete(account)}
-                              className="py-2 px-3 d-flex align-items-center text-danger"
-                            >
-                              <CIcon icon={cilTrash} className="me-2" />
-                              <span>Удалить</span>
-                            </CDropdownItem>
-                          </CDropdownMenu>
-                        </CDropdown>
-                      </CTableDataCell>
+                      </CTableHeaderCell>
+                      <CTableHeaderCell scope="col" className="border-bottom-0 fw-semibold">Аккаунт</CTableHeaderCell>
+                      <CTableHeaderCell scope="col" className="border-bottom-0 fw-semibold">Email</CTableHeaderCell>
+                      <CTableHeaderCell scope="col" className="border-bottom-0 fw-semibold">ID</CTableHeaderCell>
+                      <CTableHeaderCell scope="col" className="border-bottom-0 fw-semibold">Статус</CTableHeaderCell>
+                      <CTableHeaderCell scope="col" className="border-bottom-0 fw-semibold">Источник</CTableHeaderCell>
+                      <CTableHeaderCell scope="col" className="border-bottom-0 fw-semibold">Создан</CTableHeaderCell>
+                      <CTableHeaderCell scope="col" className="border-bottom-0 pe-4" style={{ width: '100px' }}>
+                        <span className="fw-semibold">Действия</span>
+                      </CTableHeaderCell>
                     </CTableRow>
-                  ))}
-                </CTableBody>
-              </CTable>
+                  </CTableHead>
+                  <CTableBody>
+                    {accounts.map((account, index) => (
+                      <CTableRow 
+                        key={account.id} 
+                        className="border-bottom"
+                        style={{ animationDelay: `${index * 50}ms` }}
+                      >
+                        <CTableDataCell className="ps-4">
+                          <CFormCheck
+                            checked={selectedAccounts.includes(account.id)}
+                            onChange={(e) => handleSelectAccount(account.id, e.target.checked)}
+                          />
+                        </CTableDataCell>
+                        
+                        <CTableDataCell>
+                          <div className="text-truncate">
+                            <div className="fw-medium text-body-emphasis">{account.login}</div>
+                            {account.nameProfiles && (
+                              <div className="small text-muted">{account.nameProfiles}</div>
+                            )}
+                          </div>
+                        </CTableDataCell>
+                        
+                        <CTableDataCell>
+                          <div className="text-truncate" style={{ maxWidth: '200px' }}>
+                            {account.email ? (
+                              <div className="d-flex align-items-center gap-1">
+                                <CIcon icon={cilEnvelopeClosed} size="sm" className="text-muted" />
+                                <span className="small">{account.email}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted small">—</span>
+                            )}
+                          </div>
+                        </CTableDataCell>
+                        
+                        <CTableDataCell>
+                          {account.userId ? (
+                            <code className="small px-2 py-1 rounded">
+                              {account.userId}
+                            </code>
+                          ) : (
+                            <span className="text-muted small">—</span>
+                          )}
+                        </CTableDataCell>
+                        
+                        <CTableDataCell>
+                          {getStatusBadge(account.status)}
+                        </CTableDataCell>
+                        
+                        <CTableDataCell>
+                          <CBadge color="secondary" className="small">
+                            {account.source === 'manual' && 'Ручное'}
+                            {account.source === 'import' && 'Импорт'}
+                            {account.source === 'registration' && 'Регистрация'}
+                            {account.source === 'api' && 'API'}
+                            {!account.source && 'Ручное'}
+                          </CBadge>
+                        </CTableDataCell>
+                        
+                        <CTableDataCell>
+                          <span className="small text-muted">
+                            {formatDate(account.createdAt)}
+                          </span>
+                        </CTableDataCell>
+                        
+                        <CTableDataCell className="pe-4">
+                          <CDropdown placement="bottom-end">
+                            <CDropdownToggle
+                              color="light"
+                              variant="ghost"
+                              size="sm"
+                              className="border-0"
+                            >
+                              <CIcon icon={cilMenu} size="sm" />
+                            </CDropdownToggle>
+                            <CDropdownMenu className="shadow border-0">
+                              <CDropdownItem
+                                onClick={() => handleEdit(account)}
+                                className="py-2 px-3 d-flex align-items-center"
+                              >
+                                <CIcon icon={cilPencil} className="me-2 text-primary" />
+                                <span>Редактировать</span>
+                              </CDropdownItem>
+                              <CDropdownItem
+                                onClick={() => handleStatusChange(account)}
+                                className="py-2 px-3 d-flex align-items-center"
+                              >
+                                <CIcon icon={cilSwapHorizontal} className="me-2 text-info" />
+                                <span>Изменить статус</span>
+                              </CDropdownItem>
+                              <CDropdownDivider />
+                              <CDropdownItem
+                                onClick={() => handleDelete(account)}
+                                className="py-2 px-3 d-flex align-items-center text-danger"
+                              >
+                                <CIcon icon={cilTrash} className="me-2" />
+                                <span>Удалить</span>
+                              </CDropdownItem>
+                            </CDropdownMenu>
+                          </CDropdown>
+                        </CTableDataCell>
+                      </CTableRow>
+                    ))}
+                  </CTableBody>
+                </CTable>
+              </div>
             </CCardBody>
           </CCard>
 
-          {/* Pagination */}
+          {/* ===== ПАГИНАЦИЯ ===== */}
           {pagination.pages > 1 && (
-            <div className="d-flex justify-content-center mt-5">
+            <div className="d-flex justify-content-center mt-4">
               <CPagination className="shadow-sm">
                 <CPaginationItem
                   disabled={pagination.page <= 1}
                   onClick={() => handlePageChange(pagination.page - 1)}
-                  className="epic-btn epic-btn--secondary"
                 >
                   Назад
                 </CPaginationItem>
@@ -609,7 +697,6 @@ const Accounts = () => {
                       key={page}
                       active={page === pagination.page}
                       onClick={() => handlePageChange(page)}
-                      className="epic-btn epic-btn--secondary"
                     >
                       {page}
                     </CPaginationItem>
@@ -619,7 +706,6 @@ const Accounts = () => {
                 <CPaginationItem
                   disabled={pagination.page >= pagination.pages}
                   onClick={() => handlePageChange(pagination.page + 1)}
-                  className="epic-btn epic-btn--secondary"
                 >
                   Далее
                 </CPaginationItem>
@@ -629,67 +715,65 @@ const Accounts = () => {
         </>
       )}
 
-      {/* Filters Offcanvas */}
+      {/* ===== ОФФКАНВАС ФИЛЬТРОВ ===== */}
       <COffcanvas placement="end" visible={showFilters} onHide={() => setShowFilters(false)}>
-        <COffcanvasHeader>
-          <COffcanvasTitle>Фильтры</COffcanvasTitle>
+        <COffcanvasHeader className="border-bottom">
+          <COffcanvasTitle className="fw-semibold">Фильтры аккаунтов</COffcanvasTitle>
         </COffcanvasHeader>
         <COffcanvasBody>
-          <div className="compact-form">
-            <div className="compact-form__row">
-              <div className="compact-form__group">
-                <label className="compact-form__label">Статус</label>
-                <CFormSelect
-                  value={filters.status || ''}
-                  onChange={(e) => handleFilterChange('status', e.target.value)}
-                  disabled={statusesLoading}
-                  className="compact-form__select"
-                >
-                  <option value="">
-                    {statusesLoading ? 'Загрузка...' : 'Все статусы'}
-                  </option>
-                  {getStatusOptions().map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
+          <div className="d-flex flex-column gap-3">
+            <div>
+              <label className="form-label fw-medium mb-2">Статус</label>
+              <CFormSelect
+                value={filters.status || ''}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+                disabled={statusesLoading}
+              >
+                <option value="">
+                  {statusesLoading ? 'Загрузка...' : 'Все статусы'}
+                </option>
+                {getStatusOptions().map(status => {
+                  const description = statusConfig?.descriptions?.[status] || status
+                  return (
+                    <option key={status} value={status}>
+                      {description}
                     </option>
-                  ))}
-                </CFormSelect>
-              </div>
+                  )
+                })}
+              </CFormSelect>
             </div>
             
-            <div className="compact-form__row">
-              <div className="compact-form__group">
-                <label className="compact-form__label">Источник</label>
-                <CFormSelect
-                  value={filters.source || ''}
-                  onChange={(e) => handleFilterChange('source', e.target.value)}
-                  className="compact-form__select"
-                >
-                  <option value="">Все источники</option>
-                  <option value="manual">Ручное создание</option>
-                  <option value="import">Импорт</option>
-                  <option value="registration">Регистрация</option>
-                  <option value="api">API</option>
-                </CFormSelect>
-              </div>
+            <div>
+              <label className="form-label fw-medium mb-2">Источник</label>
+              <CFormSelect
+                value={filters.source || ''}
+                onChange={(e) => handleFilterChange('source', e.target.value)}
+              >
+                <option value="">Все источники</option>
+                <option value="manual">Ручное создание</option>
+                <option value="import">Импорт</option>
+                <option value="registration">Регистрация</option>
+              </CFormSelect>
             </div>
 
-            <div className="d-flex gap-2">
-              <CButton 
-                color="outline-secondary" 
-                onClick={() => refetch()}
-                disabled={isLoading}
-                className="epic-btn epic-btn--secondary flex-fill"
-              >
-                <CIcon icon={cilReload} className="me-2" />
-                Обновить
-              </CButton>
-            </div>
+            <hr />
+
+            <CButton 
+              color="outline-secondary" 
+              onClick={() => refetch()}
+              disabled={isLoading}
+              className="d-flex align-items-center justify-content-center gap-2"
+            >
+              <CIcon icon={cilReload} size="sm" />
+              Обновить данные
+            </CButton>
           </div>
         </COffcanvasBody>
       </COffcanvas>
 
-      {/* Modals */}
+      {/* ===== МОДАЛЬНЫЕ ОКНА ===== */}
+      
+      {/* Модалка удаления */}
       <DeleteModal
         visible={modals.delete.visible}
         onClose={() => closeModal('delete')}
@@ -702,6 +786,7 @@ const Accounts = () => {
         className="simple-modal"
       />
 
+      {/* Модалка изменения статуса */}
       <StatusChangeModal
         visible={modals.statusChange.visible}
         onClose={() => closeModal('statusChange')}
@@ -714,6 +799,7 @@ const Accounts = () => {
         className="simple-modal"
       />
 
+      {/* Модалка массовых действий */}
       <BulkActionModal
         visible={modals.bulkAction.visible}
         onClose={() => closeModal('bulkAction')}
@@ -725,12 +811,22 @@ const Accounts = () => {
         className="simple-modal"
       />
 
+      {/* Модалка создания/редактирования аккаунта */}
       <AccountFormModal
         visible={showModal}
         onClose={handleCloseModal}
         account={editingAccount}
         isEdit={!!editingAccount}
         className="simple-modal"
+      />
+
+      {/* Модалка импорта/экспорта - используем уже созданную универсальную систему */}
+      <ImportExportModal
+        visible={modalState.visible}
+        type={modalState.type}
+        mode={modalState.mode}
+        onClose={closeImportExport}
+        onSuccess={handleImportExportSuccess}
       />
     </CContainer>
   )

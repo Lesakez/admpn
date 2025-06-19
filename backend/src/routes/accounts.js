@@ -10,8 +10,11 @@ router.get('/', accountController.getAccounts);
 // GET /api/accounts/stats - статистика аккаунтов
 router.get('/stats', accountController.getAccountStats);
 
-// GET /api/accounts/:id - получить аккаунт по ID
+// GET /api/accounts/:id - получить аккаунт по ID (без пароля)
 router.get('/:id', accountController.getAccount);
+
+// GET /api/accounts/:id/full - получить полные данные аккаунта (включая пароль)
+router.get('/:id/full', accountController.getAccountWithPassword);
 
 // POST /api/accounts - создать новый аккаунт
 router.post('/', validateAccount, accountController.createAccount);
@@ -34,16 +37,16 @@ router.post('/bulk-delete', accountController.bulkDeleteAccounts);
 // POST /api/accounts/bulk-update-status - массовое обновление статуса
 router.post('/bulk-update-status', accountController.bulkUpdateStatus);
 
-// GET /api/accounts/export-json - экспорт в JSON
-router.get('/export-json', accountController.exportAccountsJSON);
+// GET /api/accounts/export/json - экспорт в JSON
+router.get('/export/json', accountController.exportAccountsJSON);
 
-// GET /api/accounts/export-csv - экспорт в CSV
-router.get('/export-csv', accountController.exportAccountsCSV);
+// GET /api/accounts/export/csv - экспорт в CSV
+router.get('/export/csv', accountController.exportAccountsCSV);
 
-// GET /api/accounts/export-txt - экспорт в TXT
-router.get('/export-txt', accountController.exportAccountsTXT);
+// GET /api/accounts/export/txt - экспорт в TXT
+router.get('/export/txt', accountController.exportAccountsTXT);
 
-// POST /api/accounts/export-custom - кастомный экспорт
-router.post('/export-custom', accountController.exportAccountsCustom);
+// POST /api/accounts/export/custom - кастомный экспорт
+router.post('/export/custom', accountController.exportAccountsCustom);
 
 module.exports = router;

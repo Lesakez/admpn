@@ -1,0 +1,354 @@
+// frontend/src/views/accounts/Accounts.scss
+// Специальные стили для страницы аккаунтов с поддержкой CoreUI тем
+
+// ===== АНИМАЦИИ =====
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+// ===== ОСНОВНЫЕ СТИЛИ =====
+
+// Анимации для строк таблицы
+.table tbody tr {
+  animation: slideInUp 0.3s ease-out;
+  transition: all 0.2s ease;
+  
+  &:hover {
+    background-color: var(--cui-tertiary-bg) !important;
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// Улучшенные карточки
+.card {
+  border: 1px solid var(--cui-border-color);
+  transition: all 0.2s ease;
+  
+  &:hover {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+  }
+}
+
+// Кнопки с анимациями
+.btn {
+  transition: all 0.2s ease;
+  
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  &:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+}
+
+// ===== СТИЛИ ДЛЯ КОДА И БЕЙДЖЕЙ =====
+
+// Код для ID - адаптивный под темы
+code {
+  background-color: var(--cui-tertiary-bg) !important;
+  color: var(--cui-body-color) !important;
+  border: 1px solid var(--cui-border-color) !important;
+  font-size: 0.8rem !important;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace !important;
+  padding: 4px 8px !important;
+  border-radius: 6px !important;
+}
+
+// Бейджи - убираем принудительные цвета
+.badge {
+  transition: all 0.2s ease;
+  
+  // Убираем все bg-light и белые цвета
+  &.bg-light {
+    background-color: var(--cui-secondary) !important;
+    color: var(--cui-body-bg) !important;
+    border: 1px solid var(--cui-border-color) !important;
+  }
+  
+  &.bg-secondary {
+    background-color: var(--cui-secondary) !important;
+    color: var(--cui-body-bg) !important;
+  }
+}
+
+// ===== УЛУЧШЕННЫЕ ДРОПДАУНЫ =====
+.dropdown-menu {
+  border: none;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  padding: 8px;
+  margin-top: 8px;
+  background-color: var(--cui-body-bg);
+  
+  .dropdown-item {
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 2px;
+    transition: all 0.2s ease;
+    color: var(--cui-body-color);
+    
+    &:hover {
+      background-color: var(--cui-primary);
+      color: white;
+      transform: translateX(4px);
+    }
+    
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+  
+  .dropdown-divider {
+    margin: 8px 0;
+    border-color: var(--cui-border-color);
+  }
+}
+
+// ===== ПАГИНАЦИЯ =====
+.pagination {
+  .page-item {
+    margin: 0 2px;
+    
+    .page-link {
+      border-radius: 8px;
+      border: 2px solid transparent;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      background-color: var(--cui-body-bg);
+      color: var(--cui-body-color);
+      
+      &:hover {
+        background-color: var(--cui-primary);
+        border-color: var(--cui-primary);
+        color: white;
+        transform: translateY(-1px);
+      }
+    }
+    
+    &.active .page-link {
+      background-color: var(--cui-primary);
+      border-color: var(--cui-primary);
+      color: white;
+      box-shadow: 0 4px 12px rgba(var(--cui-primary-rgb, 33, 133, 208), 0.3);
+    }
+  }
+}
+
+// ===== ПОИСК =====
+.search-input {
+  transition: all 0.2s ease;
+  
+  &:focus {
+    box-shadow: 0 0 0 3px rgba(var(--cui-primary-rgb, 33, 133, 208), 0.1);
+    border-color: var(--cui-primary);
+  }
+}
+
+// ===== ЧЕКБОКСЫ =====
+.form-check-input {
+  transition: all 0.2s ease;
+  
+  &:checked {
+    background-color: var(--cui-primary);
+    border-color: var(--cui-primary);
+    box-shadow: 0 2px 8px rgba(var(--cui-primary-rgb, 33, 133, 208), 0.3);
+  }
+  
+  &:focus {
+    box-shadow: 0 0 0 3px rgba(var(--cui-primary-rgb, 33, 133, 208), 0.1);
+  }
+}
+
+// ===== ОФКАНВАС =====
+.offcanvas {
+  border: none;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.1);
+  background-color: var(--cui-body-bg);
+  
+  .offcanvas-header {
+    border-bottom: 1px solid var(--cui-border-color);
+    padding: 20px 24px;
+  }
+  
+  .offcanvas-body {
+    padding: 24px;
+  }
+}
+
+// ===== АЛЕРТЫ =====
+.alert {
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  
+  &.alert-danger {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.1), rgba(220, 53, 69, 0.05));
+    color: var(--cui-danger);
+    border: 1px solid rgba(220, 53, 69, 0.2);
+  }
+  
+  &.alert-success {
+    background: linear-gradient(135deg, rgba(25, 135, 84, 0.1), rgba(25, 135, 84, 0.05));
+    color: var(--cui-success);
+    border: 1px solid rgba(25, 135, 84, 0.2);
+  }
+  
+  &.alert-warning {
+    background: linear-gradient(135deg, rgba(255, 193, 7, 0.1), rgba(255, 193, 7, 0.05));
+    color: var(--cui-warning);
+    border: 1px solid rgba(255, 193, 7, 0.2);
+  }
+  
+  &.alert-info {
+    background: linear-gradient(135deg, rgba(13, 202, 240, 0.1), rgba(13, 202, 240, 0.05));
+    color: var(--cui-info);
+    border: 1px solid rgba(13, 202, 240, 0.2);
+  }
+}
+
+// ===== РЕСПОНСИВНОСТЬ =====
+@media (max-width: 768px) {
+  .table-responsive {
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  }
+  
+  .d-flex.gap-2 {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  
+  .btn {
+    min-width: 120px;
+  }
+}
+
+// ===== ТЕМНАЯ ТЕМА =====
+[data-coreui-theme="dark"] {
+  
+  // Код в темной теме
+  code {
+    background-color: var(--cui-gray-800) !important;
+    color: var(--cui-gray-200) !important;
+    border-color: var(--cui-gray-600) !important;
+  }
+  
+  // Бейджи в темной теме
+  .badge {
+    &.bg-light,
+    &.bg-secondary {
+      background-color: var(--cui-gray-600) !important;
+      color: var(--cui-gray-100) !important;
+      border-color: var(--cui-gray-500) !important;
+    }
+  }
+  
+  // Карточки
+  .card {
+    background-color: var(--cui-body-bg);
+    border-color: var(--cui-border-color);
+  }
+  
+  // Таблица
+  .table tbody tr:hover {
+    background-color: var(--cui-tertiary-bg) !important;
+  }
+  
+  // Дропдауны
+  .dropdown-menu {
+    background-color: var(--cui-body-bg);
+    border-color: var(--cui-border-color);
+  }
+  
+  // Офканвас
+  .offcanvas {
+    background-color: var(--cui-body-bg);
+  }
+  
+  // Алерты в темной теме
+  .alert {
+    &.alert-danger {
+      background: linear-gradient(135deg, rgba(220, 53, 69, 0.15), rgba(220, 53, 69, 0.05));
+      color: #ff6b6b;
+      border-color: rgba(220, 53, 69, 0.3);
+    }
+    
+    &.alert-success {
+      background: linear-gradient(135deg, rgba(25, 135, 84, 0.15), rgba(25, 135, 84, 0.05));
+      color: #51cf66;
+      border-color: rgba(25, 135, 84, 0.3);
+    }
+    
+    &.alert-warning {
+      background: linear-gradient(135deg, rgba(255, 193, 7, 0.15), rgba(255, 193, 7, 0.05));
+      color: #ffd43b;
+      border-color: rgba(255, 193, 7, 0.3);
+    }
+    
+    &.alert-info {
+      background: linear-gradient(135deg, rgba(13, 202, 240, 0.15), rgba(13, 202, 240, 0.05));
+      color: #74c0fc;
+      border-color: rgba(13, 202, 240, 0.3);
+    }
+  }
+}
+
+// ===== ДОПОЛНИТЕЛЬНЫЕ ФИКСЫ =====
+
+// Убираем все белые фоны
+.bg-white {
+  background-color: var(--cui-body-bg) !important;
+}
+
+.bg-light {
+  background-color: var(--cui-tertiary-bg) !important;
+}
+
+// Фикс для input group
+.input-group-text {
+  background-color: var(--cui-body-bg) !important;
+  border-color: var(--cui-border-color) !important;
+  color: var(--cui-body-color) !important;
+}
+
+// Фикс для модальных окон
+.modal-content {
+  background-color: var(--cui-body-bg) !important;
+  border: none !important;
+}
+
+.modal-header {
+  background-color: var(--cui-tertiary-bg) !important;
+  border-bottom: 1px solid var(--cui-border-color) !important;
+}
+
+.modal-footer {
+  background-color: var(--cui-tertiary-bg) !important;
+  border-top: 1px solid var(--cui-border-color) !important;
+}
+
+// Спиннер
+.spinner-border {
+  color: var(--cui-primary) !important;
+}
