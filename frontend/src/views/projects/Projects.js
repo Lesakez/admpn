@@ -24,10 +24,6 @@ import {
   CSpinner,
   CAlert,
   CWidgetStatsA,
-  CDropdown,
-  CDropdownToggle,
-  CDropdownMenu,
-  CDropdownItem,
   CFormCheck,
   CTooltip,
   CModal,
@@ -47,11 +43,8 @@ import {
   cilFolder,
   cilDevices,
   cilGlobeAlt,
-  cilOptions,
-  cilCloudDownload,
   cilWarning
 } from '@coreui/icons'
-// ИСПРАВЛЕНО: Используем отдельные хуки вместо несуществующего useEntityManager
 import { useEntityList, useEntityCRUD } from '../../hooks/useEntityCRUD'
 import { projectsService } from '../../services/projectsService'
 import { ProjectFormModal } from '../../components/forms'
@@ -76,9 +69,10 @@ const Projects = () => {
   // Выбранные проекты для массовых операций
   const [selectedProjects, setSelectedProjects] = useState([])
 
-  // ИСПРАВЛЕНО: Используем только существующие хуки
+  // Используем хук для списка проектов
   const {
-    data: listData,
+    data: projectsArray,
+    pagination,
     isLoading: isLoadingList,
     error: listError,
     refetch
@@ -87,50 +81,54 @@ const Projects = () => {
     staleTime: 2 * 60 * 1000
   })
 
+  // CRUD операции
   const {
     create,
     update,
     delete: deleteProject,
+    bulkDelete,
     isCreating,
     isUpdating,
-    isDeleting
+    isDeleting,
+    isBulkDeleting
   } = useEntityCRUD('projects', projectsService, {
     successMessages: {
       create: 'Проект успешно создан',
-      update: 'Проект успешно обновлен',
-      delete: 'Проект удален'
+      update: 'Проект успешно обновлен', 
+      delete: 'Проект удален',
+      bulkDelete: 'Проекты удалены'
     }
   })
 
-  // ВРЕМЕННО: Заглушка для массового удаления пока не исправим хуки
-  const bulkDelete = async (ids) => {
-    console.log('Bulk delete:', ids)
-    // TODO: Реализовать массовое удаление
-  }
-  const isBulkDeleting = false
+  // Отдельный хук для общей статистики
+  const {
+    data: globalStats,
+    isLoading: isLoadingStats
+  } = useEntityList('projects', projectsService, { includeStats: true }, {
+    staleTime: 30 * 1000,
+    select: (data) => {
+      // Вычисляем общую статистику из всех проектов
+      if (!data?.data || !Array.isArray(data.data)) {
+        return { totalProxies: 0, totalPhones: 0, totalProfiles: 0 }
+      }
+      
+      return data.data.reduce((acc, project) => {
+        if (project.stats) {
+          acc.totalProxies += project.stats.proxies?.total || 0
+          acc.totalPhones += project.stats.phones?.total || 0
+          acc.totalProfiles += project.stats.profiles?.total || 0
+        }
+        return acc
+      }, { totalProxies: 0, totalPhones: 0, totalProfiles: 0 })
+    }
+  })
 
-  // ИСПРАВЛЕНО: Безопасное извлечение данных
-  const projects = useMemo(() => {
-    if (!listData) return []
-    
-    // Проверяем разные возможные структуры ответа
-    if (Array.isArray(listData)) return listData
-    if (listData.data && Array.isArray(listData.data)) return listData.data
-    if (listData.projects && Array.isArray(listData.projects)) return listData.projects
-    
-    return []
-  }, [listData])
+  // Безопасная проверка массива проектов
+  const safeProjectsArray = useMemo(() => {
+    return Array.isArray(projectsArray) ? projectsArray : []
+  }, [projectsArray])
 
-  const pagination = useMemo(() => {
-    if (!listData) return { total: 0, page: 1, pages: 0, hasNext: false, hasPrev: false }
-    
-    if (listData.pagination) return listData.pagination
-    if (listData.data?.pagination) return listData.data.pagination
-    
-    return { total: 0, page: 1, pages: 0, hasNext: false, hasPrev: false }
-  }, [listData])
-
-  // Обработчики модальных окон
+  // Утилиты для модальных окон
   const openModal = useCallback((type, data = {}) => {
     setModals(prev => ({
       ...prev,
@@ -150,7 +148,7 @@ const Projects = () => {
     setFilters(prev => ({
       ...prev,
       [key]: value,
-      page: key !== 'page' ? 1 : value // Сбрасываем страницу при изменении фильтров
+      page: key !== 'page' ? 1 : value
     }))
   }, [])
 
@@ -178,9 +176,9 @@ const Projects = () => {
 
   const handleSelectAll = useCallback(() => {
     setSelectedProjects(prev => 
-      prev.length === projects.length ? [] : projects.map(p => p.id)
+      prev.length === safeProjectsArray.length ? [] : safeProjectsArray.map(p => p.id)
     )
-  }, [projects])
+  }, [safeProjectsArray])
 
   // Обработчики CRUD операций
   const handleCreateProject = useCallback(async (data) => {
@@ -223,38 +221,30 @@ const Projects = () => {
     }
   }, [bulkDelete, selectedProjects, closeModal])
 
-  // ИСПРАВЛЕНО: Упрощаем статистику без отдельного API запроса
+  // Вычисляемые значения
   const totalStats = useMemo(() => {
-    return projects.reduce((acc, project) => {
-      if (project.stats) {
-        acc.totalProxies += project.stats.proxies?.total || 0
-        acc.totalPhones += project.stats.phones?.total || 0
-        acc.totalProfiles += project.stats.profiles?.total || 0
-      }
-      return acc
-    }, { totalProxies: 0, totalPhones: 0, totalProfiles: 0 })
-  }, [projects])
+    return globalStats || { totalProxies: 0, totalPhones: 0, totalProfiles: 0 }
+  }, [globalStats])
 
   const sortIcon = useMemo(() => {
     return filters.sortOrder === 'ASC' ? '↑' : '↓'
   }, [filters.sortOrder])
 
   const isAllSelected = useMemo(() => {
-    return projects.length > 0 && selectedProjects.length === projects.length
-  }, [projects.length, selectedProjects.length])
+    return safeProjectsArray.length > 0 && selectedProjects.length === safeProjectsArray.length
+  }, [safeProjectsArray.length, selectedProjects.length])
 
   const isPartiallySelected = useMemo(() => {
-    return selectedProjects.length > 0 && selectedProjects.length < projects.length
-  }, [selectedProjects.length, projects.length])
+    return selectedProjects.length > 0 && selectedProjects.length < safeProjectsArray.length
+  }, [selectedProjects.length, safeProjectsArray.length])
 
-  // Рендер статусных бейджей
+  // Рендер компонентов
   const renderStatusBadge = useCallback((status, count, variant) => (
     <CBadge color={variant} className="me-1">
       {status}: {count}
     </CBadge>
   ), [])
 
-  // Рендер пагинации
   const renderPagination = useMemo(() => {
     if (!pagination || pagination.pages <= 1) return null
 
@@ -476,14 +466,14 @@ const Projects = () => {
                         <div className="mt-2">Загрузка проектов...</div>
                       </CTableDataCell>
                     </CTableRow>
-                  ) : projects.length === 0 ? (
+                  ) : safeProjectsArray.length === 0 ? (
                     <CTableRow>
                       <CTableDataCell colSpan="6" className="text-center py-4 text-muted">
                         {filters.search ? 'Проекты не найдены' : 'Нет проектов'}
                       </CTableDataCell>
                     </CTableRow>
                   ) : (
-                    projects.map((project) => (
+                    safeProjectsArray.map((project) => (
                       <CTableRow key={project.id}>
                         <CTableDataCell>
                           <CFormCheck
