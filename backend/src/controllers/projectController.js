@@ -1,178 +1,158 @@
 // backend/src/controllers/projectController.js
+
 const { Project, Proxy, Phone, Profile, sequelize } = require('../models');
 const { Op } = require('sequelize');
 const logger = require('../utils/logger');
 
 /**
- * ИСПРАВЛЕНИЯ В КОНТРОЛЛЕРЕ:
- * 1. Обрезанные методы дополнены полностью
- * 2. Добавлена правильная обработка ошибок
- * 3. Унифицированы форматы ответов
- * 4. Добавлена пагинация и фильтрация
- * 5. Исправлены SQL запросы с правильными полями
+ * Получить список проектов с пагинацией и статистикой
  */
-
-// Получить список проектов с пагинацией и фильтрацией
 const getProjects = async (req, res, next) => {
   try {
     const {
       page = 1,
       limit = 20,
       search = '',
-      sortBy = 'created_at', // ИСПРАВЛЕНО: snake_case как в БД
+      sortBy = 'created_at',
       sortOrder = 'DESC'
     } = req.query;
 
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-    const searchCondition = search ? {
-      [Op.or]: [
+    const validatedPage = Math.max(1, parseInt(page));
+    const validatedLimit = Math.min(100, Math.max(1, parseInt(limit)));
+    const offset = (validatedPage - 1) * validatedLimit;
+
+    const where = {};
+    if (search) {
+      where[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } }
-      ]
-    } : {};
+        { description: { [Op.like]: `%${search}%` } },
+        { transliterateName: { [Op.like]: `%${search}%` } }
+      ];
+    }
 
-    // Получаем проекты с подсчетом связанных ресурсов
-    const { count, rows: projects } = await Project.findAndCountAll({
-      where: searchCondition,
-      limit: parseInt(limit),
-      offset,
-      order: [[sortBy, sortOrder.toUpperCase()]],
-      include: [
-        {
-          model: Proxy,
-          as: 'proxies',
-          attributes: ['id', 'status'],
-          required: false
-        },
-        {
-          model: Phone,
-          as: 'phones', 
-          attributes: ['id', 'status'],
-          required: false
-        }
-      ]
-    });
+    const validSortOrders = ['ASC', 'DESC', 'asc', 'desc'];
+    const order = validSortOrders.includes(sortOrder) 
+      ? [[sortBy, sortOrder.toUpperCase()]]
+      : [['created_at', 'DESC']];
 
-    // Формируем статистику для каждого проекта
-    const projectsWithStats = projects.map(project => {
-      const proxies = project.proxies || [];
-      const phones = project.phones || [];
+    // ИСПРАВЛЕНО: Убираем distinct и делаем отдельные запросы
+    const [projects, totalCount] = await Promise.all([
+      Project.findAll({
+        where,
+        limit: validatedLimit,
+        offset,
+        order
+      }),
+      Project.count({ where })
+    ]);
 
-      const stats = {
-        proxies: {
-          total: proxies.length,
-          free: proxies.filter(p => p.status === 'free').length,
-          busy: proxies.filter(p => p.status === 'busy').length
-        },
-        phones: {
-          total: phones.length,
-          free: phones.filter(p => p.status === 'free').length,
-          busy: phones.filter(p => p.status === 'busy').length
-        }
-      };
+    // Получаем статистику для найденных проектов
+    const projectsWithStats = [];
+    
+    for (const project of projects) {
+      try {
+        // Получаем статистику по каждому проекту отдельными запросами
+        const [proxiesStats, phonesStats, profilesStats] = await Promise.all([
+          Proxy.findAll({
+            where: { projectId: project.id },
+            attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+            group: ['status'],
+            raw: true
+          }).catch(() => []),
+          
+          Phone.findAll({
+            where: { projectId: project.id },
+            attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+            group: ['status'],
+            raw: true
+          }).catch(() => []),
+          
+          Profile ? Profile.findAll({
+            where: { projectId: project.id },
+            attributes: ['status', [sequelize.fn('COUNT', sequelize.col('id')), 'count']],
+            group: ['status'],
+            raw: true
+          }).catch(() => []) : Promise.resolve([])
+        ]);
 
-      return {
-        id: project.id,
-        name: project.name,
-        description: project.description,
-        transliterateName: project.transliterateName,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt,
-        stats
-      };
-    });
+        // Формируем статистику
+        const proxyStats = {
+          total: proxiesStats.reduce((sum, item) => sum + parseInt(item.count), 0),
+          free: proxiesStats.find(item => item.status === 'free')?.count || 0,
+          busy: proxiesStats.find(item => item.status === 'busy')?.count || 0,
+          blocked: proxiesStats.find(item => item.status === 'blocked')?.count || 0,
+          error: proxiesStats.find(item => item.status === 'error')?.count || 0
+        };
+
+        const phoneStats = {
+          total: phonesStats.reduce((sum, item) => sum + parseInt(item.count), 0),
+          free: phonesStats.find(item => item.status === 'free')?.count || 0,
+          busy: phonesStats.find(item => item.status === 'busy')?.count || 0
+        };
+
+        const profileStats = {
+          total: profilesStats.reduce((sum, item) => sum + parseInt(item.count), 0),
+          active: profilesStats.find(item => item.status === 'active')?.count || 0,
+          created: profilesStats.find(item => item.status === 'created')?.count || 0,
+          working: profilesStats.find(item => item.status === 'working')?.count || 0
+        };
+
+        projectsWithStats.push({
+          ...project.toJSON(),
+          stats: {
+            proxies: proxyStats,
+            phones: phoneStats,
+            profiles: profileStats
+          }
+        });
+      } catch (error) {
+        logger.error(`Error getting stats for project ${project.id}:`, error);
+        // Добавляем проект без статистики
+        projectsWithStats.push({
+          ...project.toJSON(),
+          stats: {
+            proxies: { total: 0, free: 0, busy: 0, blocked: 0, error: 0 },
+            phones: { total: 0, free: 0, busy: 0 },
+            profiles: { total: 0, active: 0, created: 0, working: 0 }
+          }
+        });
+      }
+    }
 
     res.json({
       success: true,
       data: {
         projects: projectsWithStats,
         pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: count,
-          pages: Math.ceil(count / parseInt(limit))
+          page: validatedPage,
+          limit: validatedLimit,
+          total: totalCount,
+          pages: Math.ceil(totalCount / validatedLimit),
+          hasNext: validatedPage < Math.ceil(totalCount / validatedLimit),
+          hasPrev: validatedPage > 1
         }
       }
     });
   } catch (error) {
+    logger.error('Error getting projects:', error);
     next(error);
   }
 };
 
-// Получить проект по ID с детальной статистикой
+/**
+ * Получить проект по ID с детальной статистикой
+ */
 const getProject = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // ИСПРАВЛЕНИЕ: Используем новый статический метод из модели
-    const projectWithStats = await Project.getWithStats(id);
-    
-    if (!projectWithStats) {
-      return res.status(404).json({
-        success: false,
-        error: 'Проект не найден'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: projectWithStats
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Создать новый проект
-const createProject = async (req, res, next) => {
-  try {
-    // ИСПРАВЛЕНИЕ: Добавлена полная валидация и обработка
-    const { name, description, transliterateName } = req.body;
-
-    // Проверяем уникальность имени
-    const existingProject = await Project.findOne({ where: { name } });
-    if (existingProject) {
+    if (!id || isNaN(parseInt(id))) {
       return res.status(400).json({
         success: false,
-        error: 'Проект с таким именем уже существует'
+        error: 'Некорректный ID проекта'
       });
     }
 
-    const project = await Project.create({
-      name,
-      description: description || null,
-      transliterateName: transliterateName || null
-    });
-
-    logger.info('Project created', { 
-      projectId: project.id, 
-      name: project.name,
-      userId: req.user?.id // Если есть аутентификация
-    });
-
-    res.status(201).json({
-      success: true,
-      data: {
-        id: project.id,
-        name: project.name,
-        description: project.description,
-        transliterateName: project.transliterateName,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt
-      },
-      message: 'Проект успешно создан'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Обновить проект
-const updateProject = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const { name, description, transliterateName } = req.body;
-    
     const project = await Project.findByPk(id);
     
     if (!project) {
@@ -182,15 +162,159 @@ const updateProject = async (req, res, next) => {
       });
     }
 
-    // ИСПРАВЛЕНИЕ: Проверяем уникальность имени только если оно изменяется
-    if (name && name !== project.name) {
+    // ИСПРАВЛЕНО: Получаем связанные данные отдельными запросами
+    const [proxies, phones, profiles] = await Promise.all([
+      Proxy.findAll({
+        where: { projectId: id },
+        attributes: ['id', 'status', 'country', 'protocol', 'ipPort']
+      }).catch(() => []),
+      
+      Phone.findAll({
+        where: { projectId: id },
+        attributes: ['id', 'status', 'model', 'androidVersion']
+      }).catch(() => []),
+      
+      Profile ? Profile.findAll({
+        where: { projectId: id },
+        attributes: ['id', 'status', 'name', 'workspaceName']
+      }).catch(() => []) : []
+    ]);
+
+    // Детальная статистика
+    const stats = {
+      proxies: {
+        total: proxies.length,
+        byStatus: proxies.reduce((acc, proxy) => {
+          acc[proxy.status] = (acc[proxy.status] || 0) + 1;
+          return acc;
+        }, {}),
+        byCountry: proxies.reduce((acc, proxy) => {
+          if (proxy.country) {
+            acc[proxy.country] = (acc[proxy.country] || 0) + 1;
+          }
+          return acc;
+        }, {}),
+        byProtocol: proxies.reduce((acc, proxy) => {
+          if (proxy.protocol) {
+            acc[proxy.protocol] = (acc[proxy.protocol] || 0) + 1;
+          }
+          return acc;
+        }, {})
+      },
+      phones: {
+        total: phones.length,
+        byStatus: phones.reduce((acc, phone) => {
+          acc[phone.status] = (acc[phone.status] || 0) + 1;
+          return acc;
+        }, {}),
+        byModel: phones.reduce((acc, phone) => {
+          if (phone.model) {
+            acc[phone.model] = (acc[phone.model] || 0) + 1;
+          }
+          return acc;
+        }, {})
+      },
+      profiles: {
+        total: profiles.length,
+        byStatus: profiles.reduce((acc, profile) => {
+          acc[profile.status] = (acc[profile.status] || 0) + 1;
+          return acc;
+        }, {})
+      }
+    };
+
+    res.json({
+      success: true,
+      data: {
+        ...project.toJSON(),
+        proxies,
+        phones,
+        profiles,
+        stats
+      }
+    });
+  } catch (error) {
+    logger.error('Error getting project:', error);
+    next(error);
+  }
+};
+
+/**
+ * Создать новый проект
+ */
+const createProject = async (req, res, next) => {
+  try {
+    const { name, description, transliterateName } = req.body;
+
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Название проекта обязательно'
+      });
+    }
+
+    // Проверяем уникальность имени
+    const existingProject = await Project.findOne({ where: { name: name.trim() } });
+    if (existingProject) {
+      return res.status(400).json({
+        success: false,
+        error: 'Проект с таким именем уже существует'
+      });
+    }
+
+    const project = await Project.create({
+      name: name.trim(),
+      description: description ? description.trim() : null,
+      transliterateName: transliterateName ? transliterateName.trim() : null
+    });
+
+    logger.info('Project created:', { 
+      projectId: project.id,
+      name: project.name
+    });
+
+    res.status(201).json({
+      success: true,
+      data: project,
+      message: 'Проект успешно создан'
+    });
+  } catch (error) {
+    logger.error('Error creating project:', error);
+    next(error);
+  }
+};
+
+/**
+ * Обновить проект
+ */
+const updateProject = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name, description, transliterateName } = req.body;
+
+    if (!id || isNaN(parseInt(id))) {
+      return res.status(400).json({
+        success: false,
+        error: 'Некорректный ID проекта'
+      });
+    }
+
+    const project = await Project.findByPk(id);
+    if (!project) {
+      return res.status(404).json({
+        success: false,
+        error: 'Проект не найден'
+      });
+    }
+
+    // Проверяем уникальность имени если оно изменилось
+    if (name && name.trim() !== project.name) {
       const existingProject = await Project.findOne({ 
         where: { 
-          name,
-          id: { [Op.ne]: id } // Исключаем текущий проект
-        }
+          name: name.trim(),
+          id: { [Op.ne]: id }
+        } 
       });
-      
       if (existingProject) {
         return res.status(400).json({
           success: false,
@@ -200,71 +324,97 @@ const updateProject = async (req, res, next) => {
     }
 
     const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (description !== undefined) updateData.description = description;
-    if (transliterateName !== undefined) updateData.transliterateName = transliterateName;
+    if (name !== undefined) updateData.name = name.trim();
+    if (description !== undefined) updateData.description = description ? description.trim() : null;
+    if (transliterateName !== undefined) updateData.transliterateName = transliterateName ? transliterateName.trim() : null;
 
     await project.update(updateData);
 
-    logger.info('Project updated', { 
-      projectId: project.id, 
-      changes: Object.keys(updateData),
-      userId: req.user?.id
+    logger.info('Project updated:', { 
+      projectId: project.id,
+      changes: Object.keys(updateData)
     });
 
     res.json({
       success: true,
-      data: {
-        id: project.id,
-        name: project.name,
-        description: project.description,
-        transliterateName: project.transliterateName,
-        createdAt: project.createdAt,
-        updatedAt: project.updatedAt
-      },
+      data: project,
       message: 'Проект успешно обновлен'
     });
   } catch (error) {
+    logger.error('Error updating project:', error);
     next(error);
   }
 };
 
-// Удалить проект
+/**
+ * Удалить проект
+ */
 const deleteProject = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  
   try {
     const { id } = req.params;
-    
-    const project = await Project.findByPk(id);
-    
+
+    if (!id || isNaN(parseInt(id))) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        error: 'Некорректный ID проекта'
+      });
+    }
+
+    const project = await Project.findByPk(id, { transaction });
     if (!project) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         error: 'Проект не найден'
       });
     }
 
-    // ИСПРАВЛЕНИЕ: Используем транзакцию для безопасного удаления
-    await sequelize.transaction(async (t) => {
-      // Отвязываем все связанные ресурсы
-      await Promise.all([
-        Proxy.update(
-          { projectId: null }, 
-          { where: { projectId: id }, transaction: t }
-        ),
-        Phone.update(
-          { projectId: null }, 
-          { where: { projectId: id }, transaction: t }
-        )
-      ]);
+    // ИСПРАВЛЕНО: Отвязываем все ресурсы от проекта с проверкой существования моделей
+    const updatePromises = [];
+    
+    updatePromises.push(
+      Proxy.update(
+        { projectId: null },
+        { where: { projectId: id }, transaction }
+      ).catch(error => {
+        logger.warn('Error updating proxies during project deletion:', error);
+        return [0];
+      })
+    );
+    
+    updatePromises.push(
+      Phone.update(
+        { projectId: null },
+        { where: { projectId: id }, transaction }
+      ).catch(error => {
+        logger.warn('Error updating phones during project deletion:', error);
+        return [0];
+      })
+    );
+    
+    if (Profile) {
+      updatePromises.push(
+        Profile.update(
+          { projectId: null },
+          { where: { projectId: id }, transaction }
+        ).catch(error => {
+          logger.warn('Error updating profiles during project deletion:', error);
+          return [0];
+        })
+      );
+    }
 
-      // Удаляем проект
-      await project.destroy({ transaction: t });
-    });
+    await Promise.all(updatePromises);
 
-    logger.info('Project deleted', { 
-      projectId: id, 
-      name: project.name,
-      userId: req.user?.id
+    await project.destroy({ transaction });
+    await transaction.commit();
+
+    logger.info('Project deleted:', { 
+      projectId: id,
+      name: project.name
     });
 
     res.json({
@@ -272,21 +422,34 @@ const deleteProject = async (req, res, next) => {
       message: 'Проект удален. Связанные ресурсы отвязаны.'
     });
   } catch (error) {
+    await transaction.rollback();
+    logger.error('Error deleting project:', error);
     next(error);
   }
 };
 
-// Получить общую статистику по всем проектам
+/**
+ * Получить общую статистику по всем проектам
+ */
 const getProjectsStats = async (req, res, next) => {
   try {
-    // ИСПРАВЛЕНИЕ: Оптимизированные запросы с правильными полями
-    const [totalProjects, totalAssignedProxies, totalUnassignedProxies, 
-           totalAssignedPhones, totalUnassignedPhones] = await Promise.all([
-      Project.count(),
-      Proxy.count({ where: { projectId: { [Op.ne]: null } } }),
-      Proxy.count({ where: { projectId: null } }),
-      Phone.count({ where: { projectId: { [Op.ne]: null } } }),
-      Phone.count({ where: { projectId: null } })
+    // ИСПРАВЛЕНО: Упрощаем запросы статистики
+    const [
+      totalProjects, 
+      totalAssignedProxies, 
+      totalUnassignedProxies, 
+      totalAssignedPhones, 
+      totalUnassignedPhones,
+      totalAssignedProfiles,
+      totalUnassignedProfiles
+    ] = await Promise.all([
+      Project.count().catch(() => 0),
+      Proxy.count({ where: { projectId: { [Op.ne]: null } } }).catch(() => 0),
+      Proxy.count({ where: { projectId: null } }).catch(() => 0),
+      Phone.count({ where: { projectId: { [Op.ne]: null } } }).catch(() => 0),
+      Phone.count({ where: { projectId: null } }).catch(() => 0),
+      Profile ? Profile.count({ where: { projectId: { [Op.ne]: null } } }).catch(() => 0) : 0,
+      Profile ? Profile.count({ where: { projectId: null } }).catch(() => 0) : 0
     ]);
 
     res.json({
@@ -304,167 +467,277 @@ const getProjectsStats = async (req, res, next) => {
           assigned: totalAssignedPhones,
           unassigned: totalUnassignedPhones,
           total: totalAssignedPhones + totalUnassignedPhones
+        },
+        profiles: {
+          assigned: totalAssignedProfiles,
+          unassigned: totalUnassignedProfiles,
+          total: totalAssignedProfiles + totalUnassignedProfiles
         }
       }
     });
   } catch (error) {
-    next(error);
+    logger.error('Error getting projects stats:', error);
+    
+    // Возвращаем базовую статистику в случае ошибки
+    res.json({
+      success: true,
+      data: {
+        projects: { total: 0 },
+        proxies: { assigned: 0, unassigned: 0, total: 0 },
+        phones: { assigned: 0, unassigned: 0, total: 0 },
+        profiles: { assigned: 0, unassigned: 0, total: 0 }
+      }
+    });
   }
 };
 
-// Массовое назначение ресурсов проекту
+/**
+ * Массовое назначение ресурсов проекту
+ */
 const assignResources = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  
   try {
     const { id } = req.params;
-    const { proxyIds = [], phoneIds = [] } = req.body;
+    const { proxyIds = [], phoneIds = [], profileIds = [] } = req.body;
 
-    const project = await Project.findByPk(id);
+    if (!id || isNaN(parseInt(id))) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        error: 'Некорректный ID проекта'
+      });
+    }
+
+    const project = await Project.findByPk(id, { transaction });
     if (!project) {
+      await transaction.rollback();
       return res.status(404).json({
         success: false,
         error: 'Проект не найден'
       });
     }
 
-    // ИСПРАВЛЕНИЕ: Валидация существования ресурсов
+    // ИСПРАВЛЕНО: Упрощаем валидацию существования ресурсов
+    const validationResults = [];
+    
     if (proxyIds.length > 0) {
-      const existingProxies = await Proxy.count({
-        where: { id: { [Op.in]: proxyIds } }
-      });
-      
-      if (existingProxies !== proxyIds.length) {
+      try {
+        const count = await Proxy.count({ 
+          where: { id: { [Op.in]: proxyIds } },
+          transaction 
+        });
+        validationResults.push({ type: 'proxy', expected: proxyIds.length, found: count });
+      } catch (error) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
-          error: 'Некоторые прокси не найдены'
+          error: 'Ошибка проверки прокси'
         });
       }
     }
-
+    
     if (phoneIds.length > 0) {
-      const existingPhones = await Phone.count({
-        where: { id: { [Op.in]: phoneIds } }
-      });
-      
-      if (existingPhones !== phoneIds.length) {
+      try {
+        const count = await Phone.count({ 
+          where: { id: { [Op.in]: phoneIds } },
+          transaction 
+        });
+        validationResults.push({ type: 'phone', expected: phoneIds.length, found: count });
+      } catch (error) {
+        await transaction.rollback();
         return res.status(400).json({
           success: false,
-          error: 'Некоторые телефоны не найдены'
+          error: 'Ошибка проверки телефонов'
+        });
+      }
+    }
+    
+    if (profileIds.length > 0 && Profile) {
+      try {
+        const count = await Profile.count({ 
+          where: { id: { [Op.in]: profileIds } },
+          transaction 
+        });
+        validationResults.push({ type: 'profile', expected: profileIds.length, found: count });
+      } catch (error) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          error: 'Ошибка проверки профилей'
+        });
+      }
+    }
+    
+    // Проверяем что все ресурсы существуют
+    for (const result of validationResults) {
+      if (result.found !== result.expected) {
+        await transaction.rollback();
+        return res.status(400).json({
+          success: false,
+          error: `Некоторые ${result.type === 'proxy' ? 'прокси' : result.type === 'phone' ? 'телефоны' : 'профили'} не найдены`
         });
       }
     }
 
-    // Используем транзакцию для атомарности операции
-    const result = await sequelize.transaction(async (t) => {
-      const updates = [];
-
-      if (proxyIds.length > 0) {
-        updates.push(
-          Proxy.update(
-            { projectId: id }, 
-            { 
-              where: { id: { [Op.in]: proxyIds } },
-              transaction: t 
-            }
-          )
+    // Назначаем ресурсы проекту
+    const assignedCounts = { proxies: 0, phones: 0, profiles: 0 };
+    
+    if (proxyIds.length > 0) {
+      try {
+        const [updatedCount] = await Proxy.update(
+          { projectId: id },
+          { where: { id: { [Op.in]: proxyIds } }, transaction }
         );
+        assignedCounts.proxies = updatedCount;
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
       }
-
-      if (phoneIds.length > 0) {
-        updates.push(
-          Phone.update(
-            { projectId: id }, 
-            { 
-              where: { id: { [Op.in]: phoneIds } },
-              transaction: t 
-            }
-          )
+    }
+    
+    if (phoneIds.length > 0) {
+      try {
+        const [updatedCount] = await Phone.update(
+          { projectId: id },
+          { where: { id: { [Op.in]: phoneIds } }, transaction }
         );
+        assignedCounts.phones = updatedCount;
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
       }
+    }
+    
+    if (profileIds.length > 0 && Profile) {
+      try {
+        const [updatedCount] = await Profile.update(
+          { projectId: id },
+          { where: { id: { [Op.in]: profileIds } }, transaction }
+        );
+        assignedCounts.profiles = updatedCount;
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+    }
 
-      const results = await Promise.all(updates);
-      return results;
-    });
+    await transaction.commit();
 
-    logger.info('Resources assigned to project', { 
+    logger.info('Resources assigned to project:', {
       projectId: id,
-      proxies: proxyIds.length,
-      phones: phoneIds.length,
-      userId: req.user?.id
+      assignedCounts
     });
 
     res.json({
       success: true,
-      message: 'Ресурсы успешно назначены проекту',
       data: {
-        assignedProxies: proxyIds.length,
-        assignedPhones: phoneIds.length
-      }
+        projectId: parseInt(id),
+        assigned: assignedCounts,
+        total: assignedCounts.proxies + assignedCounts.phones + assignedCounts.profiles
+      },
+      message: 'Ресурсы успешно назначены проекту'
     });
   } catch (error) {
+    await transaction.rollback();
+    logger.error('Error assigning resources:', error);
     next(error);
   }
 };
 
-// НОВЫЙ МЕТОД: Массовое удаление проектов
-const bulkDeleteProjects = async (req, res, next) => {
+/**
+ * Отвязать ресурсы от проекта
+ */
+const unassignResources = async (req, res, next) => {
+  const transaction = await sequelize.transaction();
+  
   try {
-    const { ids } = req.body;
+    const { id } = req.params;
+    const { proxyIds = [], phoneIds = [], profileIds = [] } = req.body;
 
-    if (!Array.isArray(ids) || ids.length === 0) {
+    if (!id || isNaN(parseInt(id))) {
+      await transaction.rollback();
       return res.status(400).json({
         success: false,
-        error: 'Необходимо указать массив ID проектов'
+        error: 'Некорректный ID проекта'
       });
     }
 
-    // Проверяем существование проектов
-    const existingProjects = await Project.findAll({
-      where: { id: { [Op.in]: ids } },
-      attributes: ['id', 'name']
-    });
-
-    if (existingProjects.length !== ids.length) {
-      return res.status(400).json({
-        success: false,
-        error: 'Некоторые проекты не найдены'
-      });
-    }
-
-    await sequelize.transaction(async (t) => {
-      // Отвязываем ресурсы
-      await Promise.all([
+    // Отвязываем ресурсы от проекта
+    const updatePromises = [];
+    
+    if (proxyIds.length > 0) {
+      updatePromises.push(
         Proxy.update(
-          { projectId: null }, 
-          { where: { projectId: { [Op.in]: ids } }, transaction: t }
-        ),
-        Phone.update(
-          { projectId: null }, 
-          { where: { projectId: { [Op.in]: ids } }, transaction: t }
+          { projectId: null },
+          { 
+            where: { 
+              id: { [Op.in]: proxyIds },
+              projectId: id
+            }, 
+            transaction 
+          }
         )
-      ]);
+      );
+    }
+    
+    if (phoneIds.length > 0) {
+      updatePromises.push(
+        Phone.update(
+          { projectId: null },
+          { 
+            where: { 
+              id: { [Op.in]: phoneIds },
+              projectId: id
+            }, 
+            transaction 
+          }
+        )
+      );
+    }
+    
+    // ИСПРАВЛЕНО: Проверяем существование модели Profile
+    if (profileIds.length > 0 && Profile) {
+      updatePromises.push(
+        Profile.update(
+          { projectId: null },
+          { 
+            where: { 
+              id: { [Op.in]: profileIds },
+              projectId: id
+            }, 
+            transaction 
+          }
+        )
+      );
+    }
 
-      // Удаляем проекты
-      await Project.destroy({
-        where: { id: { [Op.in]: ids } },
-        transaction: t
-      });
-    });
+    const updateResults = await Promise.all(updatePromises);
+    await transaction.commit();
 
-    logger.info('Bulk delete projects', { 
-      projectIds: ids,
-      count: ids.length,
-      userId: req.user?.id
+    const unassignedCounts = {
+      proxies: proxyIds.length > 0 ? updateResults[0][0] : 0,
+      phones: phoneIds.length > 0 ? updateResults[proxyIds.length > 0 ? 1 : 0][0] : 0,
+      profiles: profileIds.length > 0 && Profile ? updateResults[updateResults.length - 1][0] : 0
+    };
+
+    logger.info('Resources unassigned from project:', {
+      projectId: id,
+      unassignedCounts
     });
 
     res.json({
       success: true,
-      message: `Удалено проектов: ${ids.length}. Связанные ресурсы отвязаны.`,
       data: {
-        deletedCount: ids.length,
-        deletedProjects: existingProjects.map(p => ({ id: p.id, name: p.name }))
-      }
+        projectId: parseInt(id),
+        unassigned: unassignedCounts,
+        total: unassignedCounts.proxies + unassignedCounts.phones + unassignedCounts.profiles
+      },
+      message: 'Ресурсы успешно отвязаны от проекта'
     });
   } catch (error) {
+    await transaction.rollback();
+    logger.error('Error unassigning resources:', error);
     next(error);
   }
 };
@@ -477,5 +750,5 @@ module.exports = {
   deleteProject,
   getProjectsStats,
   assignResources,
-  bulkDeleteProjects // НОВЫЙ МЕТОД
+  unassignResources
 };

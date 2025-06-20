@@ -1,5 +1,6 @@
 // backend/src/models/Proxy.js
-const { DataTypes } = require('sequelize');
+
+const { DataTypes, Op } = require('sequelize');
 
 module.exports = (sequelize) => {
   const Proxy = sequelize.define('Proxy', {
@@ -11,7 +12,7 @@ module.exports = (sequelize) => {
     protocol: {
       type: DataTypes.STRING(50),
       allowNull: true,
-      field: 'type',
+      field: 'type', // Сохраняем маппинг для совместимости с БД
       validate: {
         isIn: {
           args: [['http', 'https', 'socks4', 'socks5']],
@@ -28,9 +29,11 @@ module.exports = (sequelize) => {
         notEmpty: {
           msg: 'IP:PORT обязательно'
         },
-        is: {
-          args: /^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/,
-          msg: 'Неверный формат IP:PORT'
+        isIPPort(value) {
+          const ipPortRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):(?:[1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5])$/;
+          if (!ipPortRegex.test(value)) {
+            throw new Error('Неверный формат IP:PORT');
+          }
         }
       },
       comment: 'IP:PORT прокси'
@@ -97,16 +100,6 @@ module.exports = (sequelize) => {
       },
       comment: 'Страна прокси'
     },
-    projectId: {
-      type: DataTypes.BIGINT.UNSIGNED,
-      allowNull: true,
-      field: 'project_id',
-      references: {
-        model: 'projects',
-        key: 'id'
-      },
-      comment: 'ID проекта'
-    },
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,
@@ -117,6 +110,12 @@ module.exports = (sequelize) => {
         }
       },
       comment: 'Заметки'
+    },
+    projectId: {
+      type: DataTypes.BIGINT.UNSIGNED,
+      allowNull: true,
+      field: 'project_id',
+      comment: 'ID проекта'
     },
     createdAt: {
       type: DataTypes.DATE,
@@ -134,39 +133,45 @@ module.exports = (sequelize) => {
     tableName: 'proxies',
     timestamps: true,
     underscored: true,
+    
     hooks: {
       beforeUpdate: (proxy) => {
         proxy.updatedAt = new Date();
         
-        // Автоматически обновляем даты при смене статуса
+        // Автоматически устанавливаем даты смены статуса
         if (proxy.changed('status')) {
+          const newStatus = proxy.status;
           const now = new Date();
-          if (proxy.status === 'busy') {
+          
+          if (newStatus === 'busy') {
             proxy.dateSetStatusBusy = now;
-            proxy.dateSetStatusFree = null;
-          } else if (proxy.status === 'free') {
+          } else if (newStatus === 'free') {
             proxy.dateSetStatusFree = now;
-            proxy.dateSetStatusBusy = null;
           }
         }
       }
     },
+    
     indexes: [
       {
-        unique: true,
-        fields: ['ip_port'] // Уникальность IP:PORT
+        unique: false,
+        fields: ['status']
       },
       {
         unique: false,
-        fields: ['status'] // Индекс для быстрого поиска по статусу
+        fields: ['project_id']
       },
       {
         unique: false,
-        fields: ['project_id'] // Индекс для связи с проектами
+        fields: ['country']
       },
       {
         unique: false,
-        fields: ['country'] // Индекс для фильтрации по стране
+        fields: ['ip_port']
+      },
+      {
+        unique: false,
+        fields: ['created_at']
       }
     ]
   });
@@ -182,14 +187,17 @@ module.exports = (sequelize) => {
     });
   };
 
-  // Статические методы
+  /**
+   * Найти свободные прокси с фильтрами
+   */
   Proxy.findFree = async function(filters = {}) {
     const where = { status: 'free' };
     
-    // Добавляем фильтры
     if (filters.country) where.country = filters.country;
     if (filters.protocol) where.protocol = filters.protocol;
-    if (filters.projectId) where.projectId = filters.projectId;
+    if (filters.projectId !== undefined) {
+      where.projectId = filters.projectId;
+    }
 
     return this.findAll({
       where,
@@ -199,12 +207,15 @@ module.exports = (sequelize) => {
         attributes: ['id', 'name']
       }],
       order: [
-        ['dateSetStatusFree', 'ASC'], // Самые давно освобожденные
+        ['dateSetStatusFree', 'ASC'],
         ['createdAt', 'ASC']
       ]
     });
   };
 
+  /**
+   * Смена IP для прокси
+   */
   Proxy.changeIP = async function(proxyId) {
     const proxy = await this.findByPk(proxyId);
     if (!proxy || !proxy.changeIpUrl) {
@@ -212,8 +223,26 @@ module.exports = (sequelize) => {
     }
 
     try {
-      // Здесь должен быть HTTP запрос к API смены IP
-      // const response = await fetch(proxy.changeIpUrl);
+      const https = require('https');
+      const http = require('http');
+      const url = require('url');
+      
+      const parsedUrl = url.parse(proxy.changeIpUrl);
+      const client = parsedUrl.protocol === 'https:' ? https : http;
+      
+      await new Promise((resolve, reject) => {
+        const req = client.request(parsedUrl, (res) => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve();
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}`));
+          }
+        });
+        
+        req.on('error', reject);
+        req.setTimeout(5000, () => reject(new Error('Timeout')));
+        req.end();
+      });
       
       await proxy.update({
         dateLastChangeIp: new Date()
@@ -222,6 +251,224 @@ module.exports = (sequelize) => {
       return true;
     } catch (error) {
       throw new Error('Ошибка смены IP: ' + error.message);
+    }
+  };
+
+  /**
+   * Массовое назначение прокси проекту
+   */
+  Proxy.assignToProject = async function(proxyIds, projectId) {
+    if (!Array.isArray(proxyIds) || proxyIds.length === 0) {
+      throw new Error('Массив ID прокси не может быть пустым');
+    }
+
+    const transaction = await sequelize.transaction();
+    
+    try {
+      // Проверяем существование проекта
+      if (projectId) {
+        const project = await sequelize.models.Project.findByPk(projectId);
+        if (!project) {
+          throw new Error('Проект не найден');
+        }
+      }
+
+      // Обновляем прокси
+      const [updatedCount] = await this.update(
+        { 
+          projectId,
+          updatedAt: new Date()
+        },
+        {
+          where: {
+            id: {
+              [Op.in]: proxyIds
+            }
+          },
+          transaction
+        }
+      );
+
+      await transaction.commit();
+      
+      return {
+        success: true,
+        assignedCount: updatedCount,
+        projectId
+      };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  };
+
+  /**
+   * Получить статистику прокси
+   */
+  Proxy.getStats = async function(where = {}) {
+    try {
+      const [total, byStatus, byCountry, byProtocol] = await Promise.all([
+        this.count({ where }),
+        
+        // Группировка по статусам
+        this.findAll({
+          where,
+          attributes: [
+            'status',
+            [sequelize.fn('COUNT', sequelize.col('*')), 'count']
+          ],
+          group: ['status'],
+          raw: true
+        }),
+        
+        // Группировка по странам
+        this.findAll({
+          where: {
+            ...where,
+            country: { [Op.ne]: null }
+          },
+          attributes: [
+            'country',
+            [sequelize.fn('COUNT', sequelize.col('*')), 'count']
+          ],
+          group: ['country'],
+          order: [[sequelize.fn('COUNT', sequelize.col('*')), 'DESC']],
+          limit: 10,
+          raw: true
+        }),
+        
+        // Группировка по протоколам
+        this.findAll({
+          where: {
+            ...where,
+            protocol: { [Op.ne]: null }
+          },
+          attributes: [
+            'protocol',
+            [sequelize.fn('COUNT', sequelize.col('*')), 'count']
+          ],
+          group: ['protocol'],
+          raw: true
+        })
+      ]);
+
+      return {
+        total,
+        byStatus: byStatus.reduce((acc, item) => {
+          acc[item.status] = parseInt(item.count);
+          return acc;
+        }, {}),
+        byCountry: byCountry.reduce((acc, item) => {
+          acc[item.country] = parseInt(item.count);
+          return acc;
+        }, {}),
+        byProtocol: byProtocol.reduce((acc, item) => {
+          acc[item.protocol] = parseInt(item.count);
+          return acc;
+        }, {})
+      };
+    } catch (error) {
+      console.error('Error getting proxy stats:', error);
+      return { total: 0, byStatus: {}, byCountry: {}, byProtocol: {} };
+    }
+  };
+
+  /**
+   * Получить список с пагинацией и фильтрацией
+   */
+  Proxy.getListWithPagination = async function(options = {}) {
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
+      status,
+      country,
+      protocol,
+      projectId
+    } = options;
+
+    const validatedPage = Math.max(1, parseInt(page));
+    const validatedLimit = Math.min(100, Math.max(1, parseInt(limit)));
+    const offset = (validatedPage - 1) * validatedLimit;
+
+    const where = {};
+    
+    if (search) {
+      where[Op.or] = [
+        { ipPort: { [Op.like]: `%${search}%` } },
+        { login: { [Op.like]: `%${search}%` } },
+        { country: { [Op.like]: `%${search}%` } }
+      ];
+    }
+    
+    if (status) where.status = status;
+    if (country) where.country = country;
+    if (protocol) where.protocol = protocol;
+    if (projectId !== undefined) where.projectId = projectId;
+
+    const validSortOrders = ['ASC', 'DESC', 'asc', 'desc'];
+    const order = validSortOrders.includes(sortOrder) 
+      ? [[sortBy, sortOrder.toUpperCase()]]
+      : [['createdAt', 'DESC']];
+
+    try {
+      const { count, rows } = await this.findAndCountAll({
+        where,
+        include: [{
+          model: sequelize.models.Project,
+          as: 'project',
+          attributes: ['id', 'name']
+        }],
+        limit: validatedLimit,
+        offset,
+        order,
+        distinct: true
+      });
+
+      return {
+        data: rows,
+        pagination: {
+          page: validatedPage,
+          limit: validatedLimit,
+          total: count,
+          pages: Math.ceil(count / validatedLimit),
+          hasNext: validatedPage < Math.ceil(count / validatedLimit),
+          hasPrev: validatedPage > 1
+        }
+      };
+    } catch (error) {
+      console.error('Error in getListWithPagination for Proxy:', error);
+      throw error;
+    }
+  };
+
+  /**
+   * Массовое удаление прокси
+   */
+  Proxy.bulkDelete = async function(ids) {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new Error('IDs must be a non-empty array');
+    }
+
+    try {
+      const deletedCount = await this.destroy({
+        where: {
+          id: {
+            [Op.in]: ids
+          }
+        }
+      });
+
+      return {
+        success: true,
+        deletedCount,
+        ids: ids.slice(0, deletedCount)
+      };
+    } catch (error) {
+      console.error('Error in bulk delete for Proxy:', error);
+      throw error;
     }
   };
 

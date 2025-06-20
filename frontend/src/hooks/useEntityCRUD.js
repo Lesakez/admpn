@@ -1,275 +1,418 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
+// frontend/src/hooks/useEntityCRUD.js
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'react-hot-toast'
+import { useMemo, useCallback } from 'react'
 
 /**
  * Универсальный хук для CRUD операций
- * @param {string} entityName - название сущности для cache keys и сообщений
- * @param {object} service - объект с методами CRUD операций
- * @param {object} options - дополнительные опции
  */
 export function useEntityCRUD(entityName, service, options = {}) {
   const queryClient = useQueryClient()
   
   const {
+    invalidateQueries = [entityName],
     successMessages = {},
     errorMessages = {},
-    invalidateQueries = [entityName],
-    onSuccessCallback,
-    onErrorCallback
+    onSuccess = {},
+    onError = {}
   } = options
 
-  const defaultSuccessMessages = {
-    create: `${entityName} создан успешно`,
-    update: `${entityName} обновлен успешно`,
-    delete: `${entityName} удален успешно`,
-    ...successMessages
-  }
-
-  const defaultErrorMessages = {
-    create: `Ошибка создания ${entityName}`,
-    update: `Ошибка обновления ${entityName}`,
-    delete: `Ошибка удаления ${entityName}`,
-    ...errorMessages
-  }
-
-  // Создание сущности
+  // Создание записи
   const createMutation = useMutation({
-    mutationFn: service.create,
-    onSuccess: (data) => {
-      // Инвалидируем кэш
+    mutationFn: (data) => service.create(data),
+    onSuccess: (response, variables) => {
+      // Инвалидируем кеш
       invalidateQueries.forEach(query => {
         queryClient.invalidateQueries([query])
       })
       
-      // Показываем сообщение
-      toast.success(defaultSuccessMessages.create)
+      const message = successMessages.create || `${entityName} успешно создан`
+      toast.success(message)
       
-      // Вызываем callback если есть
-      if (onSuccessCallback?.create) {
-        onSuccessCallback.create(data)
-      }
+      onSuccess.create?.(response, variables)
     },
-    onError: (error) => {
-      const message = error.response?.data?.error || defaultErrorMessages.create
+    onError: (error, variables) => {
+      const message = error.response?.data?.error || 
+                     errorMessages.create || 
+                     `Ошибка создания ${entityName}`
       toast.error(message)
       
-      if (onErrorCallback?.create) {
-        onErrorCallback.create(error)
-      }
+      onError.create?.(error, variables)
     }
   })
 
-  // Обновление сущности
+  // Обновление записи
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => service.update(id, data),
-    onSuccess: (data) => {
+    onSuccess: (response, variables) => {
       invalidateQueries.forEach(query => {
         queryClient.invalidateQueries([query])
       })
       
-      toast.success(defaultSuccessMessages.update)
+      const message = successMessages.update || `${entityName} успешно обновлен`
+      toast.success(message)
       
-      if (onSuccessCallback?.update) {
-        onSuccessCallback.update(data)
-      }
+      onSuccess.update?.(response, variables)
     },
-    onError: (error) => {
-      const message = error.response?.data?.error || defaultErrorMessages.update
+    onError: (error, variables) => {
+      const message = error.response?.data?.error || 
+                     errorMessages.update || 
+                     `Ошибка обновления ${entityName}`
       toast.error(message)
       
-      if (onErrorCallback?.update) {
-        onErrorCallback.update(error)
-      }
+      onError.update?.(error, variables)
     }
   })
 
-  // Удаление сущности
+  // Удаление записи
   const deleteMutation = useMutation({
-    mutationFn: service.delete,
-    onSuccess: (data) => {
+    mutationFn: (id) => service.delete(id),
+    onSuccess: (response, variables) => {
       invalidateQueries.forEach(query => {
         queryClient.invalidateQueries([query])
       })
       
-      toast.success(defaultSuccessMessages.delete)
+      const message = successMessages.delete || `${entityName} успешно удален`
+      toast.success(message)
       
-      if (onSuccessCallback?.delete) {
-        onSuccessCallback.delete(data)
-      }
+      onSuccess.delete?.(response, variables)
     },
-    onError: (error) => {
-      const message = error.response?.data?.error || defaultErrorMessages.delete
+    onError: (error, variables) => {
+      const message = error.response?.data?.error || 
+                     errorMessages.delete || 
+                     `Ошибка удаления ${entityName}`
       toast.error(message)
       
-      if (onErrorCallback?.delete) {
-        onErrorCallback.delete(error)
-      }
+      onError.delete?.(error, variables)
     }
   })
+
+  // Массовое удаление
+  const bulkDeleteMutation = useMutation({
+    mutationFn: (ids) => service.bulkDelete(ids),
+    onSuccess: (response, variables) => {
+      invalidateQueries.forEach(query => {
+        queryClient.invalidateQueries([query])
+      })
+      
+      const count = response?.data?.deletedCount || variables.length
+      const message = successMessages.bulkDelete || `Удалено ${count} записей`
+      toast.success(message)
+      
+      onSuccess.bulkDelete?.(response, variables)
+    },
+    onError: (error, variables) => {
+      const message = error.response?.data?.error || 
+                     errorMessages.bulkDelete || 
+                     'Ошибка массового удаления'
+      toast.error(message)
+      
+      onError.bulkDelete?.(error, variables)
+    }
+  })
+
+  // Массовое обновление
+  const bulkUpdateMutation = useMutation({
+    mutationFn: ({ ids, data }) => service.bulkUpdate(ids, data),
+    onSuccess: (response, variables) => {
+      invalidateQueries.forEach(query => {
+        queryClient.invalidateQueries([query])
+      })
+      
+      const count = response?.data?.updatedCount || variables.ids.length
+      const message = successMessages.bulkUpdate || `Обновлено ${count} записей`
+      toast.success(message)
+      
+      onSuccess.bulkUpdate?.(response, variables)
+    },
+    onError: (error, variables) => {
+      const message = error.response?.data?.error || 
+                     errorMessages.bulkUpdate || 
+                     'Ошибка массового обновления'
+      toast.error(message)
+      
+      onError.bulkUpdate?.(error, variables)
+    }
+  })
+
+  // Мемоизированные методы для стабильности ссылок
+  const methods = useMemo(() => ({
+    create: createMutation.mutateAsync,
+    update: updateMutation.mutateAsync,
+    delete: deleteMutation.mutateAsync,
+    bulkDelete: bulkDeleteMutation.mutateAsync,
+    bulkUpdate: bulkUpdateMutation.mutateAsync
+  }), [createMutation, updateMutation, deleteMutation, bulkDeleteMutation, bulkUpdateMutation])
 
   return {
+    // Мутации
     createMutation,
     updateMutation,
     deleteMutation,
+    bulkDeleteMutation,
+    bulkUpdateMutation,
     
-    // Утилиты для проверки состояния
-    isCreating: createMutation.isLoading,
-    isUpdating: updateMutation.isLoading,
-    isDeleting: deleteMutation.isLoading,
-    isLoading: createMutation.isLoading || updateMutation.isLoading || deleteMutation.isLoading,
+    // Состояния
+    isCreating: createMutation.isPending,
+    isUpdating: updateMutation.isPending,
+    isDeleting: deleteMutation.isPending,
+    isBulkDeleting: bulkDeleteMutation.isPending,
+    isBulkUpdating: bulkUpdateMutation.isPending,
+    isLoading: createMutation.isPending || updateMutation.isPending || deleteMutation.isPending,
+    isBulkLoading: bulkDeleteMutation.isPending || bulkUpdateMutation.isPending,
     
-    // Методы для вызова мутаций
-    create: createMutation.mutateAsync,
-    update: updateMutation.mutateAsync,
-    delete: deleteMutation.mutateAsync
+    // Методы
+    ...methods
   }
 }
 
 /**
- * Хук для получения списка сущностей с фильтрацией и пагинацией
- * @param {string} entityName - название сущности
- * @param {object} service - сервис для API вызовов
- * @param {object} filters - фильтры и параметры запроса
- * @param {object} options - опции для useQuery
+ * Хук для получения списка сущностей
  */
 export function useEntityList(entityName, service, filters = {}, options = {}) {
   const {
     enabled = true,
     staleTime = 5 * 60 * 1000, // 5 минут
-    cacheTime = 10 * 60 * 1000, // 10 минут
+    gcTime = 10 * 60 * 1000, // 10 минут (было cacheTime)
     refetchOnWindowFocus = false,
+    keepPreviousData = true,
     ...queryOptions
   } = options
 
-  return useQuery({
-    queryKey: [entityName, 'list', filters],
+  // Мемоизируем ключ запроса для стабильности
+  const queryKey = useMemo(() => [entityName, 'list', filters], [entityName, filters])
+
+  const query = useQuery({
+    queryKey,
     queryFn: () => service.getAll(filters),
     enabled,
     staleTime,
-    cacheTime,
+    gcTime,
     refetchOnWindowFocus,
-    select: (data) => data?.data || data,
+    placeholderData: keepPreviousData ? (previousData) => previousData : undefined,
+    select: useCallback((data) => {
+      // Нормализуем структуру ответа
+      if (data?.data?.data) {
+        return {
+          data: data.data.data,
+          pagination: data.data.pagination,
+          stats: data.data.stats
+        }
+      }
+      if (data?.data) {
+        return {
+          data: Array.isArray(data.data) ? data.data : data.data.data || [],
+          pagination: data.data.pagination,
+          stats: data.data.stats
+        }
+      }
+      return {
+        data: Array.isArray(data) ? data : [],
+        pagination: null,
+        stats: null
+      }
+    }, []),
     ...queryOptions
   })
+
+  return {
+    ...query,
+    data: query.data?.data || [],
+    pagination: query.data?.pagination,
+    stats: query.data?.stats
+  }
 }
 
 /**
  * Хук для получения одной сущности по ID
- * @param {string} entityName - название сущности
- * @param {object} service - сервис для API вызовов
- * @param {number|string} id - ID сущности
- * @param {object} options - опции для useQuery
  */
 export function useEntityById(entityName, service, id, options = {}) {
   const {
     enabled = !!id,
     staleTime = 5 * 60 * 1000,
-    cacheTime = 10 * 60 * 1000,
+    gcTime = 10 * 60 * 1000,
     refetchOnWindowFocus = false,
     ...queryOptions
   } = options
 
+  const queryKey = useMemo(() => [entityName, 'detail', id], [entityName, id])
+
   return useQuery({
-    queryKey: [entityName, 'detail', id],
+    queryKey,
     queryFn: () => service.getById(id),
     enabled,
     staleTime,
-    cacheTime,
+    gcTime,
     refetchOnWindowFocus,
-    select: (data) => data?.data || data,
+    select: useCallback((data) => {
+      if (data?.data?.data) return data.data.data
+      if (data?.data) return data.data
+      return data
+    }, []),
     ...queryOptions
   })
-}
-
-/**
- * Хук для массовых операций
- * @param {string} entityName - название сущности
- * @param {object} service - сервис для API вызовов
- * @param {object} options - дополнительные опции
- */
-export function useEntityBulkOperations(entityName, service, options = {}) {
-  const queryClient = useQueryClient()
-  const { invalidateQueries = [entityName] } = options
-
-  const bulkDeleteMutation = useMutation({
-    mutationFn: (ids) => service.bulkDelete(ids),
-    onSuccess: (data) => {
-      invalidateQueries.forEach(query => {
-        queryClient.invalidateQueries([query])
-      })
-      
-      const count = data?.data?.deletedCount || 0
-      toast.success(`Удалено ${count} элементов`)
-    },
-    onError: (error) => {
-      const message = error.response?.data?.error || 'Ошибка массового удаления'
-      toast.error(message)
-    }
-  })
-
-  const bulkUpdateMutation = useMutation({
-    mutationFn: ({ ids, data }) => service.bulkUpdate(ids, data),
-    onSuccess: (data) => {
-      invalidateQueries.forEach(query => {
-        queryClient.invalidateQueries([query])
-      })
-      
-      const count = data?.data?.updatedCount || 0
-      toast.success(`Обновлено ${count} элементов`)
-    },
-    onError: (error) => {
-      const message = error.response?.data?.error || 'Ошибка массового обновления'
-      toast.error(message)
-    }
-  })
-
-  return {
-    bulkDeleteMutation,
-    bulkUpdateMutation,
-    
-    // Утилиты
-    isBulkDeleting: bulkDeleteMutation.isLoading,
-    isBulkUpdating: bulkUpdateMutation.isLoading,
-    isBulkLoading: bulkDeleteMutation.isLoading || bulkUpdateMutation.isLoading,
-    
-    // Методы
-    bulkDelete: bulkDeleteMutation.mutateAsync,
-    bulkUpdate: bulkUpdateMutation.mutateAsync
-  }
 }
 
 /**
  * Хук для статистики сущности
- * @param {string} entityName - название сущности
- * @param {object} service - сервис для API вызовов
- * @param {object} options - опции для useQuery
  */
 export function useEntityStats(entityName, service, options = {}) {
   const {
     enabled = true,
-    staleTime = 2 * 60 * 1000, // 2 минуты для статистики
-    cacheTime = 5 * 60 * 1000,
+    staleTime = 2 * 60 * 1000, // 2 минуты
+    gcTime = 5 * 60 * 1000,
     refetchInterval = 30000, // Обновляем каждые 30 секунд
+    refetchOnWindowFocus = true,
     ...queryOptions
   } = options
 
+  const queryKey = useMemo(() => [entityName, 'stats'], [entityName])
+
   return useQuery({
-    queryKey: [entityName, 'stats'],
-    queryFn: () => service.getStats(),
-    enabled,
+    queryKey,
+    queryFn: () => service.getStats?.(),
+    enabled: enabled && !!service.getStats,
     staleTime,
-    cacheTime,
+    gcTime,
     refetchInterval,
-    select: (data) => data?.data || data,
+    refetchOnWindowFocus,
+    select: useCallback((data) => {
+      if (data?.data?.data) return data.data.data
+      if (data?.data) return data.data
+      return data
+    }, []),
     ...queryOptions
   })
 }
 
-// Экспортируем все хуки для удобства
+/**
+ * Хук для автокомплита
+ */
+export function useEntityAutocomplete(entityName, service, query, options = {}) {
+  const {
+    enabled = !!query && query.length >= 2,
+    staleTime = 30 * 1000, // 30 секунд
+    gcTime = 2 * 60 * 1000,
+    ...queryOptions
+  } = options
+
+  const queryKey = useMemo(() => [entityName, 'autocomplete', query], [entityName, query])
+
+  return useQuery({
+    queryKey,
+    queryFn: () => service.autocomplete?.(query),
+    enabled: enabled && !!service.autocomplete,
+    staleTime,
+    gcTime,
+    select: useCallback((data) => {
+      if (data?.data?.data) return data.data.data
+      if (data?.data) return Array.isArray(data.data) ? data.data : []
+      return Array.isArray(data) ? data : []
+    }, []),
+    ...queryOptions
+  })
+}
+
+/**
+ * Хук для экспорта данных
+ */
+export function useEntityExport(entityName, service, options = {}) {
+  const {
+    onSuccess = () => {},
+    onError = () => {}
+  } = options
+
+  return useMutation({
+    mutationFn: (exportOptions) => service.export?.(exportOptions),
+    onSuccess: (response, variables) => {
+      toast.success('Экспорт успешно выполнен')
+      onSuccess(response, variables)
+    },
+    onError: (error, variables) => {
+      const message = error.response?.data?.error || 'Ошибка экспорта'
+      toast.error(message)
+      onError(error, variables)
+    }
+  })
+}
+
+/**
+ * Хук для импорта данных
+ */
+export function useEntityImport(entityName, service, options = {}) {
+  const queryClient = useQueryClient()
+  
+  const {
+    invalidateQueries = [entityName],
+    onSuccess = () => {},
+    onError = () => {}
+  } = options
+
+  return useMutation({
+    mutationFn: (importData) => service.import?.(importData),
+    onSuccess: (response, variables) => {
+      invalidateQueries.forEach(query => {
+        queryClient.invalidateQueries([query])
+      })
+      
+      const count = response?.data?.importedCount || 0
+      toast.success(`Импортировано ${count} записей`)
+      onSuccess(response, variables)
+    },
+    onError: (error, variables) => {
+      const message = error.response?.data?.error || 'Ошибка импорта'
+      toast.error(message)
+      onError(error, variables)
+    }
+  })
+}
+
+/**
+ * Комплексный хук для полного управления сущностью
+ */
+export function useEntityManager(entityName, service, filters = {}, options = {}) {
+  const crud = useEntityCRUD(entityName, service, options)
+  const list = useEntityList(entityName, service, filters, options)
+  const stats = useEntityStats(entityName, service, options)
+  const exportHook = useEntityExport(entityName, service, options)
+  const importHook = useEntityImport(entityName, service, options)
+
+  return {
+    // CRUD операции
+    ...crud,
+    
+    // Данные
+    data: list.data,
+    pagination: list.pagination,
+    stats: stats.data,
+    
+    // Состояния
+    isLoadingList: list.isLoading,
+    isLoadingStats: stats.isLoading,
+    isExporting: exportHook.isPending,
+    isImporting: importHook.isPending,
+    
+    // Ошибки
+    listError: list.error,
+    statsError: stats.error,
+    
+    // Методы
+    refetch: list.refetch,
+    refetchStats: stats.refetch,
+    exportData: exportHook.mutateAsync,
+    importData: importHook.mutateAsync
+  }
+}
+
+// Экспорт всех хуков
 export default {
   useEntityCRUD,
   useEntityList,
   useEntityById,
-  useEntityBulkOperations,
-  useEntityStats
+  useEntityStats,
+  useEntityAutocomplete,
+  useEntityExport,
+  useEntityImport,
+  useEntityManager
 }
