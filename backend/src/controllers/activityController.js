@@ -1,51 +1,75 @@
 const { Activity } = require('../models');
 const { Op } = require('sequelize');
+const logger = require('../utils/logger');
 
 const activityController = {
   // Получить последнюю активность
   getRecentActivity: async (req, res) => {
     try {
-      const {
-        limit = 50,
-        offset = 0,
-        entityType,
-        actionType,
-        entityId,
-        userId,
+      // Проверяем, что модель Activity доступна
+      if (!Activity) {
+        return res.status(500).json({
+          success: false,
+          error: 'Activity model not available'
+        });
+      }
+
+      const { 
+        limit = 50, 
+        offset = 0, 
+        entityType, 
+        entityId, 
+        actionType, 
+        search,
         startDate,
-        endDate
+        endDate 
       } = req.query;
 
       const where = {};
 
       // Фильтры
       if (entityType) where.entityType = entityType;
-      if (actionType) where.actionType = actionType;
       if (entityId) where.entityId = entityId;
-      if (userId) where.userId = userId;
+      if (actionType) where.actionType = actionType;
+      if (search) {
+        where.description = {
+          [Op.like]: `%${search}%`
+        };
+      }
 
       // Фильтр по дате
       if (startDate || endDate) {
-        where.timestamp = {};
-        if (startDate) where.timestamp[Op.gte] = new Date(startDate);
-        if (endDate) where.timestamp[Op.lte] = new Date(endDate);
+        where[Op.or] = [];
+        
+        if (startDate || endDate) {
+          const timestampCondition = {};
+          const createdAtCondition = {};
+          
+          if (startDate) {
+            timestampCondition[Op.gte] = new Date(startDate);
+            createdAtCondition[Op.gte] = new Date(startDate);
+          }
+          if (endDate) {
+            timestampCondition[Op.lte] = new Date(endDate);
+            createdAtCondition[Op.lte] = new Date(endDate);
+          }
+          
+          where[Op.or].push(
+            { timestamp: timestampCondition },
+            { createdAt: createdAtCondition }
+          );
+        }
       }
 
       const activities = await Activity.findAll({
         where,
-        order: [['timestamp', 'DESC']],
+        order: [
+          ['timestamp', 'DESC'],
+          ['createdAt', 'DESC'],
+          ['id', 'DESC']
+        ],
         limit: parseInt(limit),
-        offset: parseInt(offset),
-        attributes: [
-          'id',
-          'timestamp',
-          'description',
-          'entityType',
-          'entityId',
-          'actionType',
-          'userId',
-          'createdAt'
-        ]
+        offset: parseInt(offset)
       });
 
       res.json({
@@ -54,10 +78,10 @@ const activityController = {
         count: activities.length
       });
     } catch (error) {
-      console.error('Error fetching recent activity:', error);
+      logger.error('Error fetching recent activity:', error);
       res.status(500).json({
         success: false,
-        error: 'Failed to fetch activity data',
+        error: 'Failed to fetch recent activity',
         message: error.message
       });
     }
@@ -69,10 +93,10 @@ const activityController = {
       const { entityType, entityId } = req.params;
       const { 
         limit = 50, 
-        offset = 0,
+        offset = 0, 
         actionType,
         startDate,
-        endDate
+        endDate 
       } = req.query;
 
       const where = {
@@ -116,29 +140,54 @@ const activityController = {
   // Получить статистику активности
   getActivityStats: async (req, res) => {
     try {
+      // Проверяем, что модель Activity доступна
+      if (!Activity) {
+        return res.status(500).json({
+          success: false,
+          error: 'Activity model not available'
+        });
+      }
+
       const { period = '7d' } = req.query;
 
       // Определяем начальную дату на основе периода
       let startDate = new Date();
       switch (period) {
         case '1d':
-          startDate.setDate(startDate.getDate() - 1);
+          startDate.setUTCHours(0, 0, 0, 0);
+          startDate.setUTCDate(startDate.getUTCDate() - 1);
           break;
         case '7d':
-          startDate.setDate(startDate.getDate() - 7);
+          startDate.setUTCHours(0, 0, 0, 0);
+          startDate.setUTCDate(startDate.getUTCDate() - 7);
           break;
         case '30d':
-          startDate.setDate(startDate.getDate() - 30);
+          startDate.setUTCHours(0, 0, 0, 0);
+          startDate.setUTCDate(startDate.getUTCDate() - 30);
           break;
         default:
-          startDate.setDate(startDate.getDate() - 7);
+          startDate.setUTCHours(0, 0, 0, 0);
+          startDate.setUTCDate(startDate.getUTCDate() - 7);
       }
 
-      // Общая статистика
+      // Общая статистика за период - используем простое условие без Op.or
       const totalCount = await Activity.count({
         where: {
-          timestamp: {
-            [Op.gte]: startDate
+          createdAt: { [Op.gte]: startDate }
+        }
+      });
+
+      // Статистика за сегодня
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+      const todayCount = await Activity.count({
+        where: {
+          createdAt: { 
+            [Op.gte]: today,
+            [Op.lt]: tomorrow 
           }
         }
       });
@@ -147,15 +196,13 @@ const activityController = {
       const actionStats = await Activity.findAll({
         attributes: [
           'actionType',
-          [Activity.sequelize.fn('COUNT', Activity.sequelize.col('actionType')), 'count']
+          [Activity.sequelize.fn('COUNT', Activity.sequelize.col('id')), 'count']
         ],
         where: {
-          timestamp: {
-            [Op.gte]: startDate
-          }
+          createdAt: { [Op.gte]: startDate }
         },
         group: ['actionType'],
-        order: [[Activity.sequelize.fn('COUNT', Activity.sequelize.col('actionType')), 'DESC']],
+        order: [[Activity.sequelize.fn('COUNT', Activity.sequelize.col('id')), 'DESC']],
         raw: true
       });
 
@@ -163,31 +210,27 @@ const activityController = {
       const entityStats = await Activity.findAll({
         attributes: [
           'entityType',
-          [Activity.sequelize.fn('COUNT', Activity.sequelize.col('entityType')), 'count']
-        ],
-        where: {
-          timestamp: {
-            [Op.gte]: startDate
-          }
-        },
-        group: ['entityType'],
-        order: [[Activity.sequelize.fn('COUNT', Activity.sequelize.col('entityType')), 'DESC']],
-        raw: true
-      });
-
-      // Активность по дням (для графика)
-      const dailyStats = await Activity.findAll({
-        attributes: [
-          [Activity.sequelize.fn('DATE', Activity.sequelize.col('timestamp')), 'date'],
           [Activity.sequelize.fn('COUNT', Activity.sequelize.col('id')), 'count']
         ],
         where: {
-          timestamp: {
-            [Op.gte]: startDate
-          }
+          createdAt: { [Op.gte]: startDate }
         },
-        group: [Activity.sequelize.fn('DATE', Activity.sequelize.col('timestamp'))],
-        order: [[Activity.sequelize.fn('DATE', Activity.sequelize.col('timestamp')), 'ASC']],
+        group: ['entityType'],
+        order: [[Activity.sequelize.fn('COUNT', Activity.sequelize.col('id')), 'DESC']],
+        raw: true
+      });
+
+      // Активность по дням
+      const dailyStats = await Activity.findAll({
+        attributes: [
+          [Activity.sequelize.fn('DATE', Activity.sequelize.col('createdAt')), 'date'],
+          [Activity.sequelize.fn('COUNT', Activity.sequelize.col('id')), 'count']
+        ],
+        where: {
+          createdAt: { [Op.gte]: startDate }
+        },
+        group: [Activity.sequelize.fn('DATE', Activity.sequelize.col('createdAt'))],
+        order: [[Activity.sequelize.fn('DATE', Activity.sequelize.col('createdAt')), 'ASC']],
         raw: true
       });
 
@@ -196,6 +239,7 @@ const activityController = {
         data: {
           period,
           totalCount,
+          todayCount,
           actionStats: actionStats.map(item => ({
             actionType: item.actionType,
             count: parseInt(item.count)
@@ -211,7 +255,7 @@ const activityController = {
         }
       });
     } catch (error) {
-      console.error('Error fetching activity stats:', error);
+      logger.error('Error fetching activity stats:', error);
       res.status(500).json({
         success: false,
         error: 'Failed to fetch activity statistics',
@@ -231,7 +275,7 @@ const activityController = {
         entityId,
         actionType,
         userId,
-        createdAt: new Date()
+        metadata
       });
 
       return activity;

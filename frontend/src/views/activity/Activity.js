@@ -42,7 +42,7 @@ const Activity = () => {
 
   // Загрузка данных
   const { data: activities, isLoading, error, refetch } = useRecentActivity(filters)
-  const { data: stats, isLoading: statsLoading, error: statsError } = useActivityStats({ period: '7d' })
+  const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useActivityStats({ period: '7d' })
 
   // Отладочная информация
   useEffect(() => {
@@ -62,6 +62,11 @@ const Activity = () => {
       ...prev,
       [key]: value
     }))
+  }
+
+  const handleRefresh = () => {
+    refetch()
+    refetchStats()
   }
 
   const getActionBadge = (actionType) => {
@@ -162,6 +167,29 @@ const Activity = () => {
     }
   }
 
+  // Функция для безопасного получения значений статистики
+  const getStatValue = (statPath, defaultValue = 0) => {
+    if (!stats) return defaultValue
+    
+    try {
+      const keys = statPath.split('.')
+      let value = stats
+      
+      for (const key of keys) {
+        if (value && typeof value === 'object') {
+          value = value[key]
+        } else {
+          return defaultValue
+        }
+      }
+      
+      return typeof value === 'number' ? value : defaultValue
+    } catch (e) {
+      console.warn(`Error getting stat value for path: ${statPath}`, e)
+      return defaultValue
+    }
+  }
+
   // Показываем ошибки, если есть
   if (error || statsError) {
     return (
@@ -173,12 +201,14 @@ const Activity = () => {
             <div><strong>Stats error:</strong> {statsError?.message || 'No error'}</div>
             <div className="mt-2">
               <strong>Debug info:</strong>
-              <pre>{JSON.stringify({ activities, stats, isLoading, statsLoading }, null, 2)}</pre>
+              <pre>{JSON.stringify({ 
+                activities: activities?.length || 'null', 
+                stats: stats ? 'loaded' : 'null', 
+                isLoading, 
+                statsLoading 
+              }, null, 2)}</pre>
             </div>
-            <CButton color="primary" onClick={() => {
-              refetch()
-              window.location.reload()
-            }} className="mt-3">
+            <CButton color="primary" onClick={handleRefresh} className="mt-3">
               Попробовать снова
             </CButton>
           </CAlert>
@@ -196,62 +226,63 @@ const Activity = () => {
             <strong>Debug Info:</strong><br/>
             Activities: {activities ? `${activities.length} записей` : 'null/undefined'}<br/>
             Loading: {isLoading ? 'Yes' : 'No'}<br/>
-            Stats: {stats ? 'Loaded' : 'null/undefined'}<br/>
+            Stats: {stats ? `totalCount: ${stats.totalCount || 0}, totalActions: ${stats.totalActions || 0}` : 'null/undefined'}<br/>
             Stats Loading: {statsLoading ? 'Yes' : 'No'}<br/>
+            Stats Object: {stats ? JSON.stringify(Object.keys(stats)) : 'null'}<br/>
             Filters: {JSON.stringify(filters)}
           </CAlert>
         </CCol>
       </CRow>
 
       {/* Статистика за неделю */}
-      {stats && (
-        <CRow className="mb-4">
-          <CCol sm={6} lg={3}>
-            <CWidgetStatsA
-              className="mb-4"
-              color="primary"
-              value={stats.totalActions || stats.totalCount || 0}
-              title="Всего действий"
-              action={
-                <CIcon icon={cilChart} height={24} className="my-4 text-white" />
-              }
-            />
-          </CCol>
-          <CCol sm={6} lg={3}>
-            <CWidgetStatsA
-              className="mb-4"
-              color="success"
-              value={stats.todayActions || 0}
-              title="Сегодня"
-              action={
-                <CIcon icon={cilCalendar} height={24} className="my-4 text-white" />
-              }
-            />
-          </CCol>
-          <CCol sm={6} lg={3}>
-            <CWidgetStatsA
-              className="mb-4"
-              color="info"
-              value={stats.byEntityType?.account || stats.entityStats?.find(e => e.entityType === 'account')?.count || 0}
-              title="Действия с аккаунтами"
-              action={
-                <CIcon icon={cilPeople} height={24} className="my-4 text-white" />
-              }
-            />
-          </CCol>
-          <CCol sm={6} lg={3}>
-            <CWidgetStatsA
-              className="mb-4"
-              color="warning"
-              value={stats.byEntityType?.project || stats.entityStats?.find(e => e.entityType === 'project')?.count || 0}
-              title="Действия с проектами"
-              action={
-                <CIcon icon={cilFolder} height={24} className="my-4 text-white" />
-              }
-            />
-          </CCol>
-        </CRow>
-      )}
+      <CRow className="mb-4">
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="primary"
+            value={getStatValue('totalActions') || getStatValue('totalCount')}
+            title="Всего действий"
+            action={
+              <CIcon icon={cilChart} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="success"
+            value={getStatValue('todayActions')}
+            title="Сегодня"
+            action={
+              <CIcon icon={cilCalendar} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="info"
+            value={getStatValue('byEntityType.account') || 
+                   (stats?.entityStats?.find(e => e.entityType === 'account')?.count) || 0}
+            title="Действия с аккаунтами"
+            action={
+              <CIcon icon={cilPeople} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+        <CCol sm={6} lg={3}>
+          <CWidgetStatsA
+            className="mb-4"
+            color="warning"
+            value={getStatValue('byEntityType.project') || 
+                   (stats?.entityStats?.find(e => e.entityType === 'project')?.count) || 0}
+            title="Действия с проектами"
+            action={
+              <CIcon icon={cilFolder} height={24} className="my-4 text-white" />
+            }
+          />
+        </CCol>
+      </CRow>
 
       {/* Основная таблица */}
       <CRow>
@@ -269,10 +300,10 @@ const Activity = () => {
                   <CButton
                     color="secondary"
                     variant="outline"
-                    onClick={() => refetch()}
-                    disabled={isLoading}
+                    onClick={handleRefresh}
+                    disabled={isLoading || statsLoading}
                   >
-                    <CIcon icon={cilReload} className={isLoading ? 'fa-spin' : ''} />
+                    <CIcon icon={cilReload} className={(isLoading || statsLoading) ? 'fa-spin' : ''} />
                     Обновить
                   </CButton>
                 </CCol>
@@ -333,6 +364,18 @@ const Activity = () => {
                   </CFormSelect>
                 </CCol>
               </CRow>
+
+              {/* Индикатор загрузки статистики */}
+              {statsLoading && (
+                <CRow className="mb-3">
+                  <CCol xs={12}>
+                    <CAlert color="info" className="mb-0">
+                      <CSpinner size="sm" className="me-2" />
+                      Загрузка статистики...
+                    </CAlert>
+                  </CCol>
+                </CRow>
+              )}
 
               {/* Таблица активности */}
               {isLoading ? (

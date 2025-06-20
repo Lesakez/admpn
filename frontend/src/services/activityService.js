@@ -87,6 +87,34 @@ export const activityService = {
     })
     
     return api.get(`/activity/stats?${searchParams.toString()}`)
+      .then(response => {
+        console.log('Activity stats API response:', response.data)
+        
+        // Обработка данных для совместимости с компонентом
+        if (response.data.success && response.data.data) {
+          const statsData = response.data.data
+          
+          // Преобразуем структуру данных для UI
+          const transformedStats = {
+            ...statsData,
+            // Добавляем вычисленные поля для совместимости
+            totalActions: statsData.totalCount,
+            todayActions: statsData.todayCount || 0,
+            byEntityType: activityService.transformEntityStats(statsData.entityStats),
+            byActionType: activityService.transformActionStats(statsData.actionStats)
+          }
+          
+          return {
+            ...response,
+            data: {
+              ...response.data,
+              data: transformedStats
+            }
+          }
+        }
+        
+        return response
+      })
       .catch(error => {
         console.error('Activity stats API error:', error)
         return {
@@ -95,13 +123,51 @@ export const activityService = {
             data: {
               period: params.period || '7d',
               totalCount: 0,
+              totalActions: 0,
+              todayActions: 0,
               actionStats: [],
               entityStats: [],
-              dailyStats: []
+              dailyStats: [],
+              byEntityType: {},
+              byActionType: {}
             }
           }
         }
       })
+  },
+
+  // Вспомогательная функция для подсчета активности за сегодня (статический метод)
+  calculateTodayActions: (dailyStats) => {
+    if (!Array.isArray(dailyStats)) return 0
+    
+    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
+    const todayData = dailyStats.find(item => item.date === today)
+    
+    return todayData ? todayData.count : 0
+  },
+
+  // Преобразование статистики по сущностям в объект (статический метод)
+  transformEntityStats: (entityStats) => {
+    if (!Array.isArray(entityStats)) return {}
+    
+    const result = {}
+    entityStats.forEach(item => {
+      result[item.entityType] = item.count
+    })
+    
+    return result
+  },
+
+  // Преобразование статистики по действиям в объект (статический метод)
+  transformActionStats: (actionStats) => {
+    if (!Array.isArray(actionStats)) return {}
+    
+    const result = {}
+    actionStats.forEach(item => {
+      result[item.actionType] = item.count
+    })
+    
+    return result
   },
 
   // Создать новую запись активности (для тестирования)
