@@ -1,68 +1,191 @@
 // backend/src/controllers/accountController.js
-const { Account } = require('../models');
-const { Op, sequelize } = require('sequelize');
+const { Account, sequelize } = require('../models');
+const { Op, DataTypes } = require('sequelize');
 const logger = require('../utils/logger');
 
-// Создать новый аккаунт
-const createAccount = async (req, res, next) => {
+/**
+ * ДИНАМИЧЕСКИЙ КОНТРОЛЛЕР БЕЗ ХАРДКОДА
+ * - Автоматически определяет поля модели
+ * - Динамически получает возможные значения для фильтров
+ * - Поддерживает импорт/экспорт всех полей
+ * - Гибкая система статусов и форматов
+ */
+
+// Получить метаданные модели аккаунтов
+const getModelMetadata = () => {
+  const attributes = Account.rawAttributes;
+  const fields = {};
+  const sensitiveFields = ['password', 'emailPassword', 'emailPasswordRecovery', 'twoFA'];
+  const publicFields = [];
+  const exportableFields = [];
+  const importableFields = [];
+
+  Object.keys(attributes).forEach(fieldName => {
+    const field = attributes[fieldName];
+    const fieldInfo = {
+      name: fieldName,
+      type: field.type.constructor.name,
+      allowNull: field.allowNull,
+      primaryKey: field.primaryKey,
+      autoIncrement: field.autoIncrement,
+      isSensitive: sensitiveFields.includes(fieldName),
+      dbField: field.field || fieldName
+    };
+
+    fields[fieldName] = fieldInfo;
+
+    // Публичные поля (для обычного отображения)
+    if (!fieldInfo.isSensitive && !fieldInfo.primaryKey) {
+      publicFields.push(fieldName);
+    }
+
+    // Экспортируемые поля (включая чувствительные, но исключая автогенерируемые)
+    if (!fieldInfo.autoIncrement) {
+      exportableFields.push(fieldName);
+    }
+
+    // Импортируемые поля (исключая первичные ключи и автогенерируемые)
+    if (!fieldInfo.primaryKey && !fieldInfo.autoIncrement) {
+      importableFields.push(fieldName);
+    }
+  });
+
+  return {
+    fields,
+    publicFields,
+    exportableFields,
+    importableFields,
+    sensitiveFields
+  };
+};
+
+// Динамически получить уникальные значения для полей
+const getFieldValues = async (fieldName, limit = 100) => {
   try {
-    const account = await Account.create(req.body);
-    
-    logger.info('Account created successfully', { accountId: account.id });
-    
-    res.status(201).json({
-      success: true,
-      data: account
+    const results = await Account.findAll({
+      attributes: [fieldName],
+      where: { 
+        [fieldName]: { [Op.ne]: null },
+        [fieldName]: { [Op.ne]: '' }
+      },
+      group: [fieldName],
+      limit,
+      order: [[sequelize.fn('COUNT', sequelize.col(fieldName)), 'DESC']]
     });
+
+    return results.map(item => item[fieldName]).filter(Boolean);
   } catch (error) {
-    next(error);
+    logger.warn(`Error getting values for field ${fieldName}:`, error.message);
+    return [];
   }
 };
 
-// Получить список аккаунтов с фильтрацией и пагинацией
+// Получить список аккаунтов с динамической фильтрацией
 const getAccounts = async (req, res, next) => {
   try {
     const {
       page = 1,
       limit = 20,
-      status,
-      source,
-      search,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC'
+      search = '',
+      sortBy = 'id',
+      sortOrder = 'DESC',
+      fields = 'public', // 'public', 'all', 'custom' или массив полей
+      includeSensitive = false,
+      ...filters // Все остальные параметры как фильтры
     } = req.query;
 
-    const offset = (page - 1) * limit;
-    const where = {};
-
-    // Фильтры
-    if (status) where.status = status;
-    if (source) where.source = source;
-    if (search) {
-      where[Op.or] = [
-        { login: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } }
-      ];
+    const metadata = getModelMetadata();
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    // Определяем какие поля возвращать
+    let selectFields;
+    if (fields === 'public') {
+      selectFields = metadata.publicFields;
+    } else if (fields === 'all') {
+      selectFields = Object.keys(metadata.fields);
+    } else if (Array.isArray(fields)) {
+      selectFields = fields.filter(f => metadata.fields[f]);
+    } else if (typeof fields === 'string' && fields !== 'public') {
+      selectFields = fields.split(',').filter(f => metadata.fields[f]);
+    } else {
+      selectFields = metadata.publicFields;
     }
 
-    const { count, rows } = await Account.findAndCountAll({
+    // Исключаем чувствительные поля если не запрошены явно
+    if (!includeSensitive || includeSensitive !== 'true') {
+      selectFields = selectFields.filter(f => !metadata.sensitiveFields.includes(f));
+    }
+
+    // Всегда включаем ID для работы с записями
+    if (!selectFields.includes('id')) {
+      selectFields = ['id', ...selectFields];
+    }
+
+    // Формируем условия поиска
+    const where = {};
+    
+    // Глобальный поиск по текстовым полям
+    if (search) {
+      const searchableFields = Object.keys(metadata.fields).filter(fieldName => {
+        const field = metadata.fields[fieldName];
+        return field.type.includes('STRING') || field.type.includes('TEXT');
+      });
+
+      if (searchableFields.length > 0) {
+        where[Op.or] = searchableFields.map(field => ({
+          [field]: { [Op.like]: `%${search}%` }
+        }));
+      }
+    }
+    
+    // Динамические фильтры по полям
+    Object.keys(filters).forEach(filterKey => {
+      if (metadata.fields[filterKey] && filters[filterKey]) {
+        const filterValue = filters[filterKey];
+        
+        // Поддержка различных операторов фильтрации
+        if (filterValue.startsWith('!=')) {
+          where[filterKey] = { [Op.ne]: filterValue.substring(2) };
+        } else if (filterValue.startsWith('>=')) {
+          where[filterKey] = { [Op.gte]: filterValue.substring(2) };
+        } else if (filterValue.startsWith('<=')) {
+          where[filterKey] = { [Op.lte]: filterValue.substring(2) };
+        } else if (filterValue.startsWith('>')) {
+          where[filterKey] = { [Op.gt]: filterValue.substring(1) };
+        } else if (filterValue.startsWith('<')) {
+          where[filterKey] = { [Op.lt]: filterValue.substring(1) };
+        } else if (filterValue.includes(',')) {
+          // Множественный выбор
+          where[filterKey] = { [Op.in]: filterValue.split(',') };
+        } else {
+          where[filterKey] = filterValue;
+        }
+      }
+    });
+
+    const { count, rows: accounts } = await Account.findAndCountAll({
+      attributes: selectFields,
       where,
       limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [[sortBy, sortOrder]],
-      attributes: { exclude: ['password'] }
+      offset,
+      order: [[sortBy, sortOrder.toUpperCase()]]
     });
 
     res.json({
       success: true,
       data: {
-        accounts: rows,
+        accounts,
         pagination: {
-          total: count,
           page: parseInt(page),
           limit: parseInt(limit),
-          pages: Math.ceil(count / limit),
-          totalPages: Math.ceil(count / limit)
+          total: count,
+          pages: Math.ceil(count / parseInt(limit))
+        },
+        metadata: {
+          fields: selectFields,
+          totalFields: Object.keys(metadata.fields).length,
+          appliedFilters: Object.keys(filters),
+          searchApplied: !!search
         }
       }
     });
@@ -71,14 +194,450 @@ const getAccounts = async (req, res, next) => {
   }
 };
 
-// Получить аккаунт по ID (без пароля)
+// Получить метаданные и возможные значения полей
+const getAccountFields = async (req, res, next) => {
+  try {
+    const { includeValues = true, valueLimit = 50 } = req.query;
+    const metadata = getModelMetadata();
+    
+    const fieldData = {};
+    
+    // Получаем возможные значения для каждого поля (если запрошено)
+    if (includeValues === 'true') {
+      for (const fieldName of Object.keys(metadata.fields)) {
+        const field = metadata.fields[fieldName];
+        
+        // Получаем значения только для не-чувствительных и не-слишком-длинных полей
+        if (!field.isSensitive && !field.primaryKey && !field.autoIncrement) {
+          const values = await getFieldValues(fieldName, parseInt(valueLimit));
+          fieldData[fieldName] = {
+            ...field,
+            possibleValues: values,
+            uniqueCount: values.length
+          };
+        } else {
+          fieldData[fieldName] = field;
+        }
+      }
+    } else {
+      Object.assign(fieldData, metadata.fields);
+    }
+
+    res.json({
+      success: true,
+      data: {
+        fields: fieldData,
+        categories: {
+          public: metadata.publicFields,
+          exportable: metadata.exportableFields,
+          importable: metadata.importableFields,
+          sensitive: metadata.sensitiveFields
+        },
+        totalFields: Object.keys(metadata.fields).length
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Получить динамическую статистику
+const getAccountStats = async (req, res, next) => {
+  try {
+    const { groupBy = [], includePercentages = true } = req.query;
+    const metadata = getModelMetadata();
+    
+    // Базовая статистика
+    const totalAccounts = await Account.count();
+    const recentAccounts = await Account.count({
+      where: {
+        createdAt: {
+          [Op.gte]: new Date(Date.now() - 24 * 60 * 60 * 1000)
+        }
+      }
+    });
+
+    const stats = {
+      total: totalAccounts,
+      recent24h: recentAccounts
+    };
+
+    // Динамическая группировка по запрошенным полям
+    const groupFields = Array.isArray(groupBy) ? groupBy : 
+                       typeof groupBy === 'string' ? groupBy.split(',') : 
+                       ['status', 'source']; // По умолчанию
+
+    for (const fieldName of groupFields) {
+      if (metadata.fields[fieldName] && !metadata.sensitiveFields.includes(fieldName)) {
+        try {
+          const groupStats = await Account.findAll({
+            attributes: [
+              fieldName,
+              [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+            ],
+            where: { [fieldName]: { [Op.ne]: null } },
+            group: [fieldName],
+            raw: true
+          });
+
+          const groupStatsObj = groupStats.reduce((acc, item) => {
+            acc[item[fieldName] || 'unknown'] = parseInt(item.count);
+            return acc;
+          }, {});
+
+          stats[`by${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)}`] = groupStatsObj;
+
+          // Добавляем проценты если запрошено
+          if (includePercentages === 'true' && totalAccounts > 0) {
+            const percentages = {};
+            Object.entries(groupStatsObj).forEach(([key, value]) => {
+              percentages[key] = ((value / totalAccounts) * 100).toFixed(1);
+            });
+            stats[`${fieldName}Percentages`] = percentages;
+          }
+        } catch (error) {
+          logger.warn(`Error calculating stats for field ${fieldName}:`, error.message);
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Универсальный импорт аккаунтов
+const importAccountsFromText = async (req, res, next) => {
+  try {
+    const { 
+      text, 
+      format = 'auto', // 'auto', 'custom', или готовый формат
+      delimiter = ':',
+      fieldMapping = null, // Маппинг полей {0: 'login', 1: 'password', ...}
+      source = 'import',
+      batchSize = 100,
+      skipErrors = true,
+      updateExisting = false
+    } = req.body;
+
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Текст для импорта обязателен'
+      });
+    }
+
+    const metadata = getModelMetadata();
+    const lines = text.split('\n').filter(line => line.trim());
+    const imported = [];
+    const updated = [];
+    const errors = [];
+
+    // Определяем маппинг полей
+    let mapping = {};
+    
+    if (fieldMapping) {
+      mapping = fieldMapping;
+    } else if (format === 'auto') {
+      // Автоматическое определение формата по первой строке
+      const firstLine = lines[0]?.trim();
+      if (firstLine) {
+        const parts = firstLine.split(delimiter);
+        if (parts.length >= 2) {
+          // Базовое определение: login:password или email:password
+          if (parts[0].includes('@')) {
+            mapping = { 0: 'email', 1: 'password' };
+          } else {
+            mapping = { 0: 'login', 1: 'password' };
+          }
+          
+          // Дополнительные поля если есть
+          if (parts.length > 2) {
+            if (!parts[0].includes('@') && parts[2].includes('@')) {
+              mapping[2] = 'email';
+            }
+          }
+        }
+      }
+    } else {
+      // Предустановленные форматы
+      const formats = {
+        'login:password': { 0: 'login', 1: 'password' },
+        'email:password': { 0: 'email', 1: 'password' },
+        'login:password:email': { 0: 'login', 1: 'password', 2: 'email' },
+        'email:password:login': { 0: 'email', 1: 'password', 2: 'login' }
+      };
+      mapping = formats[format] || formats['login:password'];
+    }
+
+    // Обрабатываем строки батчами
+    for (let i = 0; i < lines.length; i += batchSize) {
+      const batch = lines.slice(i, i + batchSize);
+      
+      for (const line of batch) {
+        try {
+          const parts = line.trim().split(delimiter);
+          const accountData = { source };
+
+          // Применяем маппинг полей
+          Object.entries(mapping).forEach(([index, fieldName]) => {
+            const value = parts[parseInt(index)]?.trim();
+            if (value && metadata.importableFields.includes(fieldName)) {
+              accountData[fieldName] = value;
+            }
+          });
+
+          // Проверяем минимальные требования
+          if (!accountData.login && !accountData.email) {
+            if (skipErrors) {
+              errors.push(`Строка пропущена (нет логина или email): ${line}`);
+              continue;
+            } else {
+              throw new Error('Требуется логин или email');
+            }
+          }
+
+          // Проверяем существование аккаунта для обновления
+          let existingAccount = null;
+          if (updateExisting) {
+            const whereCondition = {};
+            if (accountData.login) whereCondition.login = accountData.login;
+            if (accountData.email) whereCondition.email = accountData.email;
+            
+            existingAccount = await Account.findOne({ where: whereCondition });
+          }
+
+          if (existingAccount) {
+            // Обновляем существующий
+            await existingAccount.update(accountData);
+            updated.push({
+              id: existingAccount.id,
+              login: existingAccount.login,
+              email: existingAccount.email,
+              action: 'updated'
+            });
+          } else {
+            // Создаем новый
+            const account = await Account.create(accountData);
+            imported.push({
+              id: account.id,
+              login: account.login,
+              email: account.email,
+              action: 'created'
+            });
+          }
+        } catch (error) {
+          const errorMsg = `Ошибка обработки строки "${line}": ${error.message}`;
+          if (skipErrors) {
+            errors.push(errorMsg);
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: errorMsg,
+              processedLines: imported.length + updated.length
+            });
+          }
+        }
+      }
+    }
+
+    logger.info('Accounts import completed', { 
+      totalLines: lines.length,
+      imported: imported.length,
+      updated: updated.length,
+      errors: errors.length,
+      mapping
+    });
+
+    res.json({
+      success: true,
+      data: {
+        processed: lines.length,
+        imported: imported.length,
+        updated: updated.length,
+        errors: errors.length,
+        mapping: mapping,
+        accounts: [...imported, ...updated],
+        errorDetails: errors.slice(0, 100) // Ограничиваем количество ошибок в ответе
+      },
+      message: `Обработано: ${lines.length}, создано: ${imported.length}, обновлено: ${updated.length}, ошибок: ${errors.length}`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Универсальный экспорт аккаунтов
+const exportAccounts = async (req, res, next) => {
+  try {
+    const { 
+      format = 'json', // 'json', 'csv', 'txt', 'xml'
+      fields = 'exportable', // 'all', 'public', 'exportable' или массив полей
+      includeSensitive = false,
+      filters = {},
+      template = null, // Шаблон для txt формата: "{login}:{password}"
+      delimiter = ':',
+      csvSeparator = ',',
+      limit = 10000,
+      ...queryFilters
+    } = req.body;
+
+    const metadata = getModelMetadata();
+    
+    // Определяем поля для экспорта
+    let exportFields;
+    if (fields === 'all') {
+      exportFields = Object.keys(metadata.fields);
+    } else if (fields === 'public') {
+      exportFields = metadata.publicFields;
+    } else if (fields === 'exportable') {
+      exportFields = metadata.exportableFields;
+    } else if (Array.isArray(fields)) {
+      exportFields = fields.filter(f => metadata.fields[f]);
+    } else {
+      exportFields = metadata.exportableFields;
+    }
+
+    // Исключаем чувствительные поля если не запрошены
+    if (!includeSensitive || includeSensitive !== 'true') {
+      exportFields = exportFields.filter(f => !metadata.sensitiveFields.includes(f));
+    }
+
+    // Формируем условия фильтрации
+    const where = {};
+    Object.keys({...filters, ...queryFilters}).forEach(filterKey => {
+      if (metadata.fields[filterKey] && (filters[filterKey] || queryFilters[filterKey])) {
+        const filterValue = filters[filterKey] || queryFilters[filterKey];
+        where[filterKey] = Array.isArray(filterValue) ? 
+          { [Op.in]: filterValue } : filterValue;
+      }
+    });
+
+    const accounts = await Account.findAll({
+      attributes: exportFields,
+      where,
+      limit: parseInt(limit),
+      order: [['id', 'ASC']]
+    });
+
+    let result = '';
+    let contentType = 'text/plain';
+    let filename = `accounts_${new Date().toISOString().split('T')[0]}`;
+
+    switch (format.toLowerCase()) {
+      case 'json':
+        result = JSON.stringify({
+          exportedAt: new Date().toISOString(),
+          totalCount: accounts.length,
+          fields: exportFields,
+          filters: where,
+          accounts: accounts.map(account => account.toJSON())
+        }, null, 2);
+        contentType = 'application/json';
+        filename += '.json';
+        break;
+
+      case 'csv':
+        const csvHeaders = exportFields;
+        const csvRows = accounts.map(account => 
+          exportFields.map(field => {
+            const value = account[field];
+            return value !== null && value !== undefined ? 
+              `"${String(value).replace(/"/g, '""')}"` : '""';
+          })
+        );
+        result = [csvHeaders, ...csvRows]
+          .map(row => row.join(csvSeparator))
+          .join('\n');
+        contentType = 'text/csv';
+        filename += '.csv';
+        break;
+
+      case 'txt':
+        if (template) {
+          // Используем шаблон
+          result = accounts.map(account => {
+            let line = template;
+            exportFields.forEach(field => {
+              const value = account[field] || '';
+              line = line.replace(new RegExp(`{${field}}`, 'g'), value);
+            });
+            return line;
+          }).join('\n');
+        } else {
+          // Стандартное форматирование
+          result = accounts.map(account => 
+            exportFields.map(field => account[field] || '').join(delimiter)
+          ).join('\n');
+        }
+        filename += '.txt';
+        break;
+
+      case 'xml':
+        result = `<?xml version="1.0" encoding="UTF-8"?>\n<accounts>\n`;
+        result += `  <metadata>\n`;
+        result += `    <exportedAt>${new Date().toISOString()}</exportedAt>\n`;
+        result += `    <totalCount>${accounts.length}</totalCount>\n`;
+        result += `    <fields>${exportFields.join(',')}</fields>\n`;
+        result += `  </metadata>\n`;
+        
+        accounts.forEach(account => {
+          result += `  <account>\n`;
+          exportFields.forEach(field => {
+            const value = account[field] || '';
+            result += `    <${field}>${String(value).replace(/[<>&]/g, char => 
+              ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[char]))}</${field}>\n`;
+          });
+          result += `  </account>\n`;
+        });
+        result += `</accounts>`;
+        contentType = 'application/xml';
+        filename += '.xml';
+        break;
+
+      default:
+        return res.status(400).json({
+          success: false,
+          error: 'Неподдерживаемый формат. Доступные: json, csv, txt, xml'
+        });
+    }
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(result);
+
+    logger.info('Accounts exported', {
+      format,
+      fieldsCount: exportFields.length,
+      accountsCount: accounts.length,
+      filters: Object.keys(where)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Остальные стандартные методы CRUD
 const getAccount = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const { includeSensitive = false } = req.query;
+    const metadata = getModelMetadata();
+
+    let attributes = metadata.publicFields;
+    if (includeSensitive === 'true') {
+      attributes = Object.keys(metadata.fields);
+    }
     
-    const account = await Account.findByPk(id, {
-      attributes: { exclude: ['password'] }
-    });
+    if (!attributes.includes('id')) {
+      attributes = ['id', ...attributes];
+    }
+
+    const account = await Account.findByPk(id, { attributes });
 
     if (!account) {
       return res.status(404).json({
@@ -96,35 +655,45 @@ const getAccount = async (req, res, next) => {
   }
 };
 
-// Получить полные данные аккаунта по ID (включая пароль)
-const getAccountWithPassword = async (req, res, next) => {
+const createAccount = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const metadata = getModelMetadata();
     
-    const account = await Account.findByPk(id);
+    // Фильтруем только допустимые для импорта поля
+    const accountData = {};
+    Object.keys(req.body).forEach(key => {
+      if (metadata.importableFields.includes(key)) {
+        accountData[key] = req.body[key];
+      }
+    });
 
-    if (!account) {
-      return res.status(404).json({
-        success: false,
-        error: 'Аккаунт не найден'
-      });
-    }
+    const account = await Account.create(accountData);
 
-    res.json({
+    logger.info('Account created', { accountId: account.id, login: account.login });
+
+    // Возвращаем публичные поля
+    const publicAccount = {};
+    [...metadata.publicFields, 'id'].forEach(field => {
+      publicAccount[field] = account[field];
+    });
+
+    res.status(201).json({
       success: true,
-      data: account
+      data: publicAccount,
+      message: 'Аккаунт успешно создан'
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Обновить аккаунт
 const updateAccount = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const metadata = getModelMetadata();
     
     const account = await Account.findByPk(id);
+    
     if (!account) {
       return res.status(404).json({
         success: false,
@@ -132,25 +701,40 @@ const updateAccount = async (req, res, next) => {
       });
     }
 
-    await account.update(req.body);
-    
-    logger.info('Account updated successfully', { accountId: id });
-    
+    // Фильтруем только допустимые для обновления поля
+    const updateData = {};
+    Object.keys(req.body).forEach(key => {
+      if (metadata.importableFields.includes(key)) {
+        updateData[key] = req.body[key];
+      }
+    });
+
+    await account.update(updateData);
+
+    logger.info('Account updated', { accountId: id, fieldsUpdated: Object.keys(updateData) });
+
+    // Возвращаем публичные поля
+    const publicAccount = {};
+    [...metadata.publicFields, 'id'].forEach(field => {
+      publicAccount[field] = account[field];
+    });
+
     res.json({
       success: true,
-      data: account
+      data: publicAccount,
+      message: 'Аккаунт успешно обновлен'
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Удалить аккаунт
 const deleteAccount = async (req, res, next) => {
   try {
     const { id } = req.params;
     
     const account = await Account.findByPk(id);
+    
     if (!account) {
       return res.status(404).json({
         success: false,
@@ -159,19 +743,18 @@ const deleteAccount = async (req, res, next) => {
     }
 
     await account.destroy();
-    
-    logger.info('Account deleted successfully', { accountId: id });
-    
+
+    logger.info('Account deleted', { accountId: id });
+
     res.json({
       success: true,
-      message: 'Аккаунт успешно удалён'
+      message: 'Аккаунт успешно удален'
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Изменить статус аккаунта
 const changeAccountStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -185,6 +768,7 @@ const changeAccountStatus = async (req, res, next) => {
     }
 
     const account = await Account.findByPk(id);
+    
     if (!account) {
       return res.status(404).json({
         success: false,
@@ -192,473 +776,29 @@ const changeAccountStatus = async (req, res, next) => {
       });
     }
 
+    const oldStatus = account.status;
     await account.update({ status });
-    
-    logger.info('Account status changed', { accountId: id, status });
-    
-    res.json({
-      success: true,
-      data: account
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
-// Получить статистику аккаунтов
-const getAccountStats = async (req, res, next) => {
-  try {
-    const total = await Account.count();
-    const active = await Account.count({ where: { status: 'active' } });
-    const blocked = await Account.count({ where: { status: 'blocked' } });
-    const suspended = await Account.count({ where: { status: 'suspended' } });
-
-    // Статистика по источникам
-    const sourceStats = await Account.findAll({
-      attributes: [
-        'source',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-      ],
-      group: ['source'],
-      raw: true
+    logger.info('Account status changed', { 
+      accountId: id, 
+      oldStatus, 
+      newStatus: status 
     });
 
     res.json({
       success: true,
       data: {
-        total,
-        active,
-        blocked,
-        suspended,
-        bySource: sourceStats.reduce((acc, item) => {
-          acc[item.source || 'Unknown'] = parseInt(item.count);
-          return acc;
-        }, {})
-      }
+        id: account.id,
+        oldStatus,
+        newStatus: status
+      },
+      message: `Статус аккаунта изменен с "${oldStatus}" на "${status}"`
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Получить доступные поля для экспорта (на основе реальной модели)
-const getAccountFields = async (req, res, next) => {
-  try {
-    const fields = [
-      { key: 'id', label: 'ID', type: 'number', description: 'Уникальный идентификатор аккаунта' },
-      { key: 'login', label: 'Логин', type: 'text', description: 'Логин аккаунта' },
-      { key: 'password', label: 'Пароль', type: 'password', description: 'Пароль аккаунта' },
-      { key: 'email', label: 'Email', type: 'text', description: 'Email аккаунта' },
-      { key: 'emailPassword', label: 'Пароль от Email', type: 'password', description: 'Пароль от email' },
-      { key: 'emailRecovery', label: 'Резервный Email', type: 'text', description: 'Резервный email' },
-      { key: 'emailPasswordRecovery', label: 'Пароль резервного Email', type: 'password', description: 'Пароль от резервного email' },
-      { key: 'userAgent', label: 'User Agent', type: 'text', description: 'User Agent браузера' },
-      { key: 'twoFA', label: '2FA', type: 'text', description: '2FA ключ' },
-      { key: 'dob', label: 'Дата рождения', type: 'date', description: 'Дата рождения' },
-      { key: 'nameProfiles', label: 'Имя профиля', type: 'text', description: 'Имя профиля' },
-      { key: 'userId', label: 'User ID', type: 'text', description: 'User ID' },
-      { key: 'cookies', label: 'Cookies', type: 'textarea', description: 'Cookies' },
-      { key: 'status', label: 'Статус', type: 'select', description: 'Статус аккаунта' },
-      { key: 'friendsCounts', label: 'Количество друзей', type: 'number', description: 'Количество друзей' },
-      { key: 'note', label: 'Заметка', type: 'textarea', description: 'Заметка' },
-      { key: 'statusCheck', label: 'Статус проверки', type: 'text', description: 'Статус проверки' },
-      { key: 'eaab', label: 'EAAB токен', type: 'text', description: 'EAAB токен' },
-      { key: 'namePage', label: 'Название страницы', type: 'text', description: 'Название страницы' },
-      { key: 'data', label: 'Дополнительные данные', type: 'textarea', description: 'Дополнительные данные' },
-      { key: 'dataRegistration', label: 'Дата регистрации', type: 'date', description: 'Дата регистрации' },
-      { key: 'idActive', label: 'ID активности', type: 'text', description: 'ID активности' },
-      { key: 'counter', label: 'Счетчик', type: 'number', description: 'Счетчик' },
-      { key: 'code', label: 'Код', type: 'text', description: 'Код' },
-      { key: 'device', label: 'Устройство', type: 'text', description: 'Устройство' },
-      { key: 'emailJsonData', label: 'JSON данные Email', type: 'textarea', description: 'JSON данные email' },
-      { key: 'lsposedJson', label: 'LSPosed JSON', type: 'textarea', description: 'LSPosed JSON данные' },
-      { key: 'accessToken', label: 'Access Token', type: 'text', description: 'Access token' },
-      { key: 'clientId', label: 'Client ID', type: 'text', description: 'Client ID' },
-      { key: 'refreshToken', label: 'Refresh Token', type: 'text', description: 'Refresh token' },
-      { key: 'source', label: 'Источник', type: 'text', description: 'Источник аккаунта' },
-      { key: 'importDate', label: 'Дата импорта', type: 'date', description: 'Дата импорта' },
-      { key: 'createdAt', label: 'Создан', type: 'date', description: 'Дата создания' },
-      { key: 'updatedAt', label: 'Обновлен', type: 'date', description: 'Дата обновления' }
-    ];
-
-    res.json({
-      success: true,
-      data: { fields }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Улучшенный импорт аккаунтов из текста
-const importAccountsFromText = async (req, res, next) => {
-  try {
-    const { 
-      text, 
-      format = 'login:password', 
-      delimiter = '\n',
-      validateEmails = false,
-      allowDuplicates = false,
-      defaultStatus = 'active',
-      defaultSource = 'import'
-    } = req.body;
-
-    if (!text) {
-      return res.status(400).json({
-        success: false,
-        error: 'Текст для импорта обязателен'
-      });
-    }
-
-    const lines = text.split(delimiter).filter(line => line.trim());
-    const results = {
-      imported: 0,
-      skipped: 0,
-      errors: [],
-      total: lines.length,
-      duplicates: []
-    };
-
-    // Валидация email
-    const validateEmail = (email) => {
-      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-    };
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
-
-      try {
-        let accountData = {
-          status: defaultStatus,
-          source: defaultSource
-        };
-
-        // Парсинг в зависимости от формата
-        if (format === 'login:password') {
-          const parts = line.split(':');
-          if (parts.length < 2) {
-            throw new Error('Неверный формат: ожидается login:password');
-          }
-          accountData.login = parts[0].trim();
-          accountData.password = parts.slice(1).join(':').trim(); // На случай если в пароле есть двоеточия
-        } else if (format === 'email:password') {
-          const parts = line.split(':');
-          if (parts.length < 2) {
-            throw new Error('Неверный формат: ожидается email:password');
-          }
-          accountData.email = parts[0].trim();
-          accountData.password = parts.slice(1).join(':').trim();
-          
-          // Валидация email если включена
-          if (validateEmails && !validateEmail(accountData.email)) {
-            throw new Error('Неверный формат email');
-          }
-        }
-
-        // Проверка на дубликаты если не разрешены
-        if (!allowDuplicates) {
-          const existingWhere = {};
-          if (accountData.login) existingWhere.login = accountData.login;
-          if (accountData.email) existingWhere.email = accountData.email;
-          
-          if (Object.keys(existingWhere).length > 0) {
-            const existing = await Account.findOne({ 
-              where: { [Op.or]: [existingWhere] }
-            });
-            
-            if (existing) {
-              results.duplicates.push({
-                line: i + 1,
-                text: line,
-                existing: existing.id
-              });
-              results.skipped++;
-              continue;
-            }
-          }
-        }
-
-        // Создание аккаунта
-        const account = await Account.create(accountData);
-        results.imported++;
-        
-      } catch (error) {
-        results.errors.push({
-          line: i + 1,
-          text: line,
-          error: error.message
-        });
-      }
-    }
-
-    logger.info('Accounts imported', { 
-      total: results.total, 
-      imported: results.imported, 
-      skipped: results.skipped,
-      errors: results.errors.length 
-    });
-
-    res.json({
-      success: true,
-      data: results
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Улучшенный экспорт аккаунтов в JSON
-const exportAccountsJSON = async (req, res, next) => {
-  try {
-    const { 
-      fields = [],
-      filters = {},
-      includePasswords = false
-    } = req.query;
-
-    const where = {};
-    
-    // Применяем фильтры
-    if (filters.status) where.status = filters.status;
-    if (filters.source) where.source = filters.source;
-    if (filters.search) {
-      where[Op.or] = [
-        { login: { [Op.like]: `%${filters.search}%` } },
-        { email: { [Op.like]: `%${filters.search}%` } }
-      ];
-    }
-
-    // Определяем поля для выборки
-    let attributes;
-    if (fields && fields.length > 0) {
-      attributes = Array.isArray(fields) ? fields : fields.split(',');
-    } else {
-      attributes = { exclude: includePasswords ? [] : ['password', 'emailPassword', 'emailPasswordRecovery'] };
-    }
-
-    const accounts = await Account.findAll({ 
-      where,
-      attributes
-    });
-
-    res.json({
-      success: true,
-      data: accounts
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Улучшенный экспорт аккаунтов в CSV
-const exportAccountsCSV = async (req, res, next) => {
-  try {
-    const { 
-      fields = ['id', 'login', 'email', 'status', 'source', 'createdAt'],
-      filters = {}
-    } = req.query;
-
-    const where = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.source) where.source = filters.source;
-
-    const selectedFields = Array.isArray(fields) ? fields : fields.split(',');
-    
-    const accounts = await Account.findAll({ 
-      where,
-      attributes: selectedFields
-    });
-
-    // Формируем CSV с динамическими заголовками
-    const headers = selectedFields.map(field => {
-      const fieldMap = {
-        id: 'ID',
-        login: 'Login',
-        email: 'Email',
-        password: 'Password',
-        status: 'Status',
-        source: 'Source',
-        createdAt: 'Created At',
-        updatedAt: 'Updated At'
-      };
-      return fieldMap[field] || field;
-    });
-
-    const rows = accounts.map(account => 
-      selectedFields.map(field => {
-        const value = account[field];
-        if (value instanceof Date) {
-          return value.toISOString();
-        }
-        return value || '';
-      })
-    );
-
-    const csv = [headers, ...rows]
-      .map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(','))
-      .join('\n');
-
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename=accounts.csv');
-    res.send('\uFEFF' + csv); // BOM для корректного отображения в Excel
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Улучшенный экспорт аккаунтов в TXT с поддержкой кастомных шаблонов
-const exportAccountsTXT = async (req, res, next) => {
-  try {
-    const { 
-      format = 'login:password',
-      filters = {},
-      customTemplate = '',
-      customDelimiter = '\n'
-    } = req.query;
-
-    const where = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.source) where.source = filters.source;
-
-    const accounts = await Account.findAll({ 
-      where,
-      attributes: ['login', 'password', 'email', 'userAgent', 'cookies', 'twoFA']
-    });
-
-    let txt = '';
-    
-    if (customTemplate) {
-      // Кастомный шаблон
-      txt = accounts.map(account => {
-        let line = customTemplate;
-        // Заменяем все возможные плейсхолдеры
-        Object.keys(account.dataValues).forEach(key => {
-          const value = account[key] || '';
-          line = line.replace(new RegExp(`{${key}}`, 'g'), value);
-        });
-        return line;
-      }).join(customDelimiter);
-    } else {
-      // Стандартные форматы
-      if (format === 'login:password') {
-        txt = accounts
-          .filter(account => account.login && account.password)
-          .map(account => `${account.login}:${account.password}`)
-          .join(customDelimiter);
-      } else if (format === 'email:password') {
-        txt = accounts
-          .filter(account => account.email && account.password)
-          .map(account => `${account.email}:${account.password}`)
-          .join(customDelimiter);
-      } else if (format === 'login:password:email') {
-        txt = accounts
-          .filter(account => account.login && account.password)
-          .map(account => `${account.login}:${account.password}:${account.email || ''}`)
-          .join(customDelimiter);
-      }
-    }
-
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename=accounts.txt');
-    res.send(txt);
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Кастомный экспорт (POST метод для сложных параметров)
-const exportAccountsCustom = async (req, res, next) => {
-  try {
-    const { 
-      fields = ['login', 'password'], 
-      format = 'json',
-      template = '',
-      filters = {},
-      options = {}
-    } = req.body;
-
-    if (!Array.isArray(fields) || fields.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Массив полей обязателен и не может быть пустым'
-      });
-    }
-
-    const where = {};
-    if (filters.status) where.status = filters.status;
-    if (filters.source) where.source = filters.source;
-    if (filters.search) {
-      where[Op.or] = [
-        { login: { [Op.like]: `%${filters.search}%` } },
-        { email: { [Op.like]: `%${filters.search}%` } }
-      ];
-    }
-
-    const accounts = await Account.findAll({ 
-      where,
-      attributes: fields 
-    });
-
-    if (format === 'template' && template) {
-      const delimiter = options.delimiter || '\n';
-      const txt = accounts.map(account => {
-        let line = template;
-        fields.forEach(field => {
-          const value = account[field] || '';
-          line = line.replace(new RegExp(`{${field}}`, 'g'), value);
-        });
-        return line;
-      }).join(delimiter);
-
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename=accounts_custom.txt');
-      res.send(txt);
-    } else {
-      res.json({
-        success: true,
-        data: accounts
-      });
-    }
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Массовое удаление аккаунтов
-const bulkDeleteAccounts = async (req, res, next) => {
-  try {
-    const { ids } = req.body;
-
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Массив ID обязателен'
-      });
-    }
-
-    const deletedCount = await Account.destroy({
-      where: {
-        id: {
-          [Op.in]: ids
-        }
-      }
-    });
-
-    logger.info('Bulk delete accounts', { count: deletedCount });
-
-    res.json({
-      success: true,
-      data: {
-        deletedCount
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Массовое обновление статуса
 const bulkUpdateStatus = async (req, res, next) => {
   try {
     const { ids, status } = req.body;
@@ -666,34 +806,35 @@ const bulkUpdateStatus = async (req, res, next) => {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Массив ID обязателен'
+        error: 'Необходимо указать массив ID аккаунтов'
       });
     }
 
     if (!status) {
       return res.status(400).json({
         success: false,
-        error: 'Статус обязателен'
+        error: 'Необходимо указать новый статус'
       });
     }
 
     const [updatedCount] = await Account.update(
       { status },
-      {
-        where: {
-          id: {
-            [Op.in]: ids
-          }
-        }
-      }
+      { where: { id: { [Op.in]: ids } } }
     );
 
-    logger.info('Bulk update account status', { count: updatedCount, status });
+    logger.info('Bulk status update', { 
+      accountIds: ids,
+      newStatus: status,
+      updatedCount
+    });
 
     res.json({
       success: true,
+      message: `Статус обновлен для ${updatedCount} аккаунтов`,
       data: {
-        updatedCount
+        updatedCount,
+        newStatus: status,
+        accountIds: ids
       }
     });
   } catch (error) {
@@ -701,19 +842,94 @@ const bulkUpdateStatus = async (req, res, next) => {
   }
 };
 
+const bulkDeleteAccounts = async (req, res, next) => {
+  try {
+    const { ids } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Необходимо указать массив ID аккаунтов'
+      });
+    }
+
+    const accountsToDelete = await Account.findAll({
+      where: { id: { [Op.in]: ids } },
+      attributes: ['id', 'login']
+    });
+
+    const deletedCount = await Account.destroy({
+      where: { id: { [Op.in]: ids } }
+    });
+
+    logger.info('Bulk delete accounts', { 
+      accountIds: ids,
+      deletedCount,
+      accounts: accountsToDelete.map(a => ({ id: a.id, login: a.login }))
+    });
+
+    res.json({
+      success: true,
+      message: `Удалено аккаунтов: ${deletedCount}`,
+      data: {
+        deletedCount,
+        deletedAccounts: accountsToDelete.map(a => ({ id: a.id, login: a.login }))
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Совместимость с существующими методами экспорта
+const exportAccountsJSON = (req, res, next) => {
+  req.body = { ...req.query, format: 'json' };
+  return exportAccounts(req, res, next);
+};
+
+const exportAccountsCSV = (req, res, next) => {
+  req.body = { ...req.query, format: 'csv' };
+  return exportAccounts(req, res, next);
+};
+
+const exportAccountsTXT = (req, res, next) => {
+  req.body = { ...req.query, format: 'txt' };
+  return exportAccounts(req, res, next);
+};
+
+const exportAccountsCustom = (req, res, next) => {
+  return exportAccounts(req, res, next);
+};
+
+// Получить полные данные аккаунта (включая пароль) - для совместимости
+const getAccountWithPassword = async (req, res, next) => {
+  req.query.includeSensitive = 'true';
+  return getAccount(req, res, next);
+};
+
 module.exports = {
-  createAccount,
+  // Основные CRUD операции
   getAccounts,
   getAccount,
   getAccountWithPassword,
+  createAccount,
   updateAccount,
   deleteAccount,
+  
+  // Управление статусами
   changeAccountStatus,
-  getAccountStats,
-  getAccountFields, // НОВЫЙ МЕТОД
-  importAccountsFromText,
-  bulkDeleteAccounts,
   bulkUpdateStatus,
+  bulkDeleteAccounts,
+  
+  // Метаданные и статистика
+  getAccountFields,
+  getAccountStats,
+  
+  // Импорт/экспорт
+  importAccountsFromText,
+  exportAccounts,
+  
+  // Совместимость с существующими методами
   exportAccountsJSON,
   exportAccountsCSV,
   exportAccountsTXT,

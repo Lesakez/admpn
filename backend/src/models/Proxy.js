@@ -9,24 +9,39 @@ module.exports = (sequelize) => {
       autoIncrement: true
     },
     protocol: {
-      type: DataTypes.TEXT,
+      type: DataTypes.STRING(50),
       allowNull: true,
-      field: 'type', // В БД поле называется 'type'
+      field: 'type',
+      validate: {
+        isIn: {
+          args: [['http', 'https', 'socks4', 'socks5']],
+          msg: 'Протокол должен быть одним из: http, https, socks4, socks5'
+        }
+      },
       comment: 'Тип/протокол прокси'
     },
     ipPort: {
-      type: DataTypes.TEXT,
-      allowNull: true,
+      type: DataTypes.STRING(255),
+      allowNull: false,
       field: 'ip_port',
+      validate: {
+        notEmpty: {
+          msg: 'IP:PORT обязательно'
+        },
+        is: {
+          args: /^(\d{1,3}\.){3}\d{1,3}:\d{1,5}$/,
+          msg: 'Неверный формат IP:PORT'
+        }
+      },
       comment: 'IP:PORT прокси'
     },
     login: {
-      type: DataTypes.TEXT,
+      type: DataTypes.STRING(255),
       allowNull: true,
       comment: 'Логин для авторизации'
     },
     password: {
-      type: DataTypes.TEXT,
+      type: DataTypes.STRING(255),
       allowNull: true,
       comment: 'Пароль для авторизации'
     },
@@ -34,6 +49,11 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true,
       field: 'change_ip_url',
+      validate: {
+        isUrl: {
+          msg: 'Неверный формат URL'
+        }
+      },
       comment: 'URL для смены IP'
     },
     dateSetStatusBusy: {
@@ -55,39 +75,154 @@ module.exports = (sequelize) => {
       comment: 'Дата последней смены IP'
     },
     status: {
-      type: DataTypes.TEXT,
-      allowNull: true,
+      type: DataTypes.ENUM('free', 'busy', 'blocked', 'error', 'maintenance'),
+      allowNull: false,
+      defaultValue: 'free',
+      validate: {
+        isIn: {
+          args: [['free', 'busy', 'blocked', 'error', 'maintenance']],
+          msg: 'Недопустимый статус прокси'
+        }
+      },
       comment: 'Статус прокси'
     },
     country: {
-      type: DataTypes.TEXT,
+      type: DataTypes.STRING(100),
       allowNull: true,
+      validate: {
+        len: {
+          args: [2, 100],
+          msg: 'Название страны должно быть от 2 до 100 символов'
+        }
+      },
       comment: 'Страна прокси'
     },
     projectId: {
       type: DataTypes.BIGINT.UNSIGNED,
       allowNull: true,
       field: 'project_id',
+      references: {
+        model: 'projects',
+        key: 'id'
+      },
       comment: 'ID проекта'
     },
-    // Добавляем поля которых нет в БД, но есть в коде
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,
+      validate: {
+        len: {
+          args: [0, 1000],
+          msg: 'Заметки не могут быть длиннее 1000 символов'
+        }
+      },
       comment: 'Заметки'
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+      field: 'created_at'
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+      field: 'updated_at'
     }
   }, {
     tableName: 'proxies',
-    timestamps: false, // В БД нет created_at/updated_at
-    underscored: true
+    timestamps: true,
+    underscored: true,
+    hooks: {
+      beforeUpdate: (proxy) => {
+        proxy.updatedAt = new Date();
+        
+        // Автоматически обновляем даты при смене статуса
+        if (proxy.changed('status')) {
+          const now = new Date();
+          if (proxy.status === 'busy') {
+            proxy.dateSetStatusBusy = now;
+            proxy.dateSetStatusFree = null;
+          } else if (proxy.status === 'free') {
+            proxy.dateSetStatusFree = now;
+            proxy.dateSetStatusBusy = null;
+          }
+        }
+      }
+    },
+    indexes: [
+      {
+        unique: true,
+        fields: ['ip_port'] // Уникальность IP:PORT
+      },
+      {
+        unique: false,
+        fields: ['status'] // Индекс для быстрого поиска по статусу
+      },
+      {
+        unique: false,
+        fields: ['project_id'] // Индекс для связи с проектами
+      },
+      {
+        unique: false,
+        fields: ['country'] // Индекс для фильтрации по стране
+      }
+    ]
   });
 
   Proxy.associate = (models) => {
-    // Используем алиас 'project' для устранения ошибки
+    // Ассоциация с проектом
     Proxy.belongsTo(models.Project, {
       foreignKey: 'projectId',
-      as: 'project' // Указываем алиас явно
+      targetKey: 'id',
+      as: 'project',
+      onDelete: 'SET NULL',
+      onUpdate: 'CASCADE'
     });
+  };
+
+  // Статические методы
+  Proxy.findFree = async function(filters = {}) {
+    const where = { status: 'free' };
+    
+    // Добавляем фильтры
+    if (filters.country) where.country = filters.country;
+    if (filters.protocol) where.protocol = filters.protocol;
+    if (filters.projectId) where.projectId = filters.projectId;
+
+    return this.findAll({
+      where,
+      include: [{
+        model: sequelize.models.Project,
+        as: 'project',
+        attributes: ['id', 'name']
+      }],
+      order: [
+        ['dateSetStatusFree', 'ASC'], // Самые давно освобожденные
+        ['createdAt', 'ASC']
+      ]
+    });
+  };
+
+  Proxy.changeIP = async function(proxyId) {
+    const proxy = await this.findByPk(proxyId);
+    if (!proxy || !proxy.changeIpUrl) {
+      throw new Error('Прокси не найден или URL смены IP не настроен');
+    }
+
+    try {
+      // Здесь должен быть HTTP запрос к API смены IP
+      // const response = await fetch(proxy.changeIpUrl);
+      
+      await proxy.update({
+        dateLastChangeIp: new Date()
+      });
+      
+      return true;
+    } catch (error) {
+      throw new Error('Ошибка смены IP: ' + error.message);
+    }
   };
 
   return Proxy;
