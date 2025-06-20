@@ -1,5 +1,5 @@
-// frontend/src/components/modals/ProxyFormModal.js
-import React, { useState } from 'react'
+// frontend/src/components/forms/ProxyFormModal.js
+import React, { useState, useEffect } from 'react'
 import {
   CModal,
   CModalHeader,
@@ -28,15 +28,15 @@ import {
   cilGlobeAlt,
   cilSettings,
   cilTask,
-  cilPeople,
   cilShieldAlt,
   cilUser,
   cilLockLocked,
+  cilEyedropper
 } from '@coreui/icons'
 import { useForm } from 'react-hook-form'
 import { useCreateProxy, useUpdateProxy } from '../../hooks/useProxies'
 import { useProjects } from '../../hooks/useProjects'
-import { useEntityStatuses } from '../../hooks/useStatuses' // ДОБАВЛЕНО
+import { useEntityStatuses } from '../../hooks/useStatuses'
 
 const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
   const [showPasswords, setShowPasswords] = useState(false)
@@ -45,7 +45,7 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
   const updateMutation = useUpdateProxy()
   const { data: projectsData } = useProjects()
   
-  // ДОБАВЛЕНО: Загружаем статусы для прокси динамически
+  // Загружаем статусы для прокси динамически
   const { data: proxyStatuses, isLoading: statusesLoading } = useEntityStatuses('proxy')
   
   const {
@@ -54,18 +54,48 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
     formState: { errors },
     reset,
     watch,
+    setValue
   } = useForm({
     defaultValues: {
-      ipPort: proxy?.ipPort || '',
-      protocol: proxy?.protocol || 'http',
-      login: proxy?.login || '',
-      password: proxy?.password || '',
-      country: proxy?.country || '',
-      status: proxy?.status || 'free',
-      projectId: proxy?.projectId || '',
-      notes: proxy?.notes || '',
+      ipPort: '',
+      protocol: 'http',
+      login: '',
+      password: '',
+      country: '',
+      status: 'free',
+      projectId: '',
+      notes: '',
     }
   })
+
+  // Обновляем форму при изменении proxy
+  useEffect(() => {
+    if (visible) {
+      if (proxy && isEdit) {
+        // Устанавливаем значения формы из данных прокси
+        setValue('ipPort', proxy.ipPort || '')
+        setValue('protocol', proxy.protocol || 'http')
+        setValue('login', proxy.login || '')
+        setValue('password', proxy.password || '')
+        setValue('country', proxy.country || '')
+        setValue('status', proxy.status || 'free')
+        setValue('projectId', proxy.projectId ? String(proxy.projectId) : '')
+        setValue('notes', proxy.notes || '')
+      } else {
+        // Для нового прокси сбрасываем форму
+        reset({
+          ipPort: '',
+          protocol: 'http',
+          login: '',
+          password: '',
+          country: '',
+          status: 'free',
+          projectId: '',
+          notes: '',
+        })
+      }
+    }
+  }, [proxy, isEdit, visible, setValue, reset])
 
   const watchedStatus = watch('status')
 
@@ -85,7 +115,6 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
         await createMutation.mutateAsync(cleanData)
       }
       
-      reset()
       onClose()
     } catch (error) {
       console.error('Form submission error:', error)
@@ -93,7 +122,6 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
   }
 
   const handleClose = () => {
-    reset()
     onClose()
   }
 
@@ -110,7 +138,7 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
       <CModalHeader>
         <CModalTitle>
           <CIcon icon={cilGlobeAlt} className="me-2" />
-          {isEdit ? 'Редактировать прокси' : 'Добавить прокси'}
+          {isEdit ? `Редактировать прокси ${proxy?.ipPort}` : 'Добавить прокси'}
         </CModalTitle>
       </CModalHeader>
       
@@ -176,25 +204,17 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
                         <CFormLabel htmlFor="status" className="fw-semibold">Статус</CFormLabel>
                         
                         {statusesLoading ? (
-                          <div className="d-flex align-items-center">
-                            <CSpinner size="sm" className="me-2" />
-                            <span className="text-muted">Загрузка...</span>
-                          </div>
+                          <CFormSelect disabled>
+                            <option>Загрузка статусов...</option>
+                          </CFormSelect>
                         ) : (
                           <CFormSelect 
                             id="status" 
                             {...register('status')}
                           >
-                            {proxyStatuses && Object.values(proxyStatuses).map(status => (
+                            {proxyStatuses?.map((status) => (
                               <option key={status} value={status}>
-                                {status === 'free' && '🟢 Свободен'}
-                                {status === 'busy' && '🟡 Занят'}
-                                {status === 'inactive' && '⚪ Неактивен'}
-                                {status === 'banned' && '🔴 Заблокирован'}
-                                {status === 'checking' && '🔍 Проверяется'}
-                                {status === 'error' && '❌ Ошибка'}
-                                {status === 'maintenance' && '🔧 Обслуживание'}
-                                {!['free', 'busy', 'inactive', 'banned', 'checking', 'error', 'maintenance'].includes(status) && `⚪ ${status}`}
+                                {status}
                               </option>
                             ))}
                           </CFormSelect>
@@ -222,7 +242,7 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
               </CCard>
             </CCol>
 
-            {/* Авторизация и проект в одном ряду */}
+            {/* Авторизация и проект */}
             <CCol lg={6} xs={12}>
               <CCard className="mb-3 h-100">
                 <CCardHeader className="py-2">
@@ -260,48 +280,45 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
                         color="outline-secondary"
                         onClick={() => setShowPasswords(!showPasswords)}
                       >
-                        <CIcon icon={showPasswords ? cilLockLocked : cilUser} />
+                        {showPasswords ? '🙈' : '👁️'}
                       </CButton>
                     </CInputGroup>
                   </div>
-
-                  {!watch('login') && !watch('password') && (
-                    <CAlert color="info" className="py-2 mb-0">
-                      <small>
-                        <CIcon icon={cilShieldAlt} className="me-1" />
-                        Оставьте пустым, если авторизация не нужна
-                      </small>
-                    </CAlert>
-                  )}
                 </CCardBody>
               </CCard>
             </CCol>
 
+            {/* Проект */}
             <CCol lg={6} xs={12}>
               <CCard className="mb-3 h-100">
                 <CCardHeader className="py-2">
                   <h6 className="mb-0">
-                    <CIcon icon={cilPeople} className="me-2" />
-                    Управление
+                    <CIcon icon={cilTask} className="me-2" />
+                    Проект
                   </h6>
                 </CCardHeader>
                 <CCardBody className="py-3">
                   <div className="mb-3">
-                    <CFormLabel htmlFor="projectId" className="fw-semibold">Проект</CFormLabel>
-                    <CFormSelect id="projectId" {...register('projectId')}>
+                    <CFormLabel htmlFor="projectId" className="fw-semibold">Назначить проекту</CFormLabel>
+                    <CFormSelect 
+                      id="projectId" 
+                      {...register('projectId')}
+                    >
                       <option value="">Без проекта</option>
-                      {projects.map(project => (
+                      {projects.map((project) => (
                         <option key={project.id} value={project.id}>
                           {project.name}
                         </option>
                       ))}
                     </CFormSelect>
-                    <div className="form-text small">
-                      Выберите проект для привязки
-                    </div>
+                    {projects.length === 0 && (
+                      <div className="form-text small text-warning">
+                        Нет доступных проектов
+                      </div>
+                    )}
                   </div>
 
-                  <div className="mb-0">
+                  <div className="mb-3">
                     <CFormLabel htmlFor="notes" className="fw-semibold">Заметки</CFormLabel>
                     <CFormTextarea
                       id="notes"
@@ -317,17 +334,25 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
         </CModalBody>
 
         <CModalFooter>
-          <CButton color="secondary" onClick={handleClose} disabled={isLoading}>
+          <CButton 
+            color="secondary" 
+            onClick={handleClose}
+            disabled={isLoading}
+          >
             Отмена
           </CButton>
-          <CButton color="primary" type="submit" disabled={isLoading}>
+          <CButton 
+            color="primary" 
+            type="submit"
+            disabled={isLoading}
+          >
             {isLoading ? (
               <>
                 <CSpinner size="sm" className="me-2" />
                 {isEdit ? 'Сохранение...' : 'Создание...'}
               </>
             ) : (
-              isEdit ? 'Сохранить' : 'Создать'
+              isEdit ? 'Сохранить изменения' : 'Создать прокси'
             )}
           </CButton>
         </CModalFooter>

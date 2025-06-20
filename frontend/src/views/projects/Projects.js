@@ -47,7 +47,7 @@ import {
 } from '@coreui/icons'
 import { useEntityList, useEntityCRUD } from '../../hooks/useEntityCRUD'
 import { projectsService } from '../../services/projectsService'
-import { ProjectFormModal } from '../../components/forms'
+import ProjectFormModal from '../../components/forms/ProjectFormModal'
 
 const Projects = () => {
   // Состояние фильтров
@@ -55,7 +55,7 @@ const Projects = () => {
     page: 1, 
     limit: 20,
     search: '',
-    sortBy: 'created_at',
+    sortBy: 'createdAt',
     sortOrder: 'DESC'
   })
 
@@ -69,12 +69,11 @@ const Projects = () => {
   // Выбранные проекты для массовых операций
   const [selectedProjects, setSelectedProjects] = useState([])
 
-  // Используем хук для списка проектов
+  // Загрузка данных
   const {
-    data: projectsArray,
-    pagination,
-    isLoading: isLoadingList,
-    error: listError,
+    data: rawData,
+    isLoading,
+    error,
     refetch
   } = useEntityList('projects', projectsService, filters, {
     keepPreviousData: true,
@@ -100,35 +99,54 @@ const Projects = () => {
     }
   })
 
-  // Отдельный хук для общей статистики
-  const {
-    data: globalStats,
-    isLoading: isLoadingStats
-  } = useEntityList('projects', projectsService, { includeStats: true }, {
-    staleTime: 30 * 1000,
-    select: (data) => {
-      // Вычисляем общую статистику из всех проектов
-      if (!data?.data || !Array.isArray(data.data)) {
-        return { totalProxies: 0, totalPhones: 0, totalProfiles: 0 }
+  // Обработка данных проектов
+  const projects = useMemo(() => {
+    if (!rawData) return []
+    if (Array.isArray(rawData)) return rawData
+    if (rawData.data && Array.isArray(rawData.data)) return rawData.data
+    if (rawData.projects && Array.isArray(rawData.projects)) return rawData.projects
+    return []
+  }, [rawData])
+
+  // Пагинация
+  const pagination = useMemo(() => {
+    if (rawData?.pagination) return rawData.pagination
+    if (rawData?.data?.pagination) return rawData.data.pagination
+    
+    // Создаем пагинацию на основе массива
+    if (Array.isArray(rawData)) {
+      const total = rawData.length
+      const pages = Math.ceil(total / filters.limit)
+      return {
+        page: filters.page,
+        limit: filters.limit,
+        total,
+        pages,
+        hasNext: filters.page < pages,
+        hasPrev: filters.page > 1
       }
-      
-      return data.data.reduce((acc, project) => {
-        if (project.stats) {
-          acc.totalProxies += project.stats.proxies?.total || 0
-          acc.totalPhones += project.stats.phones?.total || 0
-          acc.totalProfiles += project.stats.profiles?.total || 0
-        }
-        return acc
-      }, { totalProxies: 0, totalPhones: 0, totalProfiles: 0 })
     }
-  })
+    
+    return { page: 1, limit: 20, total: 0, pages: 0, hasNext: false, hasPrev: false }
+  }, [rawData, filters.page, filters.limit])
 
-  // Безопасная проверка массива проектов
-  const safeProjectsArray = useMemo(() => {
-    return Array.isArray(projectsArray) ? projectsArray : []
-  }, [projectsArray])
+  // Статистика
+  const stats = useMemo(() => {
+    if (!projects.length) {
+      return { totalProxies: 0, totalPhones: 0, totalProfiles: 0 }
+    }
+    
+    return projects.reduce((acc, project) => {
+      if (project.stats) {
+        acc.totalProxies += project.stats.proxies?.total || 0
+        acc.totalPhones += project.stats.phones?.total || 0
+        acc.totalProfiles += project.stats.profiles?.total || 0
+      }
+      return acc
+    }, { totalProxies: 0, totalPhones: 0, totalProfiles: 0 })
+  }, [projects])
 
-  // Утилиты для модальных окон
+  // Обработчики модальных окон
   const openModal = useCallback((type, data = {}) => {
     setModals(prev => ({
       ...prev,
@@ -165,7 +183,7 @@ const Projects = () => {
     }))
   }, [])
 
-  // Обработчики выбора проектов
+  // Обработчики выбора
   const handleSelectProject = useCallback((projectId) => {
     setSelectedProjects(prev => 
       prev.includes(projectId) 
@@ -176,30 +194,30 @@ const Projects = () => {
 
   const handleSelectAll = useCallback(() => {
     setSelectedProjects(prev => 
-      prev.length === safeProjectsArray.length ? [] : safeProjectsArray.map(p => p.id)
+      prev.length === projects.length ? [] : projects.map(p => p.id)
     )
-  }, [safeProjectsArray])
+  }, [projects])
 
-  // Обработчики CRUD операций
-  const handleCreateProject = useCallback(async (data) => {
+  // CRUD обработчики
+  const handleCreate = useCallback(async (data) => {
     try {
       await create(data)
       closeModal('form')
     } catch (error) {
-      // Ошибка уже обработана в хуке
+      console.error('Create error:', error)
     }
   }, [create, closeModal])
 
-  const handleUpdateProject = useCallback(async (id, data) => {
+  const handleUpdate = useCallback(async (id, data) => {
     try {
       await update({ id, data })
       closeModal('form')
     } catch (error) {
-      // Ошибка уже обработана в хуке
+      console.error('Update error:', error)
     }
   }, [update, closeModal])
 
-  const handleDeleteProject = useCallback(async () => {
+  const handleDelete = useCallback(async () => {
     if (!modals.delete.project) return
     
     try {
@@ -207,7 +225,7 @@ const Projects = () => {
       closeModal('delete')
       setSelectedProjects(prev => prev.filter(id => id !== modals.delete.project.id))
     } catch (error) {
-      // Ошибка уже обработана в хуке
+      console.error('Delete error:', error)
     }
   }, [deleteProject, modals.delete.project, closeModal])
 
@@ -217,41 +235,29 @@ const Projects = () => {
       closeModal('bulkDelete')
       setSelectedProjects([])
     } catch (error) {
-      // Ошибка уже обработана в хуке
+      console.error('Bulk delete error:', error)
     }
   }, [bulkDelete, selectedProjects, closeModal])
 
   // Вычисляемые значения
-  const totalStats = useMemo(() => {
-    return globalStats || { totalProxies: 0, totalPhones: 0, totalProfiles: 0 }
-  }, [globalStats])
+  const sortIcon = filters.sortOrder === 'ASC' ? '↑' : '↓'
+  const isAllSelected = projects.length > 0 && selectedProjects.length === projects.length
+  const isPartiallySelected = selectedProjects.length > 0 && selectedProjects.length < projects.length
 
-  const sortIcon = useMemo(() => {
-    return filters.sortOrder === 'ASC' ? '↑' : '↓'
-  }, [filters.sortOrder])
-
-  const isAllSelected = useMemo(() => {
-    return safeProjectsArray.length > 0 && selectedProjects.length === safeProjectsArray.length
-  }, [safeProjectsArray.length, selectedProjects.length])
-
-  const isPartiallySelected = useMemo(() => {
-    return selectedProjects.length > 0 && selectedProjects.length < safeProjectsArray.length
-  }, [selectedProjects.length, safeProjectsArray.length])
-
-  // Рендер компонентов
-  const renderStatusBadge = useCallback((status, count, variant) => (
-    <CBadge color={variant} className="me-1">
-      {status}: {count}
+  // Рендер бейджа статистики
+  const renderBadge = (label, count, color) => (
+    <CBadge color={color} className="me-1">
+      {label}: {count}
     </CBadge>
-  ), [])
+  )
 
-  const renderPagination = useMemo(() => {
+  // Рендер пагинации
+  const renderPagination = () => {
     if (!pagination || pagination.pages <= 1) return null
 
     const items = []
     const { page, pages } = pagination
 
-    // Первая страница
     if (pages > 0) {
       items.push(
         <CPaginationItem
@@ -264,12 +270,10 @@ const Projects = () => {
       )
     }
 
-    // Предыдущие страницы
     if (page > 3) {
       items.push(<CPaginationItem key="dots1" disabled>...</CPaginationItem>)
     }
 
-    // Текущая и соседние страницы
     for (let i = Math.max(2, page - 1); i <= Math.min(pages - 1, page + 1); i++) {
       items.push(
         <CPaginationItem
@@ -282,12 +286,10 @@ const Projects = () => {
       )
     }
 
-    // Следующие страницы
     if (page < pages - 2) {
       items.push(<CPaginationItem key="dots2" disabled>...</CPaginationItem>)
     }
 
-    // Последняя страница
     if (pages > 1) {
       items.push(
         <CPaginationItem
@@ -302,301 +304,302 @@ const Projects = () => {
     }
 
     return (
-      <CPagination className="justify-content-center mt-3">
+      <CPagination>
         <CPaginationItem
           disabled={page === 1}
           onClick={() => handleFilterChange('page', page - 1)}
         >
-          Назад
+          Предыдущая
         </CPaginationItem>
         {items}
         <CPaginationItem
           disabled={page === pages}
           onClick={() => handleFilterChange('page', page + 1)}
         >
-          Вперед
+          Следующая
         </CPaginationItem>
       </CPagination>
     )
-  }, [pagination, handleFilterChange])
+  }
+
+  // Обработка ошибок
+  if (error) {
+    return (
+      <CAlert color="danger">
+        <h4>Ошибка загрузки проектов</h4>
+        <p>{error.message}</p>
+        <CButton color="primary" onClick={() => refetch()}>
+          <CIcon icon={cilReload} className="me-2" />
+          Попробовать снова
+        </CButton>
+      </CAlert>
+    )
+  }
 
   return (
     <>
-      <CRow>
-        {/* Виджеты статистики */}
+      {/* Статистика */}
+      <CRow className="mb-4">
         <CCol sm={6} lg={3}>
           <CWidgetStatsA
             className="mb-4"
             color="primary"
-            value={pagination?.total || 0}
+            value={projects.length}
             title="Всего проектов"
-            chart={<CIcon icon={cilFolder} height={52} />}
+            action={
+              <CButton
+                color="transparent"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isLoading}
+              >
+                <CIcon icon={cilReload} />
+              </CButton>
+            }
           />
         </CCol>
         <CCol sm={6} lg={3}>
           <CWidgetStatsA
             className="mb-4"
             color="info"
-            value={totalStats.totalProxies}
+            value={stats.totalProxies}
             title="Всего прокси"
-            chart={<CIcon icon={cilGlobeAlt} height={52} />}
+            action={<CIcon icon={cilGlobeAlt} />}
           />
         </CCol>
         <CCol sm={6} lg={3}>
           <CWidgetStatsA
             className="mb-4"
             color="warning"
-            value={totalStats.totalPhones}
+            value={stats.totalPhones}
             title="Всего телефонов"
-            chart={<CIcon icon={cilDevices} height={52} />}
+            action={<CIcon icon={cilDevices} />}
           />
         </CCol>
         <CCol sm={6} lg={3}>
           <CWidgetStatsA
             className="mb-4"
             color="success"
-            value={totalStats.totalProfiles}
+            value={stats.totalProfiles}
             title="Всего профилей"
-            chart={<CIcon icon={cilChart} height={52} />}
+            action={<CIcon icon={cilChart} />}
           />
         </CCol>
       </CRow>
 
-      <CRow>
-        <CCol xs={12}>
-          <CCard className="mb-4">
-            <CCardHeader>
-              <div className="d-flex justify-content-between align-items-center">
-                <h4 className="mb-0">Проекты</h4>
-                
-                <div className="d-flex gap-2">
-                  {/* Поиск */}
-                  <CInputGroup style={{ width: '300px' }}>
-                    <CInputGroupText>
-                      <CIcon icon={cilSearch} />
-                    </CInputGroupText>
-                    <CFormInput
-                      placeholder="Поиск проектов..."
-                      value={filters.search}
-                      onChange={(e) => handleSearch(e.target.value)}
-                    />
-                  </CInputGroup>
-
-                  {/* Массовые действия */}
-                  {selectedProjects.length > 0 && (
-                    <CButtonGroup>
-                      <CTooltip content="Удалить выбранные">
-                        <CButton
-                          color="danger"
-                          variant="outline"
-                          onClick={() => openModal('bulkDelete', { selectedIds: selectedProjects })}
-                          disabled={isBulkDeleting}
-                        >
-                          <CIcon icon={cilTrash} size="sm" />
-                          {selectedProjects.length}
-                        </CButton>
-                      </CTooltip>
-                    </CButtonGroup>
-                  )}
-
-                  {/* Кнопки управления */}
-                  <CButton
-                    color="primary"
-                    onClick={() => openModal('form')}
-                    disabled={isCreating}
-                  >
-                    <CIcon icon={cilPlus} size="sm" className="me-1" />
-                    Создать проект
-                  </CButton>
-
-                  <CButton
-                    color="secondary"
-                    variant="outline"
-                    onClick={refetch}
-                    disabled={isLoadingList}
-                  >
-                    <CIcon icon={cilReload} size="sm" />
-                  </CButton>
-                </div>
-              </div>
-            </CCardHeader>
-
-            <CCardBody>
-              {/* Ошибки */}
-              {listError && (
-                <CAlert color="danger" className="mb-3">
-                  <CIcon icon={cilWarning} className="me-2" />
-                  Ошибка загрузки: {listError.message}
-                </CAlert>
+      {/* Основная карточка */}
+      <CCard>
+        <CCardHeader>
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <h5 className="mb-0">Проекты</h5>
+              <small className="text-body-secondary">
+                Управление проектами системы
+              </small>
+            </div>
+            <div className="d-flex gap-2">
+              {selectedProjects.length > 0 && (
+                <CButton
+                  color="danger"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => openModal('bulkDelete', { selectedIds: selectedProjects })}
+                  disabled={isBulkDeleting}
+                >
+                  <CIcon icon={cilTrash} className="me-1" />
+                  Удалить ({selectedProjects.length})
+                </CButton>
               )}
+              <CButton
+                color="primary"
+                onClick={() => openModal('form')}
+                disabled={isCreating}
+              >
+                <CIcon icon={cilPlus} className="me-2" />
+                Создать проект
+              </CButton>
+            </div>
+          </div>
+        </CCardHeader>
 
-              {/* Таблица */}
-              <CTable hover responsive>
+        <CCardBody>
+          {/* Поиск и фильтры */}
+          <CRow className="mb-3">
+            <CCol md={6}>
+              <CInputGroup>
+                <CInputGroupText>
+                  <CIcon icon={cilSearch} />
+                </CInputGroupText>
+                <CFormInput
+                  placeholder="Поиск проектов..."
+                  value={filters.search}
+                  onChange={(e) => handleSearch(e.target.value)}
+                />
+              </CInputGroup>
+            </CCol>
+            <CCol md={6} className="d-flex justify-content-end">
+              <CButton
+                color="secondary"
+                variant="outline"
+                size="sm"
+                onClick={() => refetch()}
+                disabled={isLoading}
+              >
+                <CIcon icon={cilReload} className="me-1" />
+                Обновить
+              </CButton>
+            </CCol>
+          </CRow>
+
+          {/* Таблица */}
+          {isLoading ? (
+            <div className="text-center py-4">
+              <CSpinner color="primary" />
+              <div className="mt-2">Загрузка проектов...</div>
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="text-center py-4">
+              <CIcon icon={cilFolder} size="xxl" className="text-body-tertiary mb-3" />
+              <h5>Проекты не найдены</h5>
+              <p className="text-body-secondary">
+                {filters.search ? 'Попробуйте изменить параметры поиска' : 'Создайте первый проект'}
+              </p>
+            </div>
+          ) : (
+            <>
+              <CTable responsive hover>
                 <CTableHead>
                   <CTableRow>
-                    <CTableHeaderCell style={{ width: '50px' }}>
+                    <CTableHeaderCell style={{ width: '40px' }}>
                       <CFormCheck
                         checked={isAllSelected}
                         indeterminate={isPartiallySelected}
                         onChange={handleSelectAll}
                       />
                     </CTableHeaderCell>
-                    <CTableHeaderCell 
+                    <CTableHeaderCell
                       style={{ cursor: 'pointer' }}
                       onClick={() => handleSort('name')}
                     >
                       Название {filters.sortBy === 'name' && sortIcon}
                     </CTableHeaderCell>
                     <CTableHeaderCell>Описание</CTableHeaderCell>
-                    <CTableHeaderCell>Ресурсы</CTableHeaderCell>
-                    <CTableHeaderCell 
+                    <CTableHeaderCell>Статистика</CTableHeaderCell>
+                    <CTableHeaderCell
                       style={{ cursor: 'pointer' }}
-                      onClick={() => handleSort('created_at')}
+                      onClick={() => handleSort('createdAt')}
                     >
-                      Создан {filters.sortBy === 'created_at' && sortIcon}
+                      Создан {filters.sortBy === 'createdAt' && sortIcon}
                     </CTableHeaderCell>
-                    <CTableHeaderCell style={{ width: '120px' }}>Действия</CTableHeaderCell>
+                    <CTableHeaderCell style={{ width: '100px' }}>Действия</CTableHeaderCell>
                   </CTableRow>
                 </CTableHead>
                 <CTableBody>
-                  {isLoadingList ? (
-                    <CTableRow>
-                      <CTableDataCell colSpan="6" className="text-center py-4">
-                        <CSpinner />
-                        <div className="mt-2">Загрузка проектов...</div>
+                  {projects.map((project) => (
+                    <CTableRow key={project.id}>
+                      <CTableDataCell>
+                        <CFormCheck
+                          checked={selectedProjects.includes(project.id)}
+                          onChange={() => handleSelectProject(project.id)}
+                        />
                       </CTableDataCell>
-                    </CTableRow>
-                  ) : safeProjectsArray.length === 0 ? (
-                    <CTableRow>
-                      <CTableDataCell colSpan="6" className="text-center py-4 text-muted">
-                        {filters.search ? 'Проекты не найдены' : 'Нет проектов'}
-                      </CTableDataCell>
-                    </CTableRow>
-                  ) : (
-                    safeProjectsArray.map((project) => (
-                      <CTableRow key={project.id}>
-                        <CTableDataCell>
-                          <CFormCheck
-                            checked={selectedProjects.includes(project.id)}
-                            onChange={() => handleSelectProject(project.id)}
-                          />
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          <div>
-                            <strong>{project.name}</strong>
-                            {project.transliterateName && (
-                              <div className="text-muted small">
-                                {project.transliterateName}
-                              </div>
-                            )}
-                          </div>
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {project.description ? (
-                            <span title={project.description}>
-                              {project.description.length > 50
-                                ? `${project.description.substring(0, 50)}...`
-                                : project.description
-                              }
-                            </span>
-                          ) : (
-                            <span className="text-muted">-</span>
-                          )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          {project.stats ? (
-                            <div>
-                              {renderStatusBadge('Прокси', project.stats.proxies?.total || 0, 'info')}
-                              {renderStatusBadge('Телефоны', project.stats.phones?.total || 0, 'warning')}
-                              {renderStatusBadge('Профили', project.stats.profiles?.total || 0, 'success')}
+                      <CTableDataCell>
+                        <div>
+                          <strong>{project.name}</strong>
+                          {project.transliterateName && (
+                            <div className="text-body-secondary small">
+                              {project.transliterateName}
                             </div>
-                          ) : (
-                            <span className="text-muted">-</span>
                           )}
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          <small className="text-muted">
-                            {project.createdAt ? 
-                              new Date(project.createdAt).toLocaleDateString('ru-RU') : 
-                              '-'
-                            }
-                          </small>
-                        </CTableDataCell>
-                        <CTableDataCell>
-                          <CButtonGroup size="sm">
-                            <CTooltip content="Редактировать">
-                              <CButton
-                                color="primary"
-                                variant="outline"
-                                onClick={() => openModal('form', { project })}
-                                disabled={isUpdating}
-                              >
-                                <CIcon icon={cilPencil} size="sm" />
-                              </CButton>
-                            </CTooltip>
-                            <CTooltip content="Удалить">
-                              <CButton
-                                color="danger"
-                                variant="outline"
-                                onClick={() => openModal('delete', { project })}
-                                disabled={isDeleting}
-                              >
-                                <CIcon icon={cilTrash} size="sm" />
-                              </CButton>
-                            </CTooltip>
-                          </CButtonGroup>
-                        </CTableDataCell>
-                      </CTableRow>
-                    ))
-                  )}
+                        </div>
+                      </CTableDataCell>
+                      <CTableDataCell>
+                        {project.description || (
+                          <span className="text-body-tertiary">Нет описания</span>
+                        )}
+                      </CTableDataCell>
+                      <CTableDataCell>
+                        {project.stats ? (
+                          <div>
+                            {renderBadge('Прокси', project.stats.proxies?.total || 0, 'primary')}
+                            {renderBadge('Телефоны', project.stats.phones?.total || 0, 'info')}
+                            {renderBadge('Профили', project.stats.profiles?.total || 0, 'success')}
+                          </div>
+                        ) : (
+                          <span className="text-body-tertiary">Нет данных</span>
+                        )}
+                      </CTableDataCell>
+                      <CTableDataCell>
+                        <small className="text-body-secondary">
+                          {new Date(project.createdAt).toLocaleDateString('ru-RU')}
+                        </small>
+                      </CTableDataCell>
+                      <CTableDataCell>
+                        <CButtonGroup size="sm">
+                          <CTooltip content="Редактировать">
+                            <CButton
+                              color="primary"
+                              variant="ghost"
+                              onClick={() => openModal('form', { project })}
+                              disabled={isUpdating}
+                            >
+                              <CIcon icon={cilPencil} />
+                            </CButton>
+                          </CTooltip>
+                          <CTooltip content="Удалить">
+                            <CButton
+                              color="danger"
+                              variant="ghost"
+                              onClick={() => openModal('delete', { project })}
+                              disabled={isDeleting}
+                            >
+                              <CIcon icon={cilTrash} />
+                            </CButton>
+                          </CTooltip>
+                        </CButtonGroup>
+                      </CTableDataCell>
+                    </CTableRow>
+                  ))}
                 </CTableBody>
               </CTable>
 
               {/* Пагинация */}
-              {renderPagination}
-            </CCardBody>
-          </CCard>
-        </CCol>
-      </CRow>
+              {renderPagination()}
+            </>
+          )}
+        </CCardBody>
+      </CCard>
 
-      {/* Модальное окно создания/редактирования */}
-      <ProjectFormModal
-        visible={modals.form.visible}
-        onClose={() => closeModal('form')}
-        project={modals.form.project}
-        onSave={modals.form.project ? 
-          (data) => handleUpdateProject(modals.form.project.id, data) : 
-          handleCreateProject
-        }
-        isLoading={isCreating || isUpdating}
-      />
+      {/* Модальные окна */}
+      {modals.form.visible && (
+        <ProjectFormModal
+          visible={modals.form.visible}
+          project={modals.form.project}
+          onClose={() => closeModal('form')}
+          onSubmit={modals.form.project ? handleUpdate : handleCreate}
+          isLoading={isCreating || isUpdating}
+        />
+      )}
 
-      {/* Модальное окно подтверждения удаления */}
+      {/* Модальное окно удаления */}
       <CModal
         visible={modals.delete.visible}
         onClose={() => closeModal('delete')}
-        alignment="center"
+        size="sm"
       >
         <CModalHeader>
           <CModalTitle>Подтверждение удаления</CModalTitle>
         </CModalHeader>
         <CModalBody>
-          <div className="d-flex align-items-center mb-3">
-            <CIcon icon={cilWarning} className="text-warning me-2" size="lg" />
-            <span>Вы уверены, что хотите удалить проект?</span>
-          </div>
-          {modals.delete.project && (
-            <div className="bg-light p-3 rounded">
-              <strong>{modals.delete.project.name}</strong>
-              {modals.delete.project.description && (
-                <div className="text-muted mt-1">
-                  {modals.delete.project.description}
-                </div>
-              )}
-            </div>
-          )}
-          <div className="mt-3 text-muted">
-            <small>Все связанные ресурсы будут отвязаны от проекта.</small>
+          <div className="text-center">
+            <CIcon icon={cilWarning} size="xxl" className="text-warning mb-3" />
+            <p>
+              Вы уверены, что хотите удалить проект{' '}
+              <strong>{modals.delete.project?.name}</strong>?
+            </p>
+            <p className="text-body-secondary small">
+              Это действие нельзя отменить.
+            </p>
           </div>
         </CModalBody>
         <CModalFooter>
@@ -609,17 +612,10 @@ const Projects = () => {
           </CButton>
           <CButton
             color="danger"
-            onClick={handleDeleteProject}
+            onClick={handleDelete}
             disabled={isDeleting}
           >
-            {isDeleting ? (
-              <>
-                <CSpinner size="sm" className="me-1" />
-                Удаление...
-              </>
-            ) : (
-              'Удалить'
-            )}
+            {isDeleting ? <CSpinner size="sm" /> : 'Удалить'}
           </CButton>
         </CModalFooter>
       </CModal>
@@ -628,22 +624,20 @@ const Projects = () => {
       <CModal
         visible={modals.bulkDelete.visible}
         onClose={() => closeModal('bulkDelete')}
-        alignment="center"
+        size="sm"
       >
         <CModalHeader>
           <CModalTitle>Массовое удаление</CModalTitle>
         </CModalHeader>
         <CModalBody>
-          <div className="d-flex align-items-center mb-3">
-            <CIcon icon={cilWarning} className="text-warning me-2" size="lg" />
-            <span>
-              Вы уверены, что хотите удалить {selectedProjects.length} 
-              {selectedProjects.length === 1 ? ' проект' : 
-               selectedProjects.length < 5 ? ' проекта' : ' проектов'}?
-            </span>
-          </div>
-          <div className="text-muted">
-            <small>Все связанные ресурсы будут отвязаны от проектов.</small>
+          <div className="text-center">
+            <CIcon icon={cilWarning} size="xxl" className="text-warning mb-3" />
+            <p>
+              Вы уверены, что хотите удалить {selectedProjects.length} проектов?
+            </p>
+            <p className="text-body-secondary small">
+              Это действие нельзя отменить.
+            </p>
           </div>
         </CModalBody>
         <CModalFooter>
@@ -659,14 +653,7 @@ const Projects = () => {
             onClick={handleBulkDelete}
             disabled={isBulkDeleting}
           >
-            {isBulkDeleting ? (
-              <>
-                <CSpinner size="sm" className="me-1" />
-                Удаление...
-              </>
-            ) : (
-              'Удалить все'
-            )}
+            {isBulkDeleting ? <CSpinner size="sm" /> : 'Удалить все'}
           </CButton>
         </CModalFooter>
       </CModal>

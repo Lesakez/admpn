@@ -24,10 +24,25 @@ router.put('/:id', validateProjectUpdate, projectController.updateProject);
 // DELETE /api/projects/:id - удалить проект
 router.delete('/:id', projectController.deleteProject);
 
+// DELETE /api/projects/bulk - массовое удаление проектов
+router.delete('/bulk', projectController.bulkDeleteProjects);
+
+// PUT /api/projects/bulk - массовое обновление проектов
+router.put('/bulk', projectController.bulkUpdateProjects);
+
 // POST /api/projects/:id/assign - массово назначить ресурсы проекту
 router.post('/:id/assign', projectController.assignResources);
 
 // POST /api/projects/:id/unassign - отвязать ресурсы от проекта
 router.post('/:id/unassign', projectController.unassignResources);
+
+// GET /api/projects/autocomplete - автокомплит для поиска проектов
+router.get('/autocomplete', projectController.autocompleteProjects);
+
+// POST /api/projects/export - экспорт проектов
+router.post('/export', projectController.exportProjects);
+
+// POST /api/projects/import - импорт проектов
+router.post('/import', projectController.importProjects);
 
 module.exports = router;

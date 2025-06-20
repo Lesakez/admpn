@@ -90,7 +90,7 @@ export function useEntityCRUD(entityName, service, options = {}) {
 
   // Массовое удаление
   const bulkDeleteMutation = useMutation({
-    mutationFn: (ids) => service.bulkDelete(ids),
+    mutationFn: (ids) => service.bulkDelete?.(ids),
     onSuccess: (response, variables) => {
       invalidateQueries.forEach(query => {
         queryClient.invalidateQueries([query])
@@ -114,7 +114,7 @@ export function useEntityCRUD(entityName, service, options = {}) {
 
   // Массовое обновление
   const bulkUpdateMutation = useMutation({
-    mutationFn: ({ ids, data }) => service.bulkUpdate(ids, data),
+    mutationFn: ({ ids, data }) => service.bulkUpdate?.(ids, data),
     onSuccess: (response, variables) => {
       invalidateQueries.forEach(query => {
         queryClient.invalidateQueries([query])
@@ -174,7 +174,7 @@ export function useEntityList(entityName, service, filters = {}, options = {}) {
   const {
     enabled = true,
     staleTime = 5 * 60 * 1000, // 5 минут
-    gcTime = 10 * 60 * 1000, // 10 минут (было cacheTime)
+    gcTime = 10 * 60 * 1000, // 10 минут
     refetchOnWindowFocus = false,
     keepPreviousData = true,
     ...queryOptions
@@ -192,29 +192,91 @@ export function useEntityList(entityName, service, filters = {}, options = {}) {
     refetchOnWindowFocus,
     placeholderData: keepPreviousData ? (previousData) => previousData : undefined,
     select: useCallback((data) => {
-      // Нормализуем структуру ответа
+      // Проверяем различные структуры ответа
       if (data?.data?.data) {
-        return {
-          data: data.data.data,
-          pagination: data.data.pagination,
-          stats: data.data.stats
+        // Если есть вложенная структура data.data.data
+        if (data.data.data.projects && Array.isArray(data.data.data.projects)) {
+          return {
+            data: data.data.data.projects,
+            pagination: data.data.data.pagination,
+            stats: data.data.data.stats
+          }
+        }
+        
+        if (Array.isArray(data.data.data)) {
+          return {
+            data: data.data.data,
+            pagination: data.data.pagination,
+            stats: data.data.stats
+          }
         }
       }
+      
       if (data?.data) {
+        // Если есть data.data
+        if (data.data.projects && Array.isArray(data.data.projects)) {
+          return {
+            data: data.data.projects,
+            pagination: data.data.pagination,
+            stats: data.data.stats
+          }
+        }
+        
+        // Если data.data - это массив
+        if (Array.isArray(data.data)) {
+          return {
+            data: data.data,
+            pagination: data.pagination,
+            stats: data.stats
+          }
+        }
+        
+        // Если data.data - объект с данными
+        if (data.data.data) {
+          return {
+            data: Array.isArray(data.data.data) ? data.data.data : [],
+            pagination: data.data.pagination,
+            stats: data.data.stats
+          }
+        }
+        
+        // Если data.data - простой объект
         return {
-          data: Array.isArray(data.data) ? data.data : data.data.data || [],
-          pagination: data.data.pagination,
-          stats: data.data.stats
+          data: Array.isArray(data.data) ? data.data : [],
+          pagination: data.pagination,
+          stats: data.stats
         }
       }
+      
+      // Если data - массив
+      if (Array.isArray(data)) {
+        return {
+          data: data,
+          pagination: null,
+          stats: null
+        }
+      }
+      
+      // Если есть projects на верхнем уровне
+      if (data?.projects && Array.isArray(data.projects)) {
+        return {
+          data: data.projects,
+          pagination: data.pagination,
+          stats: data.stats
+        }
+      }
+      
+      // Возвращаем пустую структуру по умолчанию
       return {
-        data: Array.isArray(data) ? data : [],
+        data: [],
         pagination: null,
         stats: null
       }
     }, []),
     ...queryOptions
   })
+
+  console.log('useEntityList result - data count:', query.data?.data?.length || 0)
 
   return {
     ...query,
