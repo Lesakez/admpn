@@ -1,195 +1,121 @@
+// backend/src/models/Activity.js
 const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
-  const Account = sequelize.define('Account', {
+  const Activity = sequelize.define('Activity', {
     id: {
       type: DataTypes.BIGINT.UNSIGNED,
       primaryKey: true,
       autoIncrement: true
     },
-    login: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'Логин аккаунта'
-    },
-    password: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'Пароль аккаунта'
-    },
-    email: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'Email аккаунта'
-    },
-    emailPassword: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'email_password',
-      comment: 'Пароль от email'
-    },
-    userAgent: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'user_agent',
-      comment: 'User Agent'
-    },
-    twoFa: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'two_fa',
-      comment: '2FA данные'
-    },
-    dob: {
+    timestamp: {
       type: DataTypes.DATE(3),
-      allowNull: true,
-      comment: 'Дата рождения'
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+      comment: 'Время события'
     },
-    nameProfiles: {
-      type: DataTypes.TEXT('long'),
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+      comment: 'Описание действия'
+    },
+    entityType: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      field: 'entity_type',
+      comment: 'Тип сущности (proxy, account, profile, etc.)'
+    },
+    entityId: {
+      type: DataTypes.BIGINT.UNSIGNED,
       allowNull: true,
-      field: 'name_profiles',
-      comment: 'Имена профилей'
+      field: 'entity_id',
+      comment: 'ID сущности'
+    },
+    actionType: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      field: 'action_type',
+      comment: 'Тип действия (create, update, delete, etc.)'
     },
     userId: {
-      type: DataTypes.TEXT('long'),
+      type: DataTypes.BIGINT.UNSIGNED,
       allowNull: true,
       field: 'user_id',
-      comment: 'User ID'
+      comment: 'ID пользователя'
     },
-    cookies: {
-      type: DataTypes.TEXT('long'),
+    metadata: {
+      type: DataTypes.JSON,
       allowNull: true,
-      comment: 'Cookies'
-    },
-    status: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'Статус аккаунта'
-    },
-    friendsCounts: {
-      type: DataTypes.BIGINT,
-      allowNull: true,
-      field: 'friends_counts',
-      comment: 'Количество друзей'
-    },
-    note: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'Заметка'
-    },
-    statusCheck: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'status_check',
-      comment: 'Статус проверки'
-    },
-    eaab: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'EAAB токен'
-    },
-    namePage: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'name_page',
-      comment: 'Название страницы'
-    },
-    data: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'Дополнительные данные'
-    },
-    dataRegistration: {
-      type: DataTypes.DATE(3),
-      allowNull: true,
-      field: 'data_registration',
-      comment: 'Дата регистрации'
-    },
-    idActive: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'id_active',
-      comment: 'ID активности'
-    },
-    counter: {
-      type: DataTypes.BIGINT,
-      allowNull: true,
-      comment: 'Счетчик'
-    },
-    code: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'Код'
-    },
-    device: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      comment: 'Устройство'
-    },
-    emailJsonData: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'email_json_data',
-      comment: 'JSON данные email'
-    },
-    lsposedJson: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'ls_posed_json',
-      comment: 'LSPosed JSON данные'
-    },
-    accessToken: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'access_token',
-      comment: 'Access token'
-    },
-    clientId: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'client_id',
-      comment: 'Client ID'
-    },
-    refreshToken: {
-      type: DataTypes.TEXT('long'),
-      allowNull: true,
-      field: 'refresh_token',
-      comment: 'Refresh token'
+      comment: 'Дополнительные данные в JSON формате'
     },
     createdAt: {
       type: DataTypes.DATE(3),
-      allowNull: true,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
       field: 'created_at'
     },
     updatedAt: {
       type: DataTypes.DATE(3),
-      allowNull: true,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
       field: 'updated_at'
     }
   }, {
-    tableName: 'accounts',
-    timestamps: false, // Отключаем автоматическое управление timestamps
+    tableName: 'activities',
+    timestamps: true,
     underscored: true,
+    
     indexes: [
       {
-        fields: ['login']
+        fields: ['timestamp']
       },
       {
-        fields: ['email']
+        fields: ['entity_type', 'entity_id']
       },
       {
-        fields: ['status']
+        fields: ['action_type']
       },
       {
-        fields: ['created_at']
+        fields: ['user_id']
       }
     ]
   });
 
-  Account.associate = (models) => {
-    // Связи можно добавить позже при необходимости
+  // Методы модели
+  Activity.addHook('beforeCreate', (activity) => {
+    if (!activity.timestamp) {
+      activity.timestamp = new Date();
+    }
+  });
+
+  // Статические методы для удобства
+  Activity.logActivity = async function(entityType, entityId, actionType, description, userId = null, metadata = null) {
+    try {
+      return await this.create({
+        timestamp: new Date(),
+        description,
+        entityType,
+        entityId,
+        actionType,
+        userId,
+        metadata
+      });
+    } catch (error) {
+      console.error('Failed to log activity:', error);
+      throw error;
+    }
   };
 
-  return Account;
+  Activity.getRecentByEntity = async function(entityType, entityId, limit = 10) {
+    return await this.findAll({
+      where: {
+        entityType,
+        entityId
+      },
+      order: [['timestamp', 'DESC']],
+      limit
+    });
+  };
+
+  return Activity;
 };

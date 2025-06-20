@@ -51,9 +51,16 @@ import {
   cilFilter,
   cilLayers,
   cilToggleOn,
+  cilToggleOff,
   cilWarning
 } from '@coreui/icons'
-import { useProxies, useDeleteProxy, useBulkDeleteProxies } from '../../hooks/useProxies'
+import { 
+  useProxies, 
+  useDeleteProxy, 
+  useBulkDeleteProxies, 
+  useToggleProxyStatus, 
+  useChangeProxyIP 
+} from '../../hooks/useProxies'
 import { useProjects } from '../../hooks/useProjects'
 import { ProxyFormModal } from '../../components/forms'
 
@@ -73,6 +80,8 @@ const Proxies = () => {
   const { data: projectsData } = useProjects()
   const deleteMutation = useDeleteProxy()
   const bulkDeleteMutation = useBulkDeleteProxies()
+  const toggleStatusMutation = useToggleProxyStatus()
+  const changeIPMutation = useChangeProxyIP()
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
@@ -100,6 +109,23 @@ const Proxies = () => {
       } catch (error) {
         console.error('Delete error:', error)
       }
+    }
+  }
+
+  // Быстрые действия
+  const handleToggleStatus = async (proxy) => {
+    try {
+      await toggleStatusMutation.mutateAsync(proxy.id)
+    } catch (error) {
+      console.error('Toggle status error:', error)
+    }
+  }
+
+  const handleChangeIP = async (proxy) => {
+    try {
+      await changeIPMutation.mutateAsync(proxy.id)
+    } catch (error) {
+      console.error('Change IP error:', error)
     }
   }
 
@@ -287,7 +313,7 @@ const Proxies = () => {
                     <CTableHeaderCell>Статус</CTableHeaderCell>
                     <CTableHeaderCell>Страна</CTableHeaderCell>
                     <CTableHeaderCell>Проект</CTableHeaderCell>
-                    <CTableHeaderCell style={{ width: '100px' }}>Действия</CTableHeaderCell>
+                    <CTableHeaderCell style={{ width: '180px' }}>Действия</CTableHeaderCell>
                   </CTableRow>
                 </CTableHead>
                 <CTableBody>
@@ -341,6 +367,43 @@ const Proxies = () => {
                       </CTableDataCell>
                       <CTableDataCell>
                         <CButtonGroup size="sm">
+                          {/* Кнопка переключения статуса */}
+                          <CTooltip 
+                            content={proxy.status === 'free' ? 'Установить статус "занят"' : 'Установить статус "свободен"'}
+                          >
+                            <CButton
+                              color={proxy.status === 'free' ? 'warning' : 'success'}
+                              variant="ghost"
+                              onClick={() => handleToggleStatus(proxy)}
+                              disabled={toggleStatusMutation.isLoading}
+                            >
+                              {toggleStatusMutation.isLoading ? (
+                                <CSpinner size="sm" />
+                              ) : (
+                                <CIcon icon={proxy.status === 'free' ? cilToggleOff : cilToggleOn} />
+                              )}
+                            </CButton>
+                          </CTooltip>
+
+                          {/* Кнопка смены IP */}
+                          {proxy.changeIpUrl && (
+                            <CTooltip content="Сменить IP">
+                              <CButton
+                                color="info"
+                                variant="ghost"
+                                onClick={() => handleChangeIP(proxy)}
+                                disabled={changeIPMutation.isLoading}
+                              >
+                                {changeIPMutation.isLoading ? (
+                                  <CSpinner size="sm" />
+                                ) : (
+                                  <CIcon icon={cilReload} />
+                                )}
+                              </CButton>
+                            </CTooltip>
+                          )}
+
+                          {/* Кнопка редактирования */}
                           <CTooltip content="Редактировать">
                             <CButton
                               color="primary"
@@ -350,6 +413,8 @@ const Proxies = () => {
                               <CIcon icon={cilPencil} />
                             </CButton>
                           </CTooltip>
+
+                          {/* Кнопка удаления */}
                           <CTooltip content="Удалить">
                             <CButton
                               color="danger"

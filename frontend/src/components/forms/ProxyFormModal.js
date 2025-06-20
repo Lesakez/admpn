@@ -31,7 +31,8 @@ import {
   cilShieldAlt,
   cilUser,
   cilLockLocked,
-  cilEyedropper
+  cilEyedropper,
+  cilLink
 } from '@coreui/icons'
 import { useForm } from 'react-hook-form'
 import { useCreateProxy, useUpdateProxy } from '../../hooks/useProxies'
@@ -46,7 +47,7 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
   const { data: projectsData } = useProjects()
   
   // Загружаем статусы для прокси динамически
-  const { data: proxyStatuses, isLoading: statusesLoading } = useEntityStatuses('proxy')
+  const { data: proxyStatusesResponse, isLoading: statusesLoading } = useEntityStatuses('proxy')
   
   const {
     register,
@@ -65,8 +66,38 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
       status: 'free',
       projectId: '',
       notes: '',
+      changeIpUrl: '', // Добавляем поле для ссылки смены IP
     }
   })
+
+  // Обработка статусов - исправляем ошибку map
+  const getStatusOptions = () => {
+    if (!proxyStatusesResponse) return ['free', 'busy', 'inactive', 'banned', 'error', 'checking', 'maintenance']
+    
+    // Если это объект с полем statuses
+    if (proxyStatusesResponse.statuses) {
+      const statuses = proxyStatusesResponse.statuses
+      if (Array.isArray(statuses)) {
+        return statuses
+      }
+      if (typeof statuses === 'object') {
+        return Object.values(statuses)
+      }
+    }
+    
+    // Если это прямой объект статусов
+    if (typeof proxyStatusesResponse === 'object' && !Array.isArray(proxyStatusesResponse)) {
+      return Object.values(proxyStatusesResponse)
+    }
+    
+    // Если это массив
+    if (Array.isArray(proxyStatusesResponse)) {
+      return proxyStatusesResponse
+    }
+    
+    // Fallback статусы
+    return ['free', 'busy', 'inactive', 'banned', 'error', 'checking', 'maintenance']
+  }
 
   // Обновляем форму при изменении proxy
   useEffect(() => {
@@ -81,6 +112,7 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
         setValue('status', proxy.status || 'free')
         setValue('projectId', proxy.projectId ? String(proxy.projectId) : '')
         setValue('notes', proxy.notes || '')
+        setValue('changeIpUrl', proxy.changeIpUrl || '') // Устанавливаем ссылку смены IP
       } else {
         // Для нового прокси сбрасываем форму
         reset({
@@ -92,6 +124,7 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
           status: 'free',
           projectId: '',
           notes: '',
+          changeIpUrl: '',
         })
       }
     }
@@ -212,7 +245,7 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
                             id="status" 
                             {...register('status')}
                           >
-                            {proxyStatuses?.map((status) => (
+                            {getStatusOptions().map((status) => (
                               <option key={status} value={status}>
                                 {status}
                               </option>
@@ -234,6 +267,35 @@ const ProxyFormModal = ({ visible, onClose, proxy = null, isEdit = false }) => {
                         />
                         <div className="form-text small">
                           Код страны (2 символа)
+                        </div>
+                      </div>
+                    </CCol>
+
+                    {/* Ссылка для смены IP */}
+                    <CCol lg={12}>
+                      <div className="mb-3">
+                        <CFormLabel htmlFor="changeIpUrl" className="fw-semibold">Ссылка для смены IP</CFormLabel>
+                        <CInputGroup>
+                          <CInputGroupText>
+                            <CIcon icon={cilLink} />
+                          </CInputGroupText>
+                          <CFormInput
+                            id="changeIpUrl"
+                            placeholder="https://example.com/change-ip?token=..."
+                            {...register('changeIpUrl', {
+                              pattern: {
+                                value: /^https?:\/\/.+/,
+                                message: 'Введите корректный URL (начинающийся с http:// или https://)'
+                              }
+                            })}
+                            invalid={!!errors.changeIpUrl}
+                          />
+                        </CInputGroup>
+                        {errors.changeIpUrl && (
+                          <div className="invalid-feedback d-block">{errors.changeIpUrl.message}</div>
+                        )}
+                        <div className="form-text small">
+                          URL для автоматической смены IP прокси (необязательно)
                         </div>
                       </div>
                     </CCol>

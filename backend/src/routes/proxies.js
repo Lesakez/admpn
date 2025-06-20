@@ -1,3 +1,4 @@
+// backend/src/routes/proxies.js
 const express = require('express');
 const proxyController = require('../controllers/proxyController');
 const { validateProxy } = require('../validators/proxyValidator');
@@ -7,7 +8,7 @@ const router = express.Router();
 // GET /api/proxies - получить список прокси
 router.get('/', proxyController.getProxies);
 
-// GET /api/proxies/stats - статистика прокси (ДОБАВЛЕНО)
+// GET /api/proxies/stats - статистика прокси
 router.get('/stats', proxyController.getProxyStats);
 
 // GET /api/proxies/:id - получить прокси по ID
@@ -24,6 +25,9 @@ router.delete('/:id', proxyController.deleteProxy);
 
 // POST /api/proxies/:id/toggle-status - переключить статус прокси
 router.post('/:id/toggle-status', proxyController.toggleProxyStatus);
+
+// POST /api/proxies/:id/change-ip - сменить IP прокси (НОВЫЙ ЭНДПОИНТ)
+router.post('/:id/change-ip', proxyController.changeProxyIP);
 
 // POST /api/proxies/bulk-delete - массовое удаление
 router.post('/bulk-delete', proxyController.bulkDeleteProxies);

@@ -1,3 +1,4 @@
+// frontend/src/services/proxiesService.js
 import api from './api'
 
 export const proxiesService = {
@@ -33,10 +34,10 @@ export const proxiesService = {
   // Получить статистику
   getStats: () => api.get('/proxies/stats'),
 
-  // Переключить статус
-  toggleStatus: (id) => api.post(`/proxies/${id}/toggle`),
+  // ИСПРАВЛЕНО: Переключить статус (правильный эндпоинт)
+  toggleStatus: (id) => api.post(`/proxies/${id}/toggle-status`),
 
-  // Сменить IP
+  // ИСПРАВЛЕНО: Сменить IP (используем новый эндпоинт)
   changeIP: (id) => api.post(`/proxies/${id}/change-ip`),
 
   // Массовые операции

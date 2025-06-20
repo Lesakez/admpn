@@ -60,6 +60,8 @@ const getProxies = async (req, res, next) => {
         name: proxy.project.name
       } : null,
       notes: proxy.notes,
+      changeIpUrl: proxy.changeIpUrl, // Добавляем changeIpUrl в ответ
+      dateLastChangeIp: proxy.dateLastChangeIp,
       createdAt: proxy.createdAt,
       updatedAt: proxy.updatedAt
     }));
@@ -120,6 +122,8 @@ const getProxy = async (req, res, next) => {
           name: proxy.project.name
         } : null,
         notes: proxy.notes,
+        changeIpUrl: proxy.changeIpUrl,
+        dateLastChangeIp: proxy.dateLastChangeIp,
         createdAt: proxy.createdAt,
         updatedAt: proxy.updatedAt
       }
@@ -261,6 +265,132 @@ const toggleProxyStatus = async (req, res, next) => {
       data: proxy
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+// Сменить IP прокси
+const changeProxyIP = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const proxy = await Proxy.findByPk(id);
+    
+    if (!proxy) {
+      return res.status(404).json({
+        success: false,
+        error: 'Прокси не найден'
+      });
+    }
+
+    if (!proxy.changeIpUrl) {
+      return res.status(400).json({
+        success: false,
+        error: 'URL для смены IP не настроен для этого прокси'
+      });
+    }
+
+    try {
+      // Выполняем HTTP запрос по ссылке смены IP
+      const https = require('https');
+      const http = require('http');
+      const url = require('url');
+      
+      const parsedUrl = url.parse(proxy.changeIpUrl);
+      const client = parsedUrl.protocol === 'https:' ? https : http;
+      
+      logger.info('Attempting to change IP', { 
+        proxyId: proxy.id, 
+        changeIpUrl: proxy.changeIpUrl 
+      });
+      
+      const responseData = await new Promise((resolve, reject) => {
+        const request = client.request(parsedUrl, (response) => {
+          let data = '';
+          
+          response.on('data', chunk => {
+            data += chunk;
+          });
+          
+          response.on('end', () => {
+            if (response.statusCode >= 200 && response.statusCode < 300) {
+              logger.info('IP change request successful', { 
+                proxyId: proxy.id, 
+                statusCode: response.statusCode,
+                responseData: data.slice(0, 200)
+              });
+              resolve(data);
+            } else if (response.statusCode === 400) {
+              // HTTP 400 обычно означает ограничения прокси-сервера (например, нужно ждать)
+              logger.warn('IP change request rate limited', { 
+                proxyId: proxy.id, 
+                statusCode: response.statusCode,
+                responseData: data
+              });
+              reject(new Error(`Ограничение прокси-сервера: ${data}`));
+            } else {
+              logger.error('IP change request failed', { 
+                proxyId: proxy.id, 
+                statusCode: response.statusCode,
+                responseData: data
+              });
+              reject(new Error(`HTTP ${response.statusCode}: ${data}`));
+            }
+          });
+        });
+        
+        request.on('error', (error) => {
+          logger.error('IP change request error', { 
+            proxyId: proxy.id, 
+            error: error.message 
+          });
+          reject(error);
+        });
+        
+        request.setTimeout(30000, () => {
+          logger.error('IP change request timeout', { proxyId: proxy.id });
+          reject(new Error('Timeout: запрос превысил 30 секунд'));
+        });
+        
+        request.end();
+      });
+      
+      // Обновляем дату последней смены IP
+      await proxy.update({
+        dateLastChangeIp: new Date()
+      });
+
+      logger.info('Proxy IP changed successfully', { 
+        proxyId: proxy.id,
+        newTimestamp: proxy.dateLastChangeIp
+      });
+
+      res.json({
+        success: true,
+        message: 'IP успешно изменен',
+        data: {
+          id: proxy.id,
+          ipPort: proxy.ipPort,
+          dateLastChangeIp: proxy.dateLastChangeIp,
+          changeIpUrl: proxy.changeIpUrl,
+          responseData: responseData.slice(0, 500) // Первые 500 символов ответа
+        }
+      });
+      
+    } catch (error) {
+      logger.error('Failed to change proxy IP', { 
+        proxyId: proxy.id, 
+        error: error.message,
+        changeIpUrl: proxy.changeIpUrl 
+      });
+      
+      return res.status(500).json({
+        success: false,
+        error: `Ошибка смены IP: ${error.message}`
+      });
+    }
+  } catch (error) {
+    logger.error('Change IP controller error', { error: error.message });
     next(error);
   }
 };
@@ -409,6 +539,7 @@ module.exports = {
   updateProxy,
   deleteProxy,
   toggleProxyStatus,
+  changeProxyIP, // ДОБАВЛЕНА ФУНКЦИЯ СМЕНЫ IP
   getProxyStats,
   bulkDeleteProxies,
   bulkUpdateStatus

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   CCard,
   CCardBody,
@@ -42,7 +42,20 @@ const Activity = () => {
 
   // Загрузка данных
   const { data: activities, isLoading, error, refetch } = useRecentActivity(filters)
-  const { data: stats } = useActivityStats({ period: '7d' })
+  const { data: stats, isLoading: statsLoading, error: statsError } = useActivityStats({ period: '7d' })
+
+  // Отладочная информация
+  useEffect(() => {
+    console.log('Activity component state:', {
+      activities,
+      isLoading,
+      error,
+      stats,
+      statsLoading,
+      statsError,
+      filters
+    })
+  }, [activities, isLoading, error, stats, statsLoading, statsError, filters])
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
@@ -149,19 +162,47 @@ const Activity = () => {
     }
   }
 
-  if (error) {
+  // Показываем ошибки, если есть
+  if (error || statsError) {
     return (
-      <CAlert color="danger">
-        Ошибка загрузки данных: {error.message}
-        <CButton color="link" onClick={() => refetch()}>
-          Попробовать снова
-        </CButton>
-      </CAlert>
+      <CRow>
+        <CCol xs={12}>
+          <CAlert color="danger">
+            <h4>Ошибка загрузки данных активности</h4>
+            <div><strong>Activities error:</strong> {error?.message || 'No error'}</div>
+            <div><strong>Stats error:</strong> {statsError?.message || 'No error'}</div>
+            <div className="mt-2">
+              <strong>Debug info:</strong>
+              <pre>{JSON.stringify({ activities, stats, isLoading, statsLoading }, null, 2)}</pre>
+            </div>
+            <CButton color="primary" onClick={() => {
+              refetch()
+              window.location.reload()
+            }} className="mt-3">
+              Попробовать снова
+            </CButton>
+          </CAlert>
+        </CCol>
+      </CRow>
     )
   }
 
   return (
     <>
+      {/* Отладочная информация */}
+      <CRow className="mb-3">
+        <CCol xs={12}>
+          <CAlert color="info">
+            <strong>Debug Info:</strong><br/>
+            Activities: {activities ? `${activities.length} записей` : 'null/undefined'}<br/>
+            Loading: {isLoading ? 'Yes' : 'No'}<br/>
+            Stats: {stats ? 'Loaded' : 'null/undefined'}<br/>
+            Stats Loading: {statsLoading ? 'Yes' : 'No'}<br/>
+            Filters: {JSON.stringify(filters)}
+          </CAlert>
+        </CCol>
+      </CRow>
+
       {/* Статистика за неделю */}
       {stats && (
         <CRow className="mb-4">
@@ -169,7 +210,7 @@ const Activity = () => {
             <CWidgetStatsA
               className="mb-4"
               color="primary"
-              value={stats.totalActions || 0}
+              value={stats.totalActions || stats.totalCount || 0}
               title="Всего действий"
               action={
                 <CIcon icon={cilChart} height={24} className="my-4 text-white" />
@@ -191,7 +232,7 @@ const Activity = () => {
             <CWidgetStatsA
               className="mb-4"
               color="info"
-              value={stats.byEntityType?.account || 0}
+              value={stats.byEntityType?.account || stats.entityStats?.find(e => e.entityType === 'account')?.count || 0}
               title="Действия с аккаунтами"
               action={
                 <CIcon icon={cilPeople} height={24} className="my-4 text-white" />
@@ -202,7 +243,7 @@ const Activity = () => {
             <CWidgetStatsA
               className="mb-4"
               color="warning"
-              value={stats.byEntityType?.project || 0}
+              value={stats.byEntityType?.project || stats.entityStats?.find(e => e.entityType === 'project')?.count || 0}
               title="Действия с проектами"
               action={
                 <CIcon icon={cilFolder} height={24} className="my-4 text-white" />
@@ -314,12 +355,17 @@ const Activity = () => {
                     {!activities || activities.length === 0 ? (
                       <CTableRow>
                         <CTableDataCell colSpan={5} className="text-center">
-                          Нет активности для отображения
+                          <div className="py-4">
+                            <div className="text-muted mb-2">Нет активности для отображения</div>
+                            <div className="small text-muted">
+                              Попробуйте выполнить какие-либо действия в системе (создать прокси, изменить статус и т.д.)
+                            </div>
+                          </div>
                         </CTableDataCell>
                       </CTableRow>
                     ) : (
                       activities.map((activity, index) => (
-                        <CTableRow key={`${activity.id}-${index}`}>
+                        <CTableRow key={`${activity.id || index}-${index}`}>
                           <CTableDataCell>
                             <CTooltip
                               content={new Date(activity.timestamp).toLocaleString('ru-RU')}

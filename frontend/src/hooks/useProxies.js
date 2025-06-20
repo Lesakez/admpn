@@ -101,21 +101,38 @@ export function useToggleProxyStatus() {
   })
 }
 
-// Сменить IP прокси
+// Сменить IP прокси (ОБНОВЛЕННЫЙ)
 export function useChangeProxyIP() {
   const queryClient = useQueryClient()
   
   return useMutation({
     mutationFn: async (id) => {
       const response = await proxiesService.changeIP(id)
-      return response.data.data
+      return response.data // Возвращаем весь response.data
     },
-    onSuccess: () => {
+    onSuccess: (responseData) => {
       queryClient.invalidateQueries(['proxies'])
-      toast.success('Запрос на смену IP отправлен')
+      
+      // responseData = { success: true, message: 'IP успешно изменен', data: {...} }
+      if (responseData.success) {
+        toast.success(responseData.message || 'IP успешно изменен!')
+      } else {
+        toast.success('Запрос на смену IP отправлен')
+      }
     },
     onError: (error) => {
-      toast.error(error.response?.data?.error || 'Ошибка смены IP')
+      const errorMsg = error.response?.data?.error
+      
+      // Специальная обработка для ограничений по времени
+      if (errorMsg && errorMsg.includes('wait')) {
+        toast.error('Нужно подождать перед следующей сменой IP')
+      } else if (errorMsg && errorMsg.includes('15s')) {
+        toast.error('Подождите 15 секунд перед следующей сменой')
+      } else if (errorMsg && errorMsg.includes('Ограничение прокси-сервера')) {
+        toast.error('Слишком частые запросы смены IP')
+      } else {
+        toast.error(errorMsg || 'Ошибка смены IP')
+      }
     }
   })
 }
