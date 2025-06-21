@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   CCard,
   CCardBody,
@@ -16,12 +16,13 @@ import {
   CFormInput,
   CInputGroupText,
   CBadge,
-  CButtonGroup,
   CFormSelect,
   CSpinner,
   CAlert,
   CWidgetStatsA,
   CTooltip,
+  CPagination,
+  CPaginationItem,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -38,30 +39,54 @@ import {
 import { useRecentActivity, useActivityStats } from '../../hooks/useActivity'
 
 const Activity = () => {
-  const [filters, setFilters] = useState({ limit: 50 })
+  const [filters, setFilters] = useState({ 
+    limit: 50,
+    offset: 0,
+    page: 1
+  })
 
   // Загрузка данных
-  const { data: activities, isLoading, error, refetch } = useRecentActivity(filters)
+  const { data: rawData, isLoading, error, refetch } = useRecentActivity(filters)
   const { data: stats, isLoading: statsLoading, error: statsError, refetch: refetchStats } = useActivityStats({ period: '7d' })
 
-  // Отладочная информация
-  useEffect(() => {
-    console.log('Activity component state:', {
-      activities,
-      isLoading,
-      error,
-      stats,
-      statsLoading,
-      statsError,
-      filters
-    })
-  }, [activities, isLoading, error, stats, statsLoading, statsError, filters])
+  // Обработка данных активности
+  const activities = useMemo(() => {
+    if (!rawData) return []
+    if (Array.isArray(rawData)) return rawData
+    if (rawData.data && Array.isArray(rawData.data)) return rawData.data
+    return []
+  }, [rawData])
+
+  // Вычисление пагинации
+  const pagination = useMemo(() => {
+    const total = activities.length
+    const pages = Math.ceil(total / filters.limit)
+    return {
+      page: filters.page,
+      pages,
+      total,
+      hasNext: filters.page < pages,
+      hasPrev: filters.page > 1
+    }
+  }, [activities.length, filters.limit, filters.page])
 
   const handleFilterChange = (key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }))
+    setFilters(prev => {
+      const newFilters = { ...prev, [key]: value }
+      
+      // При изменении limit сбрасываем на первую страницу
+      if (key === 'limit') {
+        newFilters.page = 1
+        newFilters.offset = 0
+      }
+      
+      // При изменении страницы пересчитываем offset
+      if (key === 'page') {
+        newFilters.offset = (value - 1) * prev.limit
+      }
+      
+      return newFilters
+    })
   }
 
   const handleRefresh = () => {
@@ -81,6 +106,7 @@ const Activity = () => {
       status_toggle: 'warning',
       import: 'primary',
       export: 'secondary',
+      export_custom: 'secondary',
       allocate: 'info',
       release: 'secondary',
       reboot: 'warning',
@@ -98,6 +124,7 @@ const Activity = () => {
       status_toggle: 'Переключение статуса',
       import: 'Импорт',
       export: 'Экспорт',
+      export_custom: 'Экспорт',
       allocate: 'Назначение',
       release: 'Освобождение',
       reboot: 'Перезагрузка',
@@ -114,6 +141,7 @@ const Activity = () => {
   const getEntityBadge = (entityType) => {
     const entityColors = {
       account: 'primary',
+      old_account: 'primary',
       profile: 'info',
       proxy: 'warning',
       phone: 'success',
@@ -122,6 +150,7 @@ const Activity = () => {
     
     const entityLabels = {
       account: 'Аккаунт',
+      old_account: 'Аккаунт',
       profile: 'Профиль',
       proxy: 'Прокси',
       phone: 'Устройство',
@@ -130,6 +159,7 @@ const Activity = () => {
     
     const entityIcons = {
       account: cilPeople,
+      old_account: cilPeople,
       profile: cilUser,
       proxy: cilGlobeAlt,
       phone: cilDevices,
@@ -167,6 +197,104 @@ const Activity = () => {
     }
   }
 
+  // Рендер пагинации
+  const renderPagination = () => {
+    if (!pagination || pagination.pages <= 1) return null
+
+    const { page, pages, hasNext, hasPrev } = pagination
+    const items = []
+
+    // Кнопка "Предыдущая"
+    items.push(
+      <CPaginationItem
+        key="prev"
+        disabled={!hasPrev}
+        onClick={() => handleFilterChange('page', page - 1)}
+      >
+        Предыдущая
+      </CPaginationItem>
+    )
+
+    // Первая страница
+    if (pages > 0) {
+      items.push(
+        <CPaginationItem
+          key={1}
+          active={page === 1}
+          onClick={() => handleFilterChange('page', 1)}
+        >
+          1
+        </CPaginationItem>
+      )
+    }
+
+    // Точки слева
+    if (page > 3) {
+      items.push(
+        <CPaginationItem key="dots1" disabled>
+          ...
+        </CPaginationItem>
+      )
+    }
+
+    // Страницы вокруг текущей
+    for (let i = Math.max(2, page - 1); i <= Math.min(pages - 1, page + 1); i++) {
+      items.push(
+        <CPaginationItem
+          key={i}
+          active={i === page}
+          onClick={() => handleFilterChange('page', i)}
+        >
+          {i}
+        </CPaginationItem>
+      )
+    }
+
+    // Точки справа
+    if (page < pages - 2) {
+      items.push(
+        <CPaginationItem key="dots2" disabled>
+          ...
+        </CPaginationItem>
+      )
+    }
+
+    // Последняя страница
+    if (pages > 1) {
+      items.push(
+        <CPaginationItem
+          key={pages}
+          active={page === pages}
+          onClick={() => handleFilterChange('page', pages)}
+        >
+          {pages}
+        </CPaginationItem>
+      )
+    }
+
+    // Кнопка "Следующая"
+    items.push(
+      <CPaginationItem
+        key="next"
+        disabled={!hasNext}
+        onClick={() => handleFilterChange('page', page + 1)}
+      >
+        Следующая
+      </CPaginationItem>
+    )
+
+    return (
+      <div className="d-flex justify-content-between align-items-center mt-4">
+        <div className="text-muted">
+          Страница {page} из {pages} • Показано {activities.length} записей
+        </div>
+        <CPagination className="mb-0">
+          {items}
+        </CPagination>
+      </div>
+    )
+  }
+
   // Функция для безопасного получения значений статистики
   const getStatValue = (statPath, defaultValue = 0) => {
     if (!stats) return defaultValue
@@ -185,7 +313,6 @@ const Activity = () => {
       
       return typeof value === 'number' ? value : defaultValue
     } catch (e) {
-      console.warn(`Error getting stat value for path: ${statPath}`, e)
       return defaultValue
     }
   }
@@ -197,17 +324,8 @@ const Activity = () => {
         <CCol xs={12}>
           <CAlert color="danger">
             <h4>Ошибка загрузки данных активности</h4>
-            <div><strong>Activities error:</strong> {error?.message || 'No error'}</div>
-            <div><strong>Stats error:</strong> {statsError?.message || 'No error'}</div>
-            <div className="mt-2">
-              <strong>Debug info:</strong>
-              <pre>{JSON.stringify({ 
-                activities: activities?.length || 'null', 
-                stats: stats ? 'loaded' : 'null', 
-                isLoading, 
-                statsLoading 
-              }, null, 2)}</pre>
-            </div>
+            {error && <div><strong>Активность:</strong> {error.message}</div>}
+            {statsError && <div><strong>Статистика:</strong> {statsError.message}</div>}
             <CButton color="primary" onClick={handleRefresh} className="mt-3">
               Попробовать снова
             </CButton>
@@ -219,29 +337,14 @@ const Activity = () => {
 
   return (
     <>
-      {/* Отладочная информация */}
-      <CRow className="mb-3">
-        <CCol xs={12}>
-          <CAlert color="info">
-            <strong>Debug Info:</strong><br/>
-            Activities: {activities ? `${activities.length} записей` : 'null/undefined'}<br/>
-            Loading: {isLoading ? 'Yes' : 'No'}<br/>
-            Stats: {stats ? `totalCount: ${stats.totalCount || 0}, totalActions: ${stats.totalActions || 0}` : 'null/undefined'}<br/>
-            Stats Loading: {statsLoading ? 'Yes' : 'No'}<br/>
-            Stats Object: {stats ? JSON.stringify(Object.keys(stats)) : 'null'}<br/>
-            Filters: {JSON.stringify(filters)}
-          </CAlert>
-        </CCol>
-      </CRow>
-
       {/* Статистика за неделю */}
       <CRow className="mb-4">
         <CCol sm={6} lg={3}>
           <CWidgetStatsA
             className="mb-4"
             color="primary"
-            value={getStatValue('totalActions') || getStatValue('totalCount')}
-            title="Всего действий"
+            value={getStatValue('totalCount')}
+            title="Всего действий за неделю"
             action={
               <CIcon icon={cilChart} height={24} className="my-4 text-white" />
             }
@@ -251,7 +354,7 @@ const Activity = () => {
           <CWidgetStatsA
             className="mb-4"
             color="success"
-            value={getStatValue('todayActions')}
+            value={getStatValue('todayCount')}
             title="Сегодня"
             action={
               <CIcon icon={cilCalendar} height={24} className="my-4 text-white" />
@@ -262,8 +365,7 @@ const Activity = () => {
           <CWidgetStatsA
             className="mb-4"
             color="info"
-            value={getStatValue('byEntityType.account') || 
-                   (stats?.entityStats?.find(e => e.entityType === 'account')?.count) || 0}
+            value={stats?.entityStats?.find(e => e.entityType === 'account' || e.entityType === 'old_account')?.count || 0}
             title="Действия с аккаунтами"
             action={
               <CIcon icon={cilPeople} height={24} className="my-4 text-white" />
@@ -274,11 +376,10 @@ const Activity = () => {
           <CWidgetStatsA
             className="mb-4"
             color="warning"
-            value={getStatValue('byEntityType.project') || 
-                   (stats?.entityStats?.find(e => e.entityType === 'project')?.count) || 0}
-            title="Действия с проектами"
+            value={stats?.entityStats?.find(e => e.entityType === 'phone')?.count || 0}
+            title="Действия с устройствами"
             action={
-              <CIcon icon={cilFolder} height={24} className="my-4 text-white" />
+              <CIcon icon={cilDevices} height={24} className="my-4 text-white" />
             }
           />
         </CCol>
@@ -347,7 +448,7 @@ const Activity = () => {
                     <option value="create">Создание</option>
                     <option value="update">Обновление</option>
                     <option value="delete">Удаление</option>
-                    <option value="status_change">Смена статуса</option>
+                    <option value="status_toggle">Смена статуса</option>
                     <option value="import">Импорт</option>
                     <option value="export">Экспорт</option>
                   </CFormSelect>
@@ -379,88 +480,91 @@ const Activity = () => {
 
               {/* Таблица активности */}
               {isLoading ? (
-                <div className="text-center">
-                  <CSpinner color="primary" />
-                  <div className="mt-2">Загрузка...</div>
+                <div className="text-center py-5">
+                  <CSpinner color="primary" size="lg" />
+                  <div className="mt-3 text-muted">Загрузка данных...</div>
                 </div>
               ) : (
-                <CTable align="middle" className="mb-0 border" hover responsive>
-                  <CTableHead color="light">
-                    <CTableRow>
-                      <CTableHeaderCell style={{ width: '140px' }}>Время</CTableHeaderCell>
-                      <CTableHeaderCell style={{ width: '120px' }}>Сущность</CTableHeaderCell>
-                      <CTableHeaderCell style={{ width: '120px' }}>Действие</CTableHeaderCell>
-                      <CTableHeaderCell>Описание</CTableHeaderCell>
-                      <CTableHeaderCell style={{ width: '80px' }}>ID</CTableHeaderCell>
-                    </CTableRow>
-                  </CTableHead>
-                  <CTableBody>
-                    {!activities || activities.length === 0 ? (
+                <>
+                  <CTable align="middle" className="mb-0 border" hover responsive striped>
+                    <CTableHead color="light">
                       <CTableRow>
-                        <CTableDataCell colSpan={5} className="text-center">
-                          <div className="py-4">
-                            <div className="text-muted mb-2">Нет активности для отображения</div>
-                            <div className="small text-muted">
-                              Попробуйте выполнить какие-либо действия в системе (создать прокси, изменить статус и т.д.)
-                            </div>
-                          </div>
-                        </CTableDataCell>
+                        <CTableHeaderCell style={{ width: '140px' }}>Время</CTableHeaderCell>
+                        <CTableHeaderCell style={{ width: '120px' }}>Сущность</CTableHeaderCell>
+                        <CTableHeaderCell style={{ width: '120px' }}>Действие</CTableHeaderCell>
+                        <CTableHeaderCell>Описание</CTableHeaderCell>
+                        <CTableHeaderCell style={{ width: '80px' }}>ID</CTableHeaderCell>
                       </CTableRow>
-                    ) : (
-                      activities.map((activity, index) => (
-                        <CTableRow key={`${activity.id || index}-${index}`}>
-                          <CTableDataCell>
-                            <CTooltip
-                              content={new Date(activity.timestamp).toLocaleString('ru-RU')}
-                            >
-                              <small className="text-muted">
-                                {formatTimestamp(activity.timestamp)}
-                              </small>
-                            </CTooltip>
-                          </CTableDataCell>
-                          <CTableDataCell>
-                            {getEntityBadge(activity.entityType)}
-                          </CTableDataCell>
-                          <CTableDataCell>
-                            {getActionBadge(activity.actionType)}
-                          </CTableDataCell>
-                          <CTableDataCell>
-                            <div>
-                              {activity.description}
-                              {activity.metadata && (
-                                <div className="text-muted small mt-1">
-                                  {Object.entries(activity.metadata).slice(0, 2).map(([key, value]) => (
-                                    <span key={key} className="me-2">
-                                      <strong>{key}:</strong> {JSON.stringify(value).slice(0, 50)}
-                                      {JSON.stringify(value).length > 50 && '...'}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
+                    </CTableHead>
+                    <CTableBody>
+                      {!activities || activities.length === 0 ? (
+                        <CTableRow>
+                          <CTableDataCell colSpan={5} className="text-center py-5">
+                            <div className="text-muted mb-2">
+                              <CIcon icon={cilChart} size="xl" className="mb-3" />
+                              <div>Нет активности для отображения</div>
                             </div>
-                          </CTableDataCell>
-                          <CTableDataCell>
-                            {activity.entityId && (
-                              <CBadge color="secondary" shape="rounded-pill">
-                                #{activity.entityId}
-                              </CBadge>
-                            )}
+                            <div className="small text-muted">
+                              Попробуйте выполнить какие-либо действия в системе
+                            </div>
                           </CTableDataCell>
                         </CTableRow>
-                      ))
-                    )}
-                  </CTableBody>
-                </CTable>
+                      ) : (
+                        activities.map((activity, index) => (
+                          <CTableRow key={`${activity.id || index}-${index}`} className="align-middle">
+                            <CTableDataCell>
+                              <CTooltip
+                                content={new Date(activity.timestamp).toLocaleString('ru-RU')}
+                              >
+                                <small className="text-muted">
+                                  {formatTimestamp(activity.timestamp)}
+                                </small>
+                              </CTooltip>
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              {getEntityBadge(activity.entityType)}
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              {getActionBadge(activity.actionType)}
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              <div className="text-wrap">
+                                {activity.description}
+                                {activity.metadata && (
+                                  <div className="text-muted small mt-1">
+                                    {Object.entries(activity.metadata).slice(0, 2).map(([key, value]) => (
+                                      <span key={key} className="me-2">
+                                        <strong>{key}:</strong> {JSON.stringify(value).slice(0, 50)}
+                                        {JSON.stringify(value).length > 50 && '...'}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </CTableDataCell>
+                            <CTableDataCell>
+                              {activity.entityId && (
+                                <CBadge color="secondary" shape="rounded-pill">
+                                  #{activity.entityId}
+                                </CBadge>
+                              )}
+                            </CTableDataCell>
+                          </CTableRow>
+                        ))
+                      )}
+                    </CTableBody>
+                  </CTable>
+
+                  {/* Пагинация */}
+                  {renderPagination()}
+                </>
               )}
 
               {/* Информация о загрузке */}
               {activities && activities.length > 0 && (
-                <div className="d-flex justify-content-between align-items-center mt-3">
+                <div className="mt-3 text-center">
                   <small className="text-muted">
-                    Показано {activities.length} записей
-                  </small>
-                  <small className="text-muted">
-                    Обновление каждые 30 секунд
+                    Автоматическое обновление каждые 30 секунд
                   </small>
                 </div>
               )}
