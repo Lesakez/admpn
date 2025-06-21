@@ -1,0 +1,21 @@
+# Специальный Dockerfile для выполнения миграций
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Устанавливаем только необходимые пакеты для миграций
+RUN npm install -g wait-port mysql2
+
+COPY package*.json ./
+RUN npm install --only=production
+
+# Копируем скрипты миграций и утилиты
+COPY database/migrations/ ./migrations/
+COPY src/utils/ ./src/utils/
+COPY migrate.js ./
+
+# Скрипт для ожидания БД и выполнения миграций
+COPY docker-entrypoint-migrations.sh ./
+RUN chmod +x docker-entrypoint-migrations.sh
+
+CMD ["./docker-entrypoint-migrations.sh"]

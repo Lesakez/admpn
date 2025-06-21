@@ -23,6 +23,7 @@ import {
   CSpinner,
   CAlert,
   CWidgetStatsA,
+  CPlaceholder,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -46,6 +47,53 @@ import {
 } from '../../hooks/usePhones'
 import { PhoneFormModal } from '../../components/forms'
 
+// Skeleton компонент для таблицы
+const TableSkeleton = ({ rows = 5 }) => (
+  <CTable hover responsive>
+    <CTableHead color="light">
+      <CTableRow>
+        {Array(8).fill().map((_, i) => (
+          <CTableHeaderCell key={i}>
+            <CPlaceholder animation="glow" style={{ width: '80%' }} />
+          </CTableHeaderCell>
+        ))}
+      </CTableRow>
+    </CTableHead>
+    <CTableBody>
+      {Array(rows).fill().map((_, rowIndex) => (
+        <CTableRow key={rowIndex}>
+          <CTableDataCell><CPlaceholder animation="glow" style={{ width: '60px' }} /></CTableDataCell>
+          <CTableDataCell><CPlaceholder animation="glow" style={{ width: '90%' }} /></CTableDataCell>
+          <CTableDataCell><CPlaceholder animation="glow" style={{ width: '85%' }} /></CTableDataCell>
+          <CTableDataCell><CPlaceholder animation="glow" style={{ width: '70%' }} /></CTableDataCell>
+          <CTableDataCell><CPlaceholder animation="glow" style={{ width: '120px' }} /></CTableDataCell>
+          <CTableDataCell>
+            <CPlaceholder animation="glow" style={{ width: '80px', height: '24px', borderRadius: '12px' }} />
+          </CTableDataCell>
+          <CTableDataCell><CPlaceholder animation="glow" style={{ width: '75%' }} /></CTableDataCell>
+          <CTableDataCell>
+            <div className="d-flex gap-1">
+              <CPlaceholder animation="glow" style={{ width: '32px', height: '32px', borderRadius: '4px' }} />
+              <CPlaceholder animation="glow" style={{ width: '32px', height: '32px', borderRadius: '4px' }} />
+              <CPlaceholder animation="glow" style={{ width: '32px', height: '32px', borderRadius: '4px' }} />
+            </div>
+          </CTableDataCell>
+        </CTableRow>
+      ))}
+    </CTableBody>
+  </CTable>
+)
+
+// Skeleton для статистики
+const StatsSkeleton = () => (
+  <CWidgetStatsA
+    className="mb-4"
+    value={<CPlaceholder animation="glow" style={{ width: '60px', height: '36px' }} />}
+    title={<CPlaceholder animation="glow" style={{ width: '120px', height: '16px' }} />}
+    action={<CPlaceholder animation="glow" style={{ width: '32px', height: '32px', borderRadius: '8px' }} />}
+  />
+)
+
 const Phones = () => {
   const [filters, setFilters] = useState({ page: 1, limit: 20 })
   const [showModal, setShowModal] = useState(false)
@@ -53,10 +101,15 @@ const Phones = () => {
 
   // Загрузка данных
   const { data, isLoading, error, refetch } = usePhones(filters)
-  const { data: stats } = usePhonesStats()
+  const { data: stats, isLoading: statsLoading } = usePhonesStats()
   const deleteMutation = useDeletePhone()
   const toggleStatusMutation = useTogglePhoneStatus()
   const rebootMutation = useRebootPhone()
+
+  // Извлекаем данные - используем оригинальную структуру
+  const phones = data?.phones || []
+  const pagination = data?.pagination || {}
+  const phoneStats = stats?.data || stats || {}
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
@@ -86,13 +139,13 @@ const Phones = () => {
     }
   }
 
-  const handleEdit = (phone) => {
-    setEditingPhone(phone)
+  const handleCreate = () => {
+    setEditingPhone(null)
     setShowModal(true)
   }
 
-  const handleCreate = () => {
-    setEditingPhone(null)
+  const handleEdit = (phone) => {
+    setEditingPhone(phone)
     setShowModal(true)
   }
 
@@ -130,92 +183,100 @@ const Phones = () => {
   if (error) {
     return (
       <CAlert color="danger">
-        Ошибка загрузки данных: {error.message}
+        <h4>Ошибка загрузки устройств</h4>
+        <p>{error.message}</p>
+        <CButton color="primary" onClick={() => refetch()}>
+          <CIcon icon={cilReload} className="me-2" />
+          Попробовать снова
+        </CButton>
       </CAlert>
     )
   }
-
-  const phones = data?.phones || []
-  const pagination = data?.pagination || {}
 
   return (
     <>
       {/* Статистика */}
       <CRow className="mb-4">
         <CCol sm={6} lg={3}>
-          <CWidgetStatsA
-            className="mb-4"
-            color="primary"
-            value={stats?.total || 0}
-            title="Всего устройств"
-            action={
-              <CIcon icon={cilDevices} height={24} className="my-4 text-white" />
-            }
-          />
+          {statsLoading ? (
+            <StatsSkeleton />
+          ) : (
+            <CWidgetStatsA
+              className="mb-4"
+              color="primary"
+              value={phoneStats.total || 0}
+              title="Всего устройств"
+              action={
+                <CButton
+                  color="transparent"
+                  size="sm"
+                  onClick={() => refetch()}
+                  disabled={isLoading}
+                >
+                  <CIcon icon={cilReload} />
+                </CButton>
+              }
+            />
+          )}
         </CCol>
         <CCol sm={6} lg={3}>
-          <CWidgetStatsA
-            className="mb-4"
-            color="success"
-            value={stats?.free || 0}
-            title="Свободные"
-            action={
-              <CIcon icon={cilToggleOn} height={24} className="my-4 text-white" />
-            }
-          />
+          {statsLoading ? (
+            <StatsSkeleton />
+          ) : (
+            <CWidgetStatsA
+              className="mb-4"
+              color="success"
+              value={phoneStats.free || 0}
+              title="Свободные"
+              action={<CIcon icon={cilToggleOn} />}
+            />
+          )}
         </CCol>
         <CCol sm={6} lg={3}>
-          <CWidgetStatsA
-            className="mb-4"
-            color="warning"
-            value={stats?.busy || 0}
-            title="Занятые"
-            action={
-              <CIcon icon={cilSync} height={24} className="my-4 text-white" />
-            }
-          />
+          {statsLoading ? (
+            <StatsSkeleton />
+          ) : (
+            <CWidgetStatsA
+              className="mb-4"
+              color="warning"
+              value={phoneStats.busy || 0}
+              title="Занятые"
+              action={<CIcon icon={cilToggleOff} />}
+            />
+          )}
         </CCol>
         <CCol sm={6} lg={3}>
-          <CWidgetStatsA
-            className="mb-4"
-            color="danger"
-            value={stats?.disabled || 0}
-            title="Отключенные"
-            action={
-              <CIcon icon={cilToggleOff} height={24} className="my-4 text-white" />
-            }
-          />
+          {statsLoading ? (
+            <StatsSkeleton />
+          ) : (
+            <CWidgetStatsA
+              className="mb-4"
+              color="info"
+              value={phoneStats.disabled || 0}
+              title="Отключенные"
+              action={<CIcon icon={cilDevices} />}
+            />
+          )}
         </CCol>
       </CRow>
 
       {/* Основная таблица */}
       <CRow>
         <CCol xs={12}>
-          <CCard className="mb-4">
+          <CCard>
             <CCardHeader>
-              <CRow>
-                <CCol sm={6}>
-                  <h4 className="mb-0">Управление устройствами</h4>
-                </CCol>
-                <CCol sm={6} className="d-flex justify-content-end">
-                  <CButtonGroup>
-                    <CButton 
-                      color="primary" 
-                      onClick={handleCreate}
-                    >
-                      <CIcon icon={cilPlus} className="me-2" />
-                      Добавить устройство
-                    </CButton>
-                    <CButton 
-                      color="secondary" 
-                      variant="outline"
-                      onClick={() => refetch()}
-                    >
-                      <CIcon icon={cilReload} />
-                    </CButton>
-                  </CButtonGroup>
-                </CCol>
-              </CRow>
+              <div className="d-flex justify-content-between align-items-center">
+                <div>
+                  <h5 className="mb-0">Устройства</h5>
+                  {!isLoading && pagination.total && (
+                    <small className="text-muted">Всего: {pagination.total}</small>
+                  )}
+                </div>
+                <CButton color="primary" onClick={handleCreate}>
+                  <CIcon icon={cilPlus} className="me-2" />
+                  Добавить устройство
+                </CButton>
+              </div>
             </CCardHeader>
 
             <CCardBody>
@@ -257,12 +318,9 @@ const Phones = () => {
                 </CCol>
               </CRow>
 
-              {/* Таблица */}
+              {/* Таблица или skeleton */}
               {isLoading ? (
-                <div className="text-center">
-                  <CSpinner color="primary" />
-                  <div className="mt-2">Загрузка...</div>
-                </div>
+                <TableSkeleton rows={filters.limit || 10} />
               ) : (
                 <>
                   <CTable align="middle" className="mb-0 border" hover responsive>
@@ -281,15 +339,22 @@ const Phones = () => {
                     <CTableBody>
                       {phones.length === 0 ? (
                         <CTableRow>
-                          <CTableDataCell colSpan={8} className="text-center">
-                            Нет данных для отображения
+                          <CTableDataCell colSpan={8} className="text-center py-4">
+                            <div className="text-muted">
+                              <CIcon icon={cilDevices} size="xl" className="mb-3" />
+                              <p>Устройства не найдены</p>
+                              <CButton color="primary" variant="outline" onClick={handleCreate}>
+                                <CIcon icon={cilPlus} className="me-2" />
+                                Добавить первое устройство
+                              </CButton>
+                            </div>
                           </CTableDataCell>
                         </CTableRow>
                       ) : (
                         phones.map((phone) => (
                           <CTableRow key={phone.id}>
                             <CTableDataCell>
-                              <strong>{phone.id}</strong>
+                              <strong>#{phone.id}</strong>
                             </CTableDataCell>
                             <CTableDataCell>{phone.model || 'N/A'}</CTableDataCell>
                             <CTableDataCell>{phone.device || 'N/A'}</CTableDataCell>
@@ -320,7 +385,11 @@ const Phones = () => {
                                   disabled={toggleStatusMutation.isLoading}
                                   title="Переключить статус"
                                 >
-                                  <CIcon icon={phone.status === 'free' ? cilToggleOff : cilToggleOn} />
+                                  {toggleStatusMutation.isLoading ? (
+                                    <CSpinner size="sm" />
+                                  ) : (
+                                    <CIcon icon={phone.status === 'free' ? cilToggleOff : cilToggleOn} />
+                                  )}
                                 </CButton>
                                 <CButton
                                   color="secondary"
@@ -329,7 +398,11 @@ const Phones = () => {
                                   disabled={rebootMutation.isLoading}
                                   title="Перезагрузить"
                                 >
-                                  <CIcon icon={cilPowerStandby} />
+                                  {rebootMutation.isLoading ? (
+                                    <CSpinner size="sm" />
+                                  ) : (
+                                    <CIcon icon={cilPowerStandby} />
+                                  )}
                                 </CButton>
                                 <CButton
                                   color="danger"
@@ -350,10 +423,7 @@ const Phones = () => {
 
                   {/* Пагинация */}
                   {pagination.pages > 1 && (
-                    <div className="d-flex justify-content-between align-items-center mt-3">
-                      <div>
-                        Показано {phones.length} из {pagination.total} записей
-                      </div>
+                    <div className="d-flex justify-content-center mt-3">
                       <CPagination>
                         <CPaginationItem
                           disabled={pagination.page <= 1}
@@ -362,12 +432,8 @@ const Phones = () => {
                           Предыдущая
                         </CPaginationItem>
                         
-                        {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
-                          const page = Math.max(1, Math.min(
-                            pagination.pages - 4,
-                            pagination.page - 2
-                          )) + i
-                          
+                        {Array.from({ length: Math.min(pagination.pages, 5) }, (_, i) => {
+                          const page = i + 1;
                           if (page <= pagination.pages) {
                             return (
                               <CPaginationItem

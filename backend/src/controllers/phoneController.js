@@ -1,407 +1,232 @@
-const { Phone, Project, Activity, sequelize } = require('../models');
+const PhoneService = require('../services/PhoneService');
 const logger = require('../utils/logger');
-const { Op } = require('sequelize');
 
-// Получить список телефонов
-const getPhones = async (req, res, next) => {
-  try {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      projectId,
-      search
-    } = req.query;
+/**
+ * РЕФАКТОРИНГ КОНТРОЛЛЕРА ТЕЛЕФОНОВ
+ * 
+ * ДО: Толстый контроллер с 50+ строк логики в каждом методе
+ * ПОСЛЕ: Тонкий контроллер, вся логика в сервисах
+ * 
+ * ПРЕИМУЩЕСТВА:
+ * ✅ Легко тестировать
+ * ✅ Переиспользуемая логика
+ * ✅ Четкое разделение ответственности
+ * ✅ Централизованная обработка ошибок
+ * ✅ Единообразные ответы API
+ */
 
-    const offset = (page - 1) * limit;
-    const where = {};
+class PhoneController {
+  constructor() {
+    this.phoneService = new PhoneService();
+  }
 
-    // Фильтры
-    if (status) {
-      where.status = Array.isArray(status) ? { [Op.in]: status } : status;
+  /**
+   * Получить список телефонов
+   * ДО: 25+ строк с фильтрацией и запросами
+   * ПОСЛЕ: 5 строк, вся логика в сервисе
+   */
+  getPhones = async (req, res, next) => {
+    try {
+      const { page, limit, status, projectId, search, ...otherFilters } = req.query;
+      
+      const filters = { status, projectId, search, ...otherFilters };
+      const pagination = { page, limit };
+      
+      const result = await this.phoneService.getPhones(filters, pagination);
+      
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      next(error);
     }
+  };
 
-    if (projectId) {
-      where.projectId = projectId;
+  /**
+   * Получить телефон по ID
+   * ДО: 15+ строк с проверками и включениями
+   * ПОСЛЕ: 3 строки
+   */
+  getPhone = async (req, res, next) => {
+    try {
+      const phone = await this.phoneService.getPhoneById(req.params.id);
+      
+      res.json({
+        success: true,
+        data: phone
+      });
+    } catch (error) {
+      next(error);
     }
+  };
 
-    if (search) {
-      where[Op.or] = [
-        { model: { [Op.like]: `%${search}%` } },
-        { device: { [Op.like]: `%${search}%` } },
-        { androidVersion: { [Op.like]: `%${search}%` } },
-        { ipAddress: { [Op.like]: `%${search}%` } }
-      ];
+  /**
+   * Создать телефон
+   * ДО: 30+ строк с подготовкой данных и логированием
+   * ПОСЛЕ: 3 строки
+   */
+  createPhone = async (req, res, next) => {
+    try {
+      const phone = await this.phoneService.createPhone(req.body);
+      
+      res.status(201).json({
+        success: true,
+        data: phone
+      });
+    } catch (error) {
+      next(error);
     }
+  };
 
-    const { count, rows } = await Phone.findAndCountAll({
-      where,
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name']
-        }
-      ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-      order: [['createdAt', 'DESC']]
-    });
+  /**
+   * Обновить телефон
+   * ДО: 35+ строк с логикой обновления статуса
+   * ПОСЛЕ: 3 строки
+   */
+  updatePhone = async (req, res, next) => {
+    try {
+      const phone = await this.phoneService.updatePhone(req.params.id, req.body);
+      
+      res.json({
+        success: true,
+        data: phone
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
 
-    res.json({
-      success: true,
-      data: {
-        phones: rows,
-        pagination: {
-          total: count,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          pages: Math.ceil(count / limit)
-        }
+  /**
+   * Удалить телефон
+   * ДО: 20+ строк с логированием
+   * ПОСЛЕ: 3 строки
+   */
+  deletePhone = async (req, res, next) => {
+    try {
+      const result = await this.phoneService.deletePhone(req.params.id);
+      
+      res.json({
+        success: true,
+        message: result.message
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Переключить статус телефона
+   * ДО: 40+ строк сложной логики
+   * ПОСЛЕ: 3 строки
+   */
+  togglePhoneStatus = async (req, res, next) => {
+    try {
+      const phone = await this.phoneService.togglePhoneStatus(req.params.id);
+      
+      res.json({
+        success: true,
+        data: phone
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Перезагрузить телефон
+   * ДО: 25+ строк с обновлением и логированием
+   * ПОСЛЕ: 3 строки
+   */
+  rebootPhone = async (req, res, next) => {
+    try {
+      const phone = await this.phoneService.rebootPhone(req.params.id);
+      
+      res.json({
+        success: true,
+        data: phone,
+        message: 'Устройство успешно перезагружено'
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Получить статистику телефонов
+   * Новый метод для дашборда
+   */
+  getPhoneStats = async (req, res, next) => {
+    try {
+      const stats = await this.phoneService.getPhoneStats();
+      
+      res.json({
+        success: true,
+        data: stats
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Массовое обновление статуса
+   * Новый метод для управления несколькими устройствами
+   */
+  bulkUpdateStatus = async (req, res, next) => {
+    try {
+      const { phoneIds, status } = req.body;
+      const result = await this.phoneService.bulkUpdateStatus(phoneIds, status);
+      
+      res.json({
+        success: true,
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /**
+   * Поиск телефонов
+   * Новый метод для быстрого поиска
+   */
+  searchPhones = async (req, res, next) => {
+    try {
+      const { q: searchText, limit = 10 } = req.query;
+      
+      if (!searchText || searchText.length < 2) {
+        return res.json({
+          success: true,
+          data: []
+        });
       }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
 
-// Получить телефон по ID
-const getPhone = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const phone = await Phone.findByPk(id, {
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name']
-        }
-      ]
-    });
-    
-    if (!phone) {
-      return res.status(404).json({
-        success: false,
-        error: 'Устройство не найдено'
+      const phones = await this.phoneService.searchPhones(searchText, { limit });
+      
+      res.json({
+        success: true,
+        data: phones
       });
+    } catch (error) {
+      next(error);
     }
+  };
+}
 
-    res.json({
-      success: true,
-      data: phone
-    });
-  } catch (error) {
-    next(error);
-  }
-};
+// Создаем единственный экземпляр контроллера
+const phoneController = new PhoneController();
 
-// Создать телефон
-const createPhone = async (req, res, next) => {
-  try {
-    const phoneData = {
-      ...req.body,
-      dateSetStatusFree: req.body.status === 'free' ? new Date() : null,
-      dateSetStatusBusy: req.body.status === 'busy' ? new Date() : null,
-      dateLastReboot: new Date()
-    };
-
-    const phone = await Phone.create(phoneData);
-
-    // Логируем активность БЕЗ metadata
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Создано устройство: ${phone.model || phone.device || `ID: ${phone.id}`}`,
-      entityType: 'phone',
-      entityId: phone.id,
-      actionType: 'create'
-    });
-
-    logger.info('Phone created', { phoneId: phone.id, model: phone.model });
-
-    // Получаем созданный телефон с проектом
-    const createdPhone = await Phone.findByPk(phone.id, {
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name']
-        }
-      ]
-    });
-
-    res.status(201).json({
-      success: true,
-      data: createdPhone
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Обновить телефон
-const updatePhone = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const phone = await Phone.findByPk(id);
-    
-    if (!phone) {
-      return res.status(404).json({
-        success: false,
-        error: 'Устройство не найдено'
-      });
-    }
-
-    const oldData = { ...phone.dataValues };
-    
-    // Обновляем даты статуса при изменении статуса
-    if (req.body.status && req.body.status !== phone.status) {
-      const now = new Date();
-      if (req.body.status === 'free') {
-        req.body.dateSetStatusFree = now;
-        req.body.dateSetStatusBusy = null;
-      } else if (req.body.status === 'busy') {
-        req.body.dateSetStatusBusy = now;
-        req.body.dateSetStatusFree = null;
-      }
-    }
-
-    await phone.update(req.body);
-
-    // Логируем активность БЕЗ metadata
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Обновлено устройство: ${phone.model || phone.device || `ID: ${phone.id}`}`,
-      entityType: 'phone',
-      entityId: phone.id,
-      actionType: 'update'
-    });
-
-    logger.info('Phone updated', { phoneId: phone.id, model: phone.model });
-
-    // Получаем обновленный телефон с проектом
-    const updatedPhone = await Phone.findByPk(phone.id, {
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name']
-        }
-      ]
-    });
-
-    res.json({
-      success: true,
-      data: updatedPhone
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Удалить телефон
-const deletePhone = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const phone = await Phone.findByPk(id);
-    
-    if (!phone) {
-      return res.status(404).json({
-        success: false,
-        error: 'Устройство не найдено'
-      });
-    }
-
-    const deletedData = { 
-      model: phone.model || phone.device || `ID: ${phone.id}`,
-      id: phone.id 
-    };
-
-    await phone.destroy();
-
-    // Логируем активность БЕЗ metadata
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Удалено устройство: ${deletedData.model}`,
-      entityType: 'phone',
-      entityId: deletedData.id,
-      actionType: 'delete'
-    });
-
-    logger.info('Phone deleted', { phoneId: deletedData.id, model: deletedData.model });
-
-    res.json({
-      success: true,
-      message: 'Устройство успешно удалено'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Переключить статус телефона
-const togglePhoneStatus = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const phone = await Phone.findByPk(id);
-    
-    if (!phone) {
-      return res.status(404).json({
-        success: false,
-        error: 'Устройство не найдено'
-      });
-    }
-
-    const oldStatus = phone.status;
-    const newStatus = phone.status === 'free' ? 'busy' : 'free';
-    const now = new Date();
-
-    const updateData = { status: newStatus };
-    
-    if (newStatus === 'free') {
-      updateData.dateSetStatusFree = now;
-      updateData.dateSetStatusBusy = null;
-    } else {
-      updateData.dateSetStatusBusy = now;
-      updateData.dateSetStatusFree = null;
-    }
-
-    await phone.update(updateData);
-
-    // Логируем активность БЕЗ metadata
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Изменен статус устройства ${phone.model || phone.device || `ID: ${phone.id}`} с "${oldStatus}" на "${newStatus}"`,
-      entityType: 'phone',
-      entityId: phone.id,
-      actionType: 'status_toggle'
-    });
-
-    logger.info('Phone status toggled', { 
-      phoneId: phone.id, 
-      model: phone.model,
-      oldStatus: oldStatus,
-      newStatus: newStatus 
-    });
-
-    // Получаем обновленный телефон с проектом
-    const updatedPhone = await Phone.findByPk(phone.id, {
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name']
-        }
-      ]
-    });
-
-    res.json({
-      success: true,
-      data: updatedPhone
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Перезагрузить телефон
-const rebootPhone = async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const phone = await Phone.findByPk(id);
-    
-    if (!phone) {
-      return res.status(404).json({
-        success: false,
-        error: 'Устройство не найдено'
-      });
-    }
-
-    // Обновляем время последней перезагрузки
-    await phone.update({
-      dateLastReboot: new Date()
-    });
-
-    // Логируем активность
-    await Activity.create({
-      timestamp: new Date(),
-      description: `Перезагружено устройство: ${phone.model || phone.device || `ID: ${phone.id}`}`,
-      entityType: 'phone',
-      entityId: phone.id,
-      actionType: 'reboot'
-    });
-
-    logger.info('Phone rebooted', { phoneId: phone.id, model: phone.model });
-
-    // Получаем обновленный телефон с проектом
-    const updatedPhone = await Phone.findByPk(phone.id, {
-      include: [
-        {
-          model: Project,
-          as: 'project',
-          attributes: ['id', 'name']
-        }
-      ]
-    });
-
-    res.json({
-      success: true,
-      data: updatedPhone,
-      message: 'Устройство перезагружено'
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// Получить статистику телефонов
-const getPhoneStats = async (req, res, next) => {
-  try {
-    const stats = await Phone.findAll({
-      attributes: [
-        'status',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-      ],
-      group: ['status'],
-      raw: true
-    });
-
-    const totalCount = await Phone.count();
-
-    // Формируем статистику по статусам
-    const statusCounts = {
-      total: totalCount,
-      free: 0,
-      busy: 0,
-      disabled: 0
-    };
-
-    stats.forEach(stat => {
-      if (stat.status && statusCounts.hasOwnProperty(stat.status)) {
-        statusCounts[stat.status] = parseInt(stat.count);
-      }
-    });
-
-    res.json({
-      success: true,
-      data: statusCounts
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
+// Экспортируем методы для использования в роутах
 module.exports = {
-  getPhones,
-  getPhone,
-  createPhone,
-  updatePhone,
-  deletePhone,
-  togglePhoneStatus,
-  rebootPhone,
-  getPhoneStats
+  getPhones: phoneController.getPhones,
+  getPhone: phoneController.getPhone,
+  createPhone: phoneController.createPhone,
+  updatePhone: phoneController.updatePhone,
+  deletePhone: phoneController.deletePhone,
+  togglePhoneStatus: phoneController.togglePhoneStatus,
+  rebootPhone: phoneController.rebootPhone,
+  getPhoneStats: phoneController.getPhoneStats,
+  bulkUpdateStatus: phoneController.bulkUpdateStatus,
+  searchPhones: phoneController.searchPhones
 };

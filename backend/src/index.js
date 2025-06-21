@@ -7,7 +7,7 @@ require('dotenv').config();
 
 const { sequelize, testConnection } = require('./config/database');
 const logger = require('./utils/logger');
-const errorHandler = require('./middleware/errorHandler');
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
 const routes = require('./routes');
 
 const app = express();
@@ -33,13 +33,11 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api', routes);
 
-// Error handling
-app.use(errorHandler);
+// 404 handler (должен быть перед error handler)
+app.use(notFoundHandler);
 
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Route not found' });
-});
+// Error handling (должен быть последним)
+app.use(errorHandler);
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
