@@ -57,35 +57,37 @@ module.exports = (sequelize) => {
       field: 'project_id',
       comment: 'ID проекта'
     },
-    // Виртуальные поля для совместимости с кодом
+    // Реальные поля (теперь есть в БД)
     ipAddress: {
-      type: DataTypes.VIRTUAL,
-      get() {
-        return this.getDataValue('ip_address') || null;
-      }
+      type: DataTypes.STRING(45),
+      allowNull: true,
+      field: 'ip_address',
+      comment: 'IP адрес устройства'
     },
     macAddress: {
-      type: DataTypes.VIRTUAL,
-      get() {
-        return this.getDataValue('mac_address') || null;
-      }
+      type: DataTypes.STRING(17),
+      allowNull: true,
+      field: 'mac_address',
+      comment: 'MAC адрес устройства'
     },
     notes: {
-      type: DataTypes.VIRTUAL,
-      get() {
-        return this.getDataValue('notes') || null;
-      }
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Заметки об устройстве'
     },
-    // Виртуальное поле для created_at чтобы избежать ошибок сортировки
     createdAt: {
-      type: DataTypes.VIRTUAL,
-      get() {
-        return this.getDataValue('id') ? new Date() : null;
-      }
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'created_at'
+    },
+    updatedAt: {
+      type: DataTypes.DATE(3),
+      allowNull: true,
+      field: 'updated_at'
     }
   }, {
     tableName: 'phones',
-    timestamps: false, // Отключаем автоматические timestamps
+    timestamps: true, // Включаем автоматические timestamps
     underscored: true
   });
 

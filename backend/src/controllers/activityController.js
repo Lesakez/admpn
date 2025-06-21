@@ -57,7 +57,9 @@ const activityController = {
           entity_id,
           action_type,
           user_id,
-          created_at
+          metadata,
+          created_at,
+          updated_at
         FROM activities 
         ${whereClause}
         ORDER BY created_at DESC 
@@ -80,9 +82,9 @@ const activityController = {
         entityId: row.entity_id,
         actionType: row.action_type,
         userId: row.user_id,
-        metadata: null,
+        metadata: row.metadata, // Теперь возвращаем реальные metadata
         createdAt: row.created_at,
-        updatedAt: row.created_at
+        updatedAt: row.updated_at || row.created_at
       }));
 
       res.json({
@@ -138,7 +140,9 @@ const activityController = {
           entity_id,
           action_type,
           user_id,
-          created_at
+          metadata,
+          created_at,
+          updated_at
         FROM activities 
         WHERE ${whereConditions.join(' AND ')}
         ORDER BY created_at DESC 
@@ -160,9 +164,9 @@ const activityController = {
         entityId: row.entity_id,
         actionType: row.action_type,
         userId: row.user_id,
-        metadata: null,
+        metadata: row.metadata, // Теперь возвращаем реальные metadata
         createdAt: row.created_at,
-        updatedAt: row.created_at
+        updatedAt: row.updated_at || row.created_at
       }));
 
       res.json({
@@ -336,7 +340,7 @@ const activityController = {
     }
   },
 
-  // Создать новую запись активности
+  // Создать новую запись активности (обновленная версия)
   createActivity: async (entityType, entityId, actionType, description, userId = null, metadata = null) => {
     try {
       const query = `
@@ -346,23 +350,35 @@ const activityController = {
           action_type, 
           description, 
           user_id, 
+          metadata,
           timestamp,
-          created_at
-        ) VALUES (?, ?, ?, ?, ?, NOW(), NOW())
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), NOW())
       `;
       
-      await sequelize.query(query, {
+      const [result] = await sequelize.query(query, {
         replacements: [
           entityType, 
           entityId, 
           actionType, 
           description, 
-          userId
+          userId,
+          metadata ? JSON.stringify(metadata) : null
         ],
         type: sequelize.QueryTypes.INSERT
       });
       
-      return { success: true };
+      return { 
+        success: true, 
+        id: result,
+        entityType,
+        entityId,
+        actionType,
+        description,
+        userId,
+        metadata
+      };
     } catch (error) {
       console.error('Error creating activity:', error);
       throw error;

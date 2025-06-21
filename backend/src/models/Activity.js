@@ -10,18 +10,18 @@ module.exports = (sequelize) => {
     },
     timestamp: {
       type: DataTypes.DATE(3),
-      allowNull: false,
+      allowNull: true,
       defaultValue: DataTypes.NOW,
       comment: 'Время события'
     },
     description: {
       type: DataTypes.TEXT,
-      allowNull: false,
+      allowNull: true,
       comment: 'Описание действия'
     },
     entityType: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
+      type: DataTypes.TEXT,
+      allowNull: true,
       field: 'entity_type',
       comment: 'Тип сущности (proxy, account, profile, etc.)'
     },
@@ -32,8 +32,8 @@ module.exports = (sequelize) => {
       comment: 'ID сущности'
     },
     actionType: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
+      type: DataTypes.TEXT,
+      allowNull: true,
       field: 'action_type',
       comment: 'Тип действия (create, update, delete, etc.)'
     },
@@ -50,19 +50,17 @@ module.exports = (sequelize) => {
     },
     createdAt: {
       type: DataTypes.DATE(3),
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
+      allowNull: true,
       field: 'created_at'
     },
     updatedAt: {
       type: DataTypes.DATE(3),
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
+      allowNull: true,
       field: 'updated_at'
     }
   }, {
     tableName: 'activities',
-    timestamps: true,
+    timestamps: true, // Включаем автоматические timestamps
     underscored: true,
     
     indexes: [

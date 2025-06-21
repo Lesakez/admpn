@@ -108,7 +108,7 @@ const createPhone = async (req, res, next) => {
 
     const phone = await Phone.create(phoneData);
 
-    // Логируем активность
+    // Логируем активность БЕЗ metadata
     await Activity.create({
       timestamp: new Date(),
       description: `Создано устройство: ${phone.model || phone.device || `ID: ${phone.id}`}`,
@@ -169,17 +169,13 @@ const updatePhone = async (req, res, next) => {
 
     await phone.update(req.body);
 
-    // Логируем активность
+    // Логируем активность БЕЗ metadata
     await Activity.create({
       timestamp: new Date(),
       description: `Обновлено устройство: ${phone.model || phone.device || `ID: ${phone.id}`}`,
       entityType: 'phone',
       entityId: phone.id,
-      actionType: 'update',
-      metadata: {
-        oldData: oldData,
-        newData: req.body
-      }
+      actionType: 'update'
     });
 
     logger.info('Phone updated', { phoneId: phone.id, model: phone.model });
@@ -225,7 +221,7 @@ const deletePhone = async (req, res, next) => {
 
     await phone.destroy();
 
-    // Логируем активность
+    // Логируем активность БЕЗ metadata
     await Activity.create({
       timestamp: new Date(),
       description: `Удалено устройство: ${deletedData.model}`,
@@ -259,6 +255,7 @@ const togglePhoneStatus = async (req, res, next) => {
       });
     }
 
+    const oldStatus = phone.status;
     const newStatus = phone.status === 'free' ? 'busy' : 'free';
     const now = new Date();
 
@@ -274,29 +271,36 @@ const togglePhoneStatus = async (req, res, next) => {
 
     await phone.update(updateData);
 
-    // Логируем активность
+    // Логируем активность БЕЗ metadata
     await Activity.create({
       timestamp: new Date(),
-      description: `Изменен статус устройства ${phone.model || phone.device || `ID: ${phone.id}`} с "${phone.status}" на "${newStatus}"`,
+      description: `Изменен статус устройства ${phone.model || phone.device || `ID: ${phone.id}`} с "${oldStatus}" на "${newStatus}"`,
       entityType: 'phone',
       entityId: phone.id,
-      actionType: 'status_toggle',
-      metadata: {
-        oldStatus: phone.status,
-        newStatus: newStatus
-      }
+      actionType: 'status_toggle'
     });
 
     logger.info('Phone status toggled', { 
       phoneId: phone.id, 
       model: phone.model,
-      oldStatus: phone.status,
+      oldStatus: oldStatus,
       newStatus: newStatus 
+    });
+
+    // Получаем обновленный телефон с проектом
+    const updatedPhone = await Phone.findByPk(phone.id, {
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name']
+        }
+      ]
     });
 
     res.json({
       success: true,
-      data: phone
+      data: updatedPhone
     });
   } catch (error) {
     next(error);
@@ -319,35 +323,35 @@ const rebootPhone = async (req, res, next) => {
 
     // Обновляем время последней перезагрузки
     await phone.update({
-      dateLastReboot: new Date(),
-      status: 'rebooting'
+      dateLastReboot: new Date()
     });
 
     // Логируем активность
     await Activity.create({
       timestamp: new Date(),
-      description: `Перезагрузка устройства: ${phone.model || phone.device || `ID: ${phone.id}`}`,
+      description: `Перезагружено устройство: ${phone.model || phone.device || `ID: ${phone.id}`}`,
       entityType: 'phone',
       entityId: phone.id,
       actionType: 'reboot'
     });
 
-    logger.info('Phone reboot initiated', { phoneId: phone.id, model: phone.model });
+    logger.info('Phone rebooted', { phoneId: phone.id, model: phone.model });
 
-    // Симуляция времени перезагрузки (в реальном проекте здесь был бы вызов API устройства)
-    setTimeout(async () => {
-      try {
-        await phone.update({ status: 'free' });
-        logger.info('Phone reboot completed', { phoneId: phone.id, model: phone.model });
-      } catch (error) {
-        logger.error('Phone reboot failed', { phoneId: phone.id, error: error.message });
-      }
-    }, 30000); // 30 секунд
+    // Получаем обновленный телефон с проектом
+    const updatedPhone = await Phone.findByPk(phone.id, {
+      include: [
+        {
+          model: Project,
+          as: 'project',
+          attributes: ['id', 'name']
+        }
+      ]
+    });
 
     res.json({
       success: true,
-      message: 'Перезагрузка устройства запущена',
-      data: phone
+      data: updatedPhone,
+      message: 'Устройство перезагружено'
     });
   } catch (error) {
     next(error);
@@ -362,57 +366,29 @@ const getPhoneStats = async (req, res, next) => {
         'status',
         [sequelize.fn('COUNT', sequelize.col('id')), 'count']
       ],
-      group: ['status']
+      group: ['status'],
+      raw: true
     });
 
     const totalCount = await Phone.count();
 
-    const statsObject = stats.reduce((acc, stat) => {
-      acc[stat.status] = parseInt(stat.dataValues.count);
-      return acc;
-    }, {});
+    // Формируем статистику по статусам
+    const statusCounts = {
+      total: totalCount,
+      free: 0,
+      busy: 0,
+      disabled: 0
+    };
 
-    // Статистика по моделям
-    const modelStats = await Phone.findAll({
-      attributes: [
-        'model',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-      ],
-      where: {
-        model: { [Op.not]: null }
-      },
-      group: ['model'],
-      order: [[sequelize.fn('COUNT', sequelize.col('id')), 'DESC']],
-      limit: 10
-    });
-
-    // Статистика по версиям Android
-    const androidStats = await Phone.findAll({
-      attributes: [
-        'androidVersion',
-        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
-      ],
-      where: {
-        androidVersion: { [Op.not]: null }
-      },
-      group: ['androidVersion'],
-      order: [[sequelize.fn('COUNT', sequelize.col('id')), 'DESC']]
+    stats.forEach(stat => {
+      if (stat.status && statusCounts.hasOwnProperty(stat.status)) {
+        statusCounts[stat.status] = parseInt(stat.count);
+      }
     });
 
     res.json({
       success: true,
-      data: {
-        total: totalCount,
-        byStatus: statsObject,
-        byModel: modelStats.map(stat => ({
-          model: stat.model,
-          count: parseInt(stat.dataValues.count)
-        })),
-        byAndroidVersion: androidStats.map(stat => ({
-          version: stat.androidVersion,
-          count: parseInt(stat.dataValues.count)
-        }))
-      }
+      data: statusCounts
     });
   } catch (error) {
     next(error);
