@@ -1,5 +1,5 @@
 // frontend/src/components/modals/panels/FormatBuilder.js
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   CCard,
   CCardBody,
@@ -35,9 +35,10 @@ import {
   cilCheckCircle,
   cilReload,
   cilCode,
-  cilEyedropper
+  cilEyedropper,
+  cilArrowTop,
+  cilArrowBottom
 } from '@coreui/icons'
-import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'
 
 const FormatBuilder = ({ 
   config, 
@@ -50,6 +51,14 @@ const FormatBuilder = ({
   const [customSeparator, setCustomSeparator] = useState('')
   const [showPreview, setShowPreview] = useState(true)
   const [showFieldCategories, setShowFieldCategories] = useState(true)
+
+  // Инициализация полей из существующего шаблона
+  useEffect(() => {
+    if (value) {
+      const parsedFields = parseTemplate(value)
+      setSelectedFields(parsedFields)
+    }
+  }, [value])
 
   // Разбираем текущий шаблон на поля
   const parseTemplate = useCallback((template) => {
@@ -109,14 +118,9 @@ const FormatBuilder = ({
     onTemplateChange?.(template)
   }, [selectedFields, separator, customSeparator, buildTemplate, onTemplateChange])
 
-  // Перетаскивание полей
-  const handleDragEnd = useCallback((result) => {
-    if (!result.destination) return
-
-    const newFields = Array.from(selectedFields)
-    const [reorderedField] = newFields.splice(result.source.index, 1)
-    newFields.splice(result.destination.index, 0, reorderedField)
-    
+  // Удалить поле
+  const removeField = useCallback((index) => {
+    const newFields = selectedFields.filter((_, i) => i !== index)
     setSelectedFields(newFields)
     
     const currentSep = separator === 'custom' ? customSeparator : separator
@@ -124,359 +128,295 @@ const FormatBuilder = ({
     onTemplateChange?.(template)
   }, [selectedFields, separator, customSeparator, buildTemplate, onTemplateChange])
 
-  // Применить быстрый шаблон
-  const applyQuickTemplate = useCallback((template) => {
-    const fields = parseTemplate(template)
-    setSelectedFields(fields)
-    onTemplateChange?.(template)
-  }, [parseTemplate, onTemplateChange])
-
-  // Изменение разделителя
-  const handleSeparatorChange = useCallback((newSep) => {
-    onSeparatorChange?.(newSep)
+  // Переместить поле вверх
+  const moveFieldUp = useCallback((index) => {
+    if (index === 0) return
     
-    const currentSep = newSep === 'custom' ? customSeparator : newSep
-    const template = buildTemplate(selectedFields, currentSep)
+    const newFields = [...selectedFields]
+    const temp = newFields[index]
+    newFields[index] = newFields[index - 1]
+    newFields[index - 1] = temp
+    setSelectedFields(newFields)
+    
+    const currentSep = separator === 'custom' ? customSeparator : separator
+    const template = buildTemplate(newFields, currentSep)
     onTemplateChange?.(template)
-  }, [selectedFields, customSeparator, buildTemplate, onTemplateChange, onSeparatorChange])
+  }, [selectedFields, separator, customSeparator, buildTemplate, onTemplateChange])
 
-  // Изменение кастомного разделителя
-  const handleCustomSeparatorChange = useCallback((newCustomSep) => {
-    setCustomSeparator(newCustomSep)
+  // Переместить поле вниз
+  const moveFieldDown = useCallback((index) => {
+    if (index === selectedFields.length - 1) return
+    
+    const newFields = [...selectedFields]
+    const temp = newFields[index]
+    newFields[index] = newFields[index + 1]
+    newFields[index + 1] = temp
+    setSelectedFields(newFields)
+    
+    const currentSep = separator === 'custom' ? customSeparator : separator
+    const template = buildTemplate(newFields, currentSep)
+    onTemplateChange?.(template)
+  }, [selectedFields, separator, customSeparator, buildTemplate, onTemplateChange])
+
+  // Обработка смены разделителя
+  const handleSeparatorChange = useCallback((newSeparator) => {
+    const currentSep = newSeparator === 'custom' ? customSeparator : newSeparator
+    const template = buildTemplate(selectedFields, currentSep)
+    onSeparatorChange?.(newSeparator)
+    onTemplateChange?.(template)
+  }, [selectedFields, customSeparator, buildTemplate, onSeparatorChange, onTemplateChange])
+
+  // Обработка смены кастомного разделителя
+  const handleCustomSeparatorChange = useCallback((newCustomSeparator) => {
+    setCustomSeparator(newCustomSeparator)
     
     if (separator === 'custom') {
-      const template = buildTemplate(selectedFields, newCustomSep)
+      const template = buildTemplate(selectedFields, newCustomSeparator)
       onTemplateChange?.(template)
     }
   }, [selectedFields, separator, buildTemplate, onTemplateChange])
 
-  // Очистить все поля
-  const clearAll = useCallback(() => {
+  // Очистить конструктор
+  const clearFields = useCallback(() => {
     setSelectedFields([])
     onTemplateChange?.('')
   }, [onTemplateChange])
 
-  // Получить информацию о поле
-  const getFieldInfo = useCallback((fieldKey) => {
-    return config?.availableFields?.find(f => f.key === fieldKey)
-  }, [config])
-
-  // Пример данных для превью
-  const previewData = {
-    id: '12345',
-    login: 'example_user',
-    password: 'password123',
-    email: 'user@example.com',
-    emailPassword: 'emailpass456',
-    twoFA: 'JBSWY3DPEHPK3PXP',
-    status: 'active',
-    userAgent: 'Mozilla/5.0...',
-    createdAt: '2024-01-15T10:30:00Z'
-  }
-
   // Генерация превью
-  const generatePreview = useCallback(() => {
-    if (!value || selectedFields.length === 0) return 'Выберите поля для превью...'
+  const previewTemplate = useMemo(() => {
+    if (!selectedFields.length) return 'Выберите поля для создания шаблона'
     
     const currentSep = separator === 'custom' ? customSeparator : separator
-    return selectedFields.map(fieldKey => previewData[fieldKey] || `{${fieldKey}}`).join(currentSep)
-  }, [value, selectedFields, separator, customSeparator])
+    return buildTemplate(selectedFields, currentSep)
+  }, [selectedFields, separator, customSeparator, buildTemplate])
+
+  // Получить информацию о поле
+  const getFieldInfo = useCallback((fieldKey) => {
+    if (!config?.availableFields) return null
+    return config.availableFields.find(field => field.key === fieldKey)
+  }, [config])
 
   return (
-    <div className="format-builder">
-      {/* Быстрые шаблоны */}
-      {config?.quickTemplates && (
-        <CCard className="mb-3">
-          <CCardHeader className="py-2">
-            <div className="d-flex justify-content-between align-items-center">
-              <h6 className="mb-0">Быстрые шаблоны</h6>
-              <CBadge color="info" className="fs-7">
-                {config.quickTemplates.length}
-              </CBadge>
-            </div>
-          </CCardHeader>
-          <CCardBody>
-            <CRow className="g-2">
-              {config.quickTemplates.map((template, index) => (
-                <CCol key={index} xs={12} md={6}>
-                  <CButton
-                    color="light"
-                    variant="outline"
-                    size="sm"
-                    className="w-100 text-start"
-                    onClick={() => applyQuickTemplate(template.template)}
-                  >
-                    <div>
-                      <strong>{template.label}</strong>
-                      <br />
-                      <small className="text-muted">{template.description}</small>
-                      <br />
-                      <code className="small">{template.template}</code>
-                    </div>
-                  </CButton>
-                </CCol>
-              ))}
-            </CRow>
-          </CCardBody>
-        </CCard>
-      )}
-
-      {/* Разделитель */}
-      <CCard className="mb-3">
-        <CCardHeader className="py-2">
-          <h6 className="mb-0">Разделитель полей</h6>
-        </CCardHeader>
-        <CCardBody>
-          <CRow className="align-items-end">
-            <CCol xs={8}>
-              <CFormSelect
-                value={separator}
-                onChange={(e) => handleSeparatorChange(e.target.value)}
-              >
-                {config?.separators?.map(sep => (
-                  <option key={sep.value} value={sep.value}>
-                    {sep.label}
-                  </option>
-                ))}
-              </CFormSelect>
+    <CCard className="mb-4">
+      <CCardHeader>
+        <div className="d-flex justify-content-between align-items-center">
+          <h6 className="mb-0">
+            <CIcon icon={cilCode} className="me-2" />
+            Конструктор формата
+          </h6>
+          <CButtonGroup size="sm">
+            <CButton
+              color="info"
+              variant="outline"
+              onClick={() => setShowPreview(!showPreview)}
+            >
+              <CIcon icon={cilEyedropper} className="me-1" />
+              Превью
+            </CButton>
+            <CButton
+              color="warning"
+              variant="outline"
+              onClick={clearFields}
+              disabled={!selectedFields.length}
+            >
+              <CIcon icon={cilReload} className="me-1" />
+              Очистить
+            </CButton>
+          </CButtonGroup>
+        </div>
+      </CCardHeader>
+      
+      <CCardBody>
+        {/* Настройки разделителя */}
+        <CRow className="mb-3">
+          <CCol md={6}>
+            <CFormLabel>Разделитель полей</CFormLabel>
+            <CFormSelect
+              value={separator}
+              onChange={(e) => handleSeparatorChange(e.target.value)}
+            >
+              <option value=":">Двоеточие (:)</option>
+              <option value="|">Вертикальная черта (|)</option>
+              <option value="-">Дефис (-)</option>
+              <option value="_">Подчеркивание (_)</option>
+              <option value=" ">Пробел ( )</option>
+              <option value="">Без разделителя</option>
+              <option value="custom">Пользовательский</option>
+            </CFormSelect>
+          </CCol>
+          
+          {separator === 'custom' && (
+            <CCol md={6}>
+              <CFormLabel>Пользовательский разделитель</CFormLabel>
+              <CFormInput
+                value={customSeparator}
+                onChange={(e) => handleCustomSeparatorChange(e.target.value)}
+                placeholder="Введите разделитель"
+              />
             </CCol>
-            {separator === 'custom' && (
-              <CCol xs={4}>
-                <CFormInput
-                  placeholder="Символ"
-                  value={customSeparator}
-                  onChange={(e) => handleCustomSeparatorChange(e.target.value)}
-                  maxLength={3}
-                />
-              </CCol>
-            )}
-          </CRow>
-        </CCardBody>
-      </CCard>
-
-      {/* Конструктор полей */}
-      <CCard className="mb-3">
-        <CCardHeader className="py-2">
-          <div className="d-flex justify-content-between align-items-center">
-            <h6 className="mb-0">
-              <CIcon icon={cilCode} className="me-2" />
-              Конструктор формата
-            </h6>
-            <div className="d-flex gap-2">
-              {selectedFields.length > 0 && (
-                <CButton
-                  color="danger"
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAll}
-                >
-                  <CIcon icon={cilTrash} size="sm" />
-                </CButton>
-              )}
-              <CButton
-                color="light"
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowFieldCategories(!showFieldCategories)}
-              >
-                <CIcon icon={showFieldCategories ? cilChevronTop : cilChevronBottom} />
-              </CButton>
-            </div>
-          </div>
-        </CCardHeader>
-        <CCardBody>
-          {/* Выбранные поля */}
-          {selectedFields.length > 0 && (
-            <div className="mb-3">
-              <CFormLabel className="small fw-semibold text-muted">
-                Выбранные поля ({selectedFields.length}):
-              </CFormLabel>
-              <DragDropContext onDragEnd={handleDragEnd}>
-                <Droppable droppableId="selected-fields">
-                  {(provided) => (
-                    <div
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                      className="selected-fields-list"
-                    >
-                      {selectedFields.map((fieldKey, index) => {
-                        const fieldInfo = getFieldInfo(fieldKey)
-                        return (
-                          <Draggable
-                            key={`${fieldKey}-${index}`}
-                            draggableId={`${fieldKey}-${index}`}
-                            index={index}
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                className={`selected-field-item ${snapshot.isDragging ? 'dragging' : ''}`}
-                                style={{
-                                  ...provided.draggableProps.style,
-                                  marginBottom: '8px',
-                                  padding: '8px 12px',
-                                  backgroundColor: 'var(--cui-tertiary-bg)',
-                                  border: '1px solid var(--cui-border-color)',
-                                  borderRadius: '6px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '8px'
-                                }}
-                              >
-                                <div
-                                  {...provided.dragHandleProps}
-                                  style={{ cursor: 'grab', color: 'var(--cui-secondary-color)' }}
-                                >
-                                  <CIcon icon={cilMove} size="sm" />
-                                </div>
-                                
-                                <CBadge 
-                                  color={fieldInfo?.sensitive ? 'warning' : 'primary'}
-                                  className="me-2"
-                                >
-                                  {fieldInfo?.label || fieldKey}
-                                </CBadge>
-                                
-                                <div className="ms-auto d-flex gap-1">
-                                  <CButton
-                                    color="info"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => duplicateField(index)}
-                                  >
-                                    <CIcon icon={cilCopy} size="sm" />
-                                  </CButton>
-                                  <CButton
-                                    color="danger"
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => removeField(index)}
-                                  >
-                                    <CIcon icon={cilTrash} size="sm" />
-                                  </CButton>
-                                </div>
-                              </div>
-                            )}
-                          </Draggable>
-                        )
-                      })}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
-            </div>
           )}
+        </CRow>
 
-          {/* Категории полей */}
-          <CCollapse visible={showFieldCategories}>
-            <div className="field-categories">
+        {/* Превью шаблона */}
+        <CCollapse visible={showPreview}>
+          <CAlert color="info" className="mb-3">
+            <strong>Превью шаблона:</strong>
+            <div className="mt-2">
+              <code>{previewTemplate}</code>
+            </div>
+          </CAlert>
+        </CCollapse>
+
+        <CRow>
+          {/* Доступные поля */}
+          <CCol md={6}>
+            <h6 className="mb-3">
+              <CIcon icon={cilPlus} className="me-2" />
+              Доступные поля
+            </h6>
+            
+            <div className="available-fields" style={{ maxHeight: '400px', overflowY: 'auto' }}>
               {Object.entries(fieldsByCategory).map(([categoryKey, category]) => (
                 <div key={categoryKey} className="mb-3">
-                  <h6 className="text-muted small fw-semibold mb-2">
-                    <CIcon icon={category.icon} className="me-2" />
-                    {category.label}
-                    <CBadge color={category.color} variant="ghost" className="ms-2">
-                      {category.fields.length}
+                  <h6 className="text-muted mb-2">
+                    {category.name}
+                    <CBadge color="secondary" className="ms-2">
+                      {category.fields?.length || 0}
                     </CBadge>
                   </h6>
-                  <div className="d-flex flex-wrap gap-1">
-                    {category.fields.map(field => (
-                      <CButton
+                  
+                  <div className="d-flex flex-wrap gap-2">
+                    {category.fields?.map((field) => (
+                      <CTooltip
                         key={field.key}
-                        color={field.sensitive ? 'warning' : category.color}
-                        variant="outline"
-                        size="sm"
-                        onClick={() => addField(field.key)}
-                        className="position-relative"
+                        content={field.description || field.name}
+                        placement="top"
                       >
-                        {field.label}
-                        {field.sensitive && (
-                          <CTooltip content="Чувствительные данные">
-                            <CIcon 
-                              icon={cilWarning} 
-                              size="sm" 
-                              className="position-absolute top-0 end-0 text-warning"
-                              style={{ fontSize: '10px', marginTop: '-2px', marginRight: '-2px' }}
-                            />
-                          </CTooltip>
-                        )}
-                      </CButton>
+                        <CButton
+                          size="sm"
+                          color="primary"
+                          variant="outline"
+                          onClick={() => addField(field.key)}
+                          className="text-nowrap"
+                        >
+                          <CIcon icon={cilPlus} size="sm" className="me-1" />
+                          {field.name}
+                        </CButton>
+                      </CTooltip>
                     ))}
                   </div>
                 </div>
               ))}
             </div>
-          </CCollapse>
-        </CCardBody>
-      </CCard>
+          </CCol>
 
-      {/* Превью и результат */}
-      <CCard className="mb-3">
-        <CCardHeader className="py-2">
-          <div className="d-flex justify-content-between align-items-center">
-            <h6 className="mb-0">
-              <CIcon icon={cilEyedropper} className="me-2" />
-              Превью формата
+          {/* Выбранные поля */}
+          <CCol md={6}>
+            <h6 className="mb-3">
+              <CIcon icon={cilMove} className="me-2" />
+              Выбранные поля
+              {selectedFields.length > 0 && (
+                <CBadge color="success" className="ms-2">
+                  {selectedFields.length}
+                </CBadge>
+              )}
             </h6>
-            <CButton
-              color="light"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowPreview(!showPreview)}
-            >
-              <CIcon icon={showPreview ? cilChevronTop : cilChevronBottom} />
-            </CButton>
-          </div>
-        </CCardHeader>
-        <CCollapse visible={showPreview}>
-          <CCardBody>
-            {/* Шаблон */}
-            <div className="mb-3">
-              <CFormLabel className="small fw-semibold">Шаблон:</CFormLabel>
-              <CFormTextarea
-                rows={2}
-                value={value}
-                onChange={(e) => onTemplateChange?.(e.target.value)}
-                placeholder="Создайте шаблон выше или введите вручную: {login}:{password}:{email}"
-                className="font-monospace"
-              />
-              <small className="text-muted">
-                Используйте {'{field_name}'} для вставки значений полей
-              </small>
+            
+            <div className="selected-fields" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {selectedFields.length === 0 ? (
+                <CAlert color="light" className="text-center">
+                  <CIcon icon={cilInfo} className="me-2" />
+                  Поля не выбраны
+                  <br />
+                  <small className="text-muted">
+                    Добавьте поля из левой панели
+                  </small>
+                </CAlert>
+              ) : (
+                selectedFields.map((fieldKey, index) => {
+                  const fieldInfo = getFieldInfo(fieldKey)
+                  return (
+                    <div key={`${fieldKey}-${index}`} className="selected-field-item mb-2">
+                      <div className="d-flex align-items-center bg-light p-2 rounded">
+                        <div className="flex-grow-1">
+                          <strong>{fieldInfo?.name || fieldKey}</strong>
+                          {fieldInfo?.description && (
+                            <small className="text-muted d-block">
+                              {fieldInfo.description}
+                            </small>
+                          )}
+                        </div>
+                        
+                        <CButtonGroup size="sm">
+                          <CTooltip content="Переместить вверх">
+                            <CButton
+                              color="secondary"
+                              variant="outline"
+                              onClick={() => moveFieldUp(index)}
+                              disabled={index === 0}
+                            >
+                              <CIcon icon={cilArrowTop} size="sm" />
+                            </CButton>
+                          </CTooltip>
+                          
+                          <CTooltip content="Переместить вниз">
+                            <CButton
+                              color="secondary"
+                              variant="outline"
+                              onClick={() => moveFieldDown(index)}
+                              disabled={index === selectedFields.length - 1}
+                            >
+                              <CIcon icon={cilArrowBottom} size="sm" />
+                            </CButton>
+                          </CTooltip>
+                          
+                          <CTooltip content="Дублировать">
+                            <CButton
+                              color="info"
+                              variant="outline"
+                              onClick={() => duplicateField(index)}
+                            >
+                              <CIcon icon={cilCopy} size="sm" />
+                            </CButton>
+                          </CTooltip>
+                          
+                          <CTooltip content="Удалить">
+                            <CButton
+                              color="danger"
+                              variant="outline"
+                              onClick={() => removeField(index)}
+                            >
+                              <CIcon icon={cilTrash} size="sm" />
+                            </CButton>
+                          </CTooltip>
+                        </CButtonGroup>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
+          </CCol>
+        </CRow>
 
-            {/* Превью данных */}
-            <div className="mb-3">
-              <CFormLabel className="small fw-semibold">Пример результата:</CFormLabel>
-              <div 
-                className="p-2 rounded"
-                style={{ 
-                  backgroundColor: 'var(--cui-tertiary-bg)', 
-                  border: '1px solid var(--cui-border-color)',
-                  fontFamily: 'monospace',
-                  fontSize: '0.875rem'
-                }}
-              >
-                {generatePreview()}
-              </div>
-            </div>
-
-            {/* Статистика */}
-            {selectedFields.length > 0 && (
-              <CAlert color="info" className="mb-0">
-                <div className="d-flex justify-content-between small">
-                  <span>Полей: {selectedFields.length}</span>
-                  <span>Чувствительных: {selectedFields.filter(f => getFieldInfo(f)?.sensitive).length}</span>
-                  <span>Разделитель: "{separator === 'custom' ? customSeparator : separator}"</span>
-                </div>
+        {/* Дополнительная информация */}
+        {selectedFields.length > 0 && (
+          <CRow className="mt-3">
+            <CCol>
+              <CAlert color="success" className="mb-0">
+                <CIcon icon={cilCheckCircle} className="me-2" />
+                <strong>Шаблон готов!</strong>
+                <br />
+                <small className="text-muted">
+                  Выбрано полей: {selectedFields.length} | 
+                  Результат: <code>{previewTemplate}</code>
+                </small>
               </CAlert>
-            )}
-          </CCardBody>
-        </CCollapse>
-      </CCard>
-    </div>
+            </CCol>
+          </CRow>
+        )}
+      </CCardBody>
+    </CCard>
   )
 }
 

@@ -1,393 +1,836 @@
-// frontend/src/components/modals/panels/ExportPanel.js - Enhanced with FormatBuilder
+// frontend/src/components/modals/panels/ExportPanel.js
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import {
+  CModal,
+  CModalHeader,
+  CModalTitle,
+  CModalBody,
+  CModalFooter,
   CButton,
   CCard,
   CCardBody,
   CCardHeader,
-  CForm,
   CFormSelect,
   CFormCheck,
   CFormInput,
+  CFormLabel,
+  CFormTextarea,
   CAlert,
   CSpinner,
   CBadge,
   CRow,
   CCol,
-  CCollapse,
-  CDropdown,
-  CDropdownToggle,
-  CDropdownMenu,
-  CDropdownItem
+  CTooltip,
+  CButtonGroup
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
   cilCloudDownload,
-  cilSettings,
-  cilFilter,
-  cilChevronBottom,
-  cilChevronTop,
   cilCheckCircle,
-  cilFile,
+  cilFilter,
   cilCode,
-  cilWarning
+  cilEyedropper,
+  cilPlus,
+  cilTrash,
+  cilCopy,
+  cilArrowTop,
+  cilArrowBottom,
+  cilList,
+  cilReload
 } from '@coreui/icons'
-import { accountsService } from '../../../services/accountsService'
-import { useEntityStatuses } from '../../../hooks/useStatuses'
-import FormatBuilder from './FormatBuilder'
 import toast from 'react-hot-toast'
+import { useImportExportConfig } from '../../../hooks/useImportExportConfig'
+import './ExportPanel.scss'
 
-const ExportPanel = ({ config, type = 'accounts', onSuccess }) => {
-  const [format, setFormat] = useState(config?.formats?.[0]?.value || 'json')
-  const [filters, setFilters] = useState({})
-  const [isLoading, setIsLoading] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
-  const [showAdvanced, setShowAdvanced] = useState(false)
-  const [customTemplate, setCustomTemplate] = useState('')
-  const [customSeparator, setCustomSeparator] = useState(':')
-  const [estimatedCount, setEstimatedCount] = useState(null)
-  const [availableFields, setAvailableFields] = useState([])
+const ExportPanel = ({ 
+  visible, 
+  onClose, 
+  type = 'accounts', 
+  selectedIds = [], 
+  currentFilters = {}, 
+  initialFormat = 'csv' 
+}) => {
+  const { config, isLoading: configLoading, error: configError } = useImportExportConfig(type)
+  
+  // Добавляем отладочные логи
+  console.log('ExportPanel render:', {
+    visible,
+    type,
+    configLoading,
+    configError,
+    config
+  })
 
-  // Загружаем статусы для аккаунтов
-  const { data: statusesResponse, isLoading: statusesLoading } = useEntityStatuses('account')
+  // Логируем полную структуру конфигурации
+  if (config) {
+    console.log('Full config structure:', JSON.stringify(config, null, 2))
+    console.log('Config export section:', config.export)
+    if (config.export) {
+      console.log('Export steps:', config.export.steps)
+      console.log('Export exportTypes:', config.export.exportTypes)
+      console.log('Export formats:', config.export.formats)
+    }
+  }
 
-  // Загружаем доступные поля
-  useEffect(() => {
-    const loadFields = async () => {
-      try {
-        const response = await accountsService.getFields()
-        setAvailableFields(response.data.fields || {})
-      } catch (error) {
-        console.error('Error loading fields:', error)
+  const [currentStep, setCurrentStep] = useState('type')
+  const [exporting, setExporting] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  
+  const [settings, setSettings] = useState({
+    export_type: selectedIds.length > 0 ? 'selected' : 'filtered',
+    format: initialFormat,
+    status_filters: [],
+    date_from: '',
+    date_to: '',
+    search_query: '',
+    user_ids: [],
+    filename: '',
+    encoding: 'utf-8',
+    include_header: true,
+    mask_passwords: false,
+    compress_output: false,
+    csv_delimiter: ',',
+    csv_quote: '"',
+    template: ''
+  })
+
+  const [selectedFieldsList, setSelectedFieldsList] = useState([])
+  const [fieldsSearchQuery, setFieldsSearchQuery] = useState('')
+  const [statusSearchQuery, setStatusSearchQuery] = useState('')
+  const [selectedTemplate, setSelectedTemplate] = useState('')
+  const [previewData, setPreviewData] = useState(null)
+  const [previewError, setPreviewError] = useState('')
+
+  // Безопасное извлечение данных из конфигурации
+  const steps = config?.export?.steps || []
+  const exportTypes = config?.export?.exportTypes || []
+  const formats = config?.export?.formats || []
+  const templates = config?.export?.templates || {}
+  const fieldCategories = config?.export?.fieldCategories || []
+  const availableFields = config?.export?.availableFields || []
+  const filters = config?.export?.filters || []
+
+  console.log('Config data extracted:', {
+    stepsLength: steps.length,
+    exportTypesLength: exportTypes.length,
+    formatsLength: formats.length,
+    fieldCategoriesLength: fieldCategories.length,
+    availableFieldsLength: availableFields.length,
+    filtersLength: filters.length
+  })
+
+  const formatUpperCase = useMemo(() => settings.format?.toUpperCase() || '', [settings.format])
+  const today = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const defaultFilename = useMemo(() => {
+    const template = config?.export?.defaults?.filename_template || 'export_{format}_{date}'
+    return template
+      .replace('{format}', settings.format)
+      .replace('{date}', today)
+      .replace('{type}', type)
+  }, [config, settings.format, today, type])
+
+  const displayFilename = useMemo(() => {
+    const filename = settings.filename || defaultFilename
+    const currentFormat = formats.find(f => f.value === settings.format)
+    const extension = currentFormat?.extension || settings.format
+    return `${filename}.${extension}`
+  }, [settings.filename, settings.format, defaultFilename, formats])
+
+  const currentFormat = useMemo(() => 
+    formats.find(f => f.value === settings.format), 
+    [formats, settings.format]
+  )
+
+  const filteredFields = useMemo(() => {
+    if (!fieldsSearchQuery) return availableFields
+    const query = fieldsSearchQuery.toLowerCase()
+    return availableFields.filter(field => {
+      const searchText = [field.name, field.label, field.description]
+        .filter(Boolean).join(' ').toLowerCase()
+      return searchText.includes(query)
+    })
+  }, [availableFields, fieldsSearchQuery])
+
+  const fieldsByCategory = useMemo(() => {
+    const grouped = {}
+    fieldCategories.forEach(category => {
+      grouped[category.key] = {
+        ...category,
+        fields: filteredFields.filter(field => field.category === category.key)
+      }
+    })
+    return grouped
+  }, [fieldCategories, filteredFields])
+
+  const autoTemplatePreview = useMemo(() => {
+    if (selectedFieldsList.length === 0) return ''
+    return selectedFieldsList.map(item => `{${item.field}}`).join(':')
+  }, [selectedFieldsList])
+
+  const canProceedToNext = useCallback(() => {
+    switch (currentStep) {
+      case 'type':
+        return settings.export_type && 
+               (settings.export_type !== 'by_ids' || settings.user_ids.length > 0) &&
+               (settings.export_type !== 'selected' || selectedIds.length > 0)
+      case 'format':
+        return settings.format && selectedFieldsList.length > 0
+      default:
+        return false
+    }
+  }, [currentStep, settings, selectedIds, selectedFieldsList])
+
+  const isStepCompleted = useCallback((stepId) => {
+    const stepIndex = steps.findIndex(s => s.id === stepId)
+    const currentIndex = steps.findIndex(s => s.id === currentStep)
+    return stepIndex < currentIndex
+  }, [steps, currentStep])
+
+  const nextStep = useCallback(() => {
+    const currentIndex = steps.findIndex(s => s.id === currentStep)
+    if (currentIndex < steps.length - 1) {
+      setCurrentStep(steps[currentIndex + 1].id)
+      
+      if (steps[currentIndex + 1].id === 'preview') {
+        loadPreview()
       }
     }
+  }, [currentStep, steps])
 
-    loadFields()
+  const previousStep = useCallback(() => {
+    const currentIndex = steps.findIndex(s => s.id === currentStep)
+    if (currentIndex > 0) {
+      setCurrentStep(steps[currentIndex - 1].id)
+    }
+  }, [currentStep, steps])
+
+  const addField = useCallback((field) => {
+    const existingCount = selectedFieldsList.filter(item => item.field === field.key).length
+    const newItem = {
+      field: field.key,
+      isDuplicate: existingCount > 0,
+      duplicateIndex: existingCount + 1
+    }
+    
+    setSelectedFieldsList(prev => [...prev, newItem])
+    updateDuplicateIndices(field.key, [...selectedFieldsList, newItem])
+  }, [selectedFieldsList])
+
+  const removeFieldAt = useCallback((index) => {
+    const removedField = selectedFieldsList[index]
+    const newList = selectedFieldsList.filter((_, i) => i !== index)
+    setSelectedFieldsList(newList)
+    updateDuplicateIndices(removedField.field, newList)
+  }, [selectedFieldsList])
+
+  const duplicateField = useCallback((index) => {
+    const fieldItem = selectedFieldsList[index]
+    const existingCount = selectedFieldsList.filter(item => item.field === fieldItem.field).length
+    
+    const newItem = {
+      field: fieldItem.field,
+      isDuplicate: true,
+      duplicateIndex: existingCount + 1
+    }
+    
+    const newList = [...selectedFieldsList]
+    newList.splice(index + 1, 0, newItem)
+    setSelectedFieldsList(newList)
+    updateDuplicateIndices(fieldItem.field, newList)
+  }, [selectedFieldsList])
+
+  const moveFieldUp = useCallback((index) => {
+    if (index === 0) return
+    
+    const newList = [...selectedFieldsList]
+    const temp = newList[index]
+    newList[index] = newList[index - 1]
+    newList[index - 1] = temp
+    setSelectedFieldsList(newList)
+    
+    const affectedFields = new Set([newList[index].field, newList[index - 1].field])
+    affectedFields.forEach(fieldName => updateDuplicateIndices(fieldName, newList))
+  }, [selectedFieldsList])
+
+  const moveFieldDown = useCallback((index) => {
+    if (index === selectedFieldsList.length - 1) return
+    
+    const newList = [...selectedFieldsList]
+    const temp = newList[index]
+    newList[index] = newList[index + 1]
+    newList[index + 1] = temp
+    setSelectedFieldsList(newList)
+    
+    const affectedFields = new Set([newList[index].field, newList[index + 1].field])
+    affectedFields.forEach(fieldName => updateDuplicateIndices(fieldName, newList))
+  }, [selectedFieldsList])
+
+  const updateDuplicateIndices = useCallback((fieldName, list = selectedFieldsList) => {
+    const fieldsOfType = list.filter(item => item.field === fieldName)
+    
+    fieldsOfType.forEach((item, index) => {
+      item.isDuplicate = index > 0
+      item.duplicateIndex = index + 1
+    })
   }, [])
 
-  // Оценка количества записей
-  useEffect(() => {
-    const estimateCount = async () => {
-      try {
-        const response = await accountsService.getAll({
-          ...filters,
-          page: 1,
-          limit: 1
-        })
-        setEstimatedCount(response.data.pagination?.total || 0)
-      } catch (error) {
-        setEstimatedCount(null)
+  const addAllFields = useCallback(() => {
+    const newItems = availableFields
+      .filter(field => !selectedFieldsList.some(item => item.field === field.key))
+      .map(field => ({
+        field: field.key,
+        isDuplicate: false,
+        duplicateIndex: 1
+      }))
+    
+    setSelectedFieldsList(prev => [...prev, ...newItems])
+  }, [availableFields, selectedFieldsList])
+
+  const clearSelectedFields = useCallback(() => {
+    setSelectedFieldsList([])
+  }, [])
+
+  const getFieldInfo = useCallback((fieldKey) => {
+    return availableFields.find(field => field.key === fieldKey)
+  }, [availableFields])
+
+  const getFieldLabel = useCallback((fieldKey) => {
+    const field = getFieldInfo(fieldKey)
+    return field?.label || field?.name || fieldKey
+  }, [getFieldInfo])
+
+  const applyTemplate = useCallback(() => {
+    const template = templates[selectedTemplate]
+    if (template) {
+      setSettings(prev => ({ ...prev, template: template.template }))
+      
+      if (template.fields?.length > 0) {
+        const newItems = template.fields.map(fieldName => ({
+          field: fieldName,
+          isDuplicate: false,
+          duplicateIndex: 1
+        }))
+        setSelectedFieldsList(newItems)
+        
+        template.fields.forEach(fieldName => updateDuplicateIndices(fieldName, newItems))
       }
     }
+  }, [selectedTemplate, templates, updateDuplicateIndices])
 
-    const timeoutId = setTimeout(estimateCount, 500)
-    return () => clearTimeout(timeoutId)
-  }, [filters])
+  const applyAutoTemplate = useCallback(() => {
+    if (selectedFieldsList.length > 0) {
+      setSettings(prev => ({ 
+        ...prev, 
+        template: selectedFieldsList.map(item => `{${item.field}}`).join(':')
+      }))
+    }
+  }, [selectedFieldsList])
 
-  // Преобразуем статусы в опции для select
-  const statusOptions = useMemo(() => {
-    if (!statusesResponse) return []
+  const loadPreview = useCallback(async () => {
+    if (previewLoading) return
     
-    const statuses = statusesResponse.statuses || {}
-    const descriptions = statusesResponse.descriptions || {}
-    
-    return Object.entries(statuses).map(([key, value]) => ({
-      value,
-      label: descriptions[value] || value,
-      key
-    }))
-  }, [statusesResponse])
-
-  // Текущий формат
-  const currentFormat = config?.formats?.find(f => f.value === format)
-
-  const handleExport = useCallback(async () => {
-    setIsLoading(true)
     try {
-      if (!currentFormat) {
-        throw new Error('Формат не выбран')
+      setPreviewLoading(true)
+      setPreviewError('')
+      
+      const previewSettings = {
+        ...settings,
+        selected_fields: selectedFieldsList.map(item => item.field),
+        export_type: settings.export_type,
+        account_ids: settings.export_type === 'selected' ? selectedIds : undefined,
+        ...currentFilters,
+        preview: true,
+        limit: 10
       }
+      
+      const { accountsService } = await import('../../../services/accountsService')
+      const response = await accountsService.getExportPreview(previewSettings)
+      
+      setPreviewData(response.data)
+      
+    } catch (error) {
+      setPreviewError(error.message || 'Ошибка загрузки предпросмотра')
+      setPreviewData(null)
+    } finally {
+      setPreviewLoading(false)
+    }
+  }, [previewLoading, settings, selectedFieldsList, selectedIds, currentFilters])
 
-      const params = {
-        ...currentFormat.params,
-        filters,
-        template: currentFormat.isCustom ? customTemplate : currentFormat.template,
-        separator: customSeparator
+  const formatPreviewValue = useCallback((value, fieldKey) => {
+    if (value === null || value === undefined) return '—'
+    
+    const field = getFieldInfo(fieldKey)
+    const str = String(value)
+    
+    if (field?.sensitive && settings.mask_passwords) {
+      return '****'
+    }
+    
+    if (str.length > 30) {
+      return str.substring(0, 27) + '...'
+    }
+    
+    return str
+  }, [getFieldInfo, settings.mask_passwords])
+
+  const executeExport = useCallback(async () => {
+    try {
+      setExporting(true)
+      
+      const exportSettings = {
+        ...settings,
+        selected_fields: selectedFieldsList.map(item => item.field)
       }
-
-      let response
-      const method = currentFormat.method
-
-      if (method === 'exportJSON') {
-        response = await accountsService.exportJSON(params)
-      } else if (method === 'exportCSV') {
-        response = await accountsService.exportCSV(params)
-      } else if (method === 'exportTXT') {
-        response = await accountsService.exportTXT(params)
-      } else if (method === 'exportCustom') {
-        response = await accountsService.exportCustom(params)
-      } else {
-        throw new Error('Неизвестный метод экспорта')
+      
+      const validation = config?.export?.validation
+      if (validation) {
+        if (selectedFieldsList.length < (validation.minFields || 1)) {
+          throw new Error(`Выберите минимум ${validation.minFields || 1} полей`)
+        }
+        
+        if (previewData?.total_records > validation.maxRecords) {
+          throw new Error(`Слишком много записей (${previewData.total_records}). Максимум: ${validation.maxRecords}`)
+        }
       }
-
-      // Скачиваем файл
-      const blob = new Blob([response.data], { type: currentFormat.mimeType })
+      
+      if (exportSettings.export_type === 'selected') {
+        exportSettings.account_ids = selectedIds
+      }
+      
+      if (exportSettings.export_type === 'filtered') {
+        Object.assign(exportSettings, currentFilters)
+      }
+      
+      if (!exportSettings.filename) {
+        exportSettings.filename = defaultFilename
+      }
+      
+      const { accountsService } = await import('../../../services/accountsService')
+      const method = currentFormat?.method || 'exportAccounts'
+      
+      const response = await accountsService[method](exportSettings)
+      
+      const blob = new Blob([response.data], { 
+        type: currentFormat?.mimeType || 'application/octet-stream' 
+      })
+      
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
+      a.style.display = 'none'
       a.href = url
-      
-      const timestamp = new Date().toISOString().split('T')[0]
-      const filename = currentFormat.filename?.replace('.', `_${timestamp}.`) || 
-                     `${type}_export_${timestamp}.${currentFormat.extension}`
-      
-      a.download = filename
+      a.download = displayFilename
       document.body.appendChild(a)
       a.click()
-      document.body.removeChild(a)
       window.URL.revokeObjectURL(url)
-
-      toast.success(`Файл ${filename} успешно загружен`)
+      document.body.removeChild(a)
       
-      onSuccess?.({
-        format: currentFormat.label,
-        filename,
-        recordsCount: estimatedCount,
-        template: params.template
-      }, 'export', type)
-
+      toast.success(`Файл ${displayFilename} скачан`)
+      onClose?.()
+      
     } catch (error) {
-      console.error('Export error:', error)
-      toast.error(error.message || 'Ошибка при экспорте')
+      toast.error(error.message || config?.export?.messages?.error || 'Ошибка экспорта')
     } finally {
-      setIsLoading(false)
+      setExporting(false)
     }
-  }, [format, filters, customTemplate, customSeparator, currentFormat, estimatedCount, onSuccess, type])
+  }, [settings, selectedFieldsList, config, currentFormat, selectedIds, currentFilters, defaultFilename, displayFilename, previewData, onClose])
 
-  const handleFilterChange = useCallback((key, value) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }))
-  }, [])
+  useEffect(() => {
+    if (visible && config?.export?.defaults) {
+      const defaults = config.export.defaults
+      
+      if (defaults.fields && selectedFieldsList.length === 0) {
+        const defaultItems = defaults.fields.map(fieldKey => ({
+          field: fieldKey,
+          isDuplicate: false,
+          duplicateIndex: 1
+        }))
+        setSelectedFieldsList(defaultItems)
+      }
+      
+      if (settings.format === 'txt' && currentFormat?.defaultTemplate && !settings.template) {
+        setSettings(prev => ({ ...prev, template: currentFormat.defaultTemplate }))
+      }
+    }
+  }, [visible, config, selectedFieldsList.length, settings.format, currentFormat, settings.template])
 
-  const clearFilters = useCallback(() => {
-    setFilters({})
-  }, [])
+  useEffect(() => {
+    if (currentFormat) {
+      const formatDefaults = {}
+      
+      if (currentFormat.value === 'csv' && currentFormat.options?.delimiters) {
+        formatDefaults.csv_delimiter = currentFormat.options.delimiters[0]?.value || ','
+      }
+      
+      if (currentFormat.value === 'txt' && currentFormat.defaultTemplate) {
+        formatDefaults.template = currentFormat.defaultTemplate
+      }
+      
+      if (Object.keys(formatDefaults).length > 0) {
+        setSettings(prev => ({ ...prev, ...formatDefaults }))
+      }
+    }
+  }, [currentFormat])
+
+  // Отладочная информация в консоль
+  useEffect(() => {
+    console.log('ExportPanel state update:', {
+      currentStep,
+      configLoading,
+      configError,
+      hasConfig: !!config,
+      hasSteps: steps.length > 0,
+      hasExportTypes: exportTypes.length > 0,
+      hasFormats: formats.length > 0
+    })
+  }, [currentStep, configLoading, configError, config, steps, exportTypes, formats])
+
+  // Показываем состояние загрузки
+  if (configLoading) {
+    return (
+      <CModal visible={visible} onClose={onClose} size="xl">
+        <CModalHeader>
+          <CModalTitle>Экспорт данных</CModalTitle>
+        </CModalHeader>
+        <CModalBody className="text-center py-5">
+          <CSpinner className="me-2" />
+          Загрузка конфигурации...
+          <div className="mt-2 text-muted">
+            <small>Загружается конфигурация для типа: {type}</small>
+          </div>
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" onClick={onClose}>
+            Закрыть
+          </CButton>
+        </CModalFooter>
+      </CModal>
+    )
+  }
+
+  // Показываем ошибку конфигурации
+  if (configError) {
+    return (
+      <CModal visible={visible} onClose={onClose} size="lg">
+        <CModalHeader>
+          <CModalTitle>Ошибка конфигурации</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          <CAlert color="danger">
+            <h6>Ошибка загрузки конфигурации экспорта</h6>
+            <p className="mb-2">Тип: {type}</p>
+            <p className="mb-0">Ошибка: {configError.message}</p>
+          </CAlert>
+          <div className="mt-3">
+            <h6>Отладочная информация:</h6>
+            <pre className="small text-muted">
+{JSON.stringify({
+  type,
+  configError: configError.message,
+  stack: configError.stack
+}, null, 2)}
+            </pre>
+          </div>
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" onClick={onClose}>
+            Закрыть
+          </CButton>
+        </CModalFooter>
+      </CModal>
+    )
+  }
+
+  // Показываем ошибку если конфигурация пустая
+  if (!config || !config.export) {
+    return (
+      <CModal visible={visible} onClose={onClose} size="lg">
+        <CModalHeader>
+          <CModalTitle>Конфигурация не найдена</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          <CAlert color="warning">
+            <h6>Конфигурация экспорта не найдена</h6>
+            <p className="mb-2">Тип: {type}</p>
+            <p className="mb-0">Убедитесь что файл конфигурации существует по пути:</p>
+            <code>src/config/{type}ExportConfig.js</code>
+          </CAlert>
+          <div className="mt-3">
+            <h6>Полученная конфигурация:</h6>
+            <pre className="small text-muted">
+{JSON.stringify(config, null, 2)}
+            </pre>
+          </div>
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" onClick={onClose}>
+            Закрыть
+          </CButton>
+        </CModalFooter>
+      </CModal>
+    )
+  }
+
+  // Показываем ошибку если нет шагов
+  if (steps.length === 0) {
+    return (
+      <CModal visible={visible} onClose={onClose} size="lg">
+        <CModalHeader>
+          <CModalTitle>Некорректная конфигурация</CModalTitle>
+        </CModalHeader>
+        <CModalBody>
+          <CAlert color="danger">
+            <h6>Не настроены шаги экспорта</h6>
+            <p className="mb-0">В конфигурации export.steps пустой массив или отсутствует</p>
+          </CAlert>
+          <div className="mt-3">
+            <h6>Конфигурация export:</h6>
+            <pre className="small text-muted">
+{JSON.stringify(config.export, null, 2)}
+            </pre>
+          </div>
+        </CModalBody>
+        <CModalFooter>
+          <CButton color="secondary" onClick={onClose}>
+            Закрыть
+          </CButton>
+        </CModalFooter>
+      </CModal>
+    )
+  }
 
   return (
-    <div className="export-panel">
-      {/* Описание */}
-      {config?.description && (
+    <CModal
+      visible={visible}
+      onClose={onClose}
+      backdrop="static"
+      size="xl"
+      className="export-modal"
+    >
+      <CModalHeader>
+        <CModalTitle className="d-flex align-items-center">
+          <CIcon icon={cilCloudDownload} className="me-2" size="lg" />
+          {config?.export?.title || 'Экспорт данных'}
+          <CBadge color="primary" className="ms-2">
+            {formatUpperCase}
+          </CBadge>
+          <CBadge color="info" className="ms-2">
+            {currentStep}
+          </CBadge>
+        </CModalTitle>
+      </CModalHeader>
+      
+      <CModalBody>
+        {/* Отладочная информация */}
         <CAlert color="info" className="mb-3">
-          <CIcon icon={cilFile} className="me-2" />
-          {config.description}
+          <strong>Debug:</strong> Шаг {currentStep}, Шагов: {steps.length}, Типов: {exportTypes.length}, Форматов: {formats.length}
         </CAlert>
-      )}
 
-      {/* Выбор формата */}
-      <CCard className="mb-3">
-        <CCardHeader className="py-2">
-          <h6 className="mb-0">Формат экспорта</h6>
-        </CCardHeader>
-        <CCardBody>
-          <CFormSelect
-            value={format}
-            onChange={(e) => setFormat(e.target.value)}
-            className="mb-2"
-          >
-            {config?.formats?.map(fmt => (
-              <option key={fmt.value} value={fmt.value}>
-                {fmt.label}
-              </option>
-            ))}
-          </CFormSelect>
-          {currentFormat && (
-            <small className="text-muted">
-              <CIcon icon={cilFile} className="me-1" />
-              {currentFormat.description}
-            </small>
-          )}
-        </CCardBody>
-      </CCard>
-
-      {/* Конструктор формата для кастомного TXT */}
-      {currentFormat?.isCustom && (
-        <FormatBuilder
-          config={config}
-          value={customTemplate}
-          separator={customSeparator}
-          onTemplateChange={setCustomTemplate}
-          onSeparatorChange={setCustomSeparator}
-        />
-      )}
-
-      {/* Фильтры */}
-      <CCard className="mb-3">
-        <CCardHeader className="py-2 d-flex justify-content-between align-items-center">
-          <h6 className="mb-0">
-            <CIcon icon={cilFilter} className="me-2" />
-            Фильтры
-          </h6>
-          <div className="d-flex gap-2">
-            {Object.keys(filters).length > 0 && (
-              <CBadge color="primary">
-                {Object.keys(filters).length}
-              </CBadge>
-            )}
-            <CButton
-              color="light"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowFilters(!showFilters)}
+        <div className="progress-steps mb-4">
+          {steps.map((step, index) => (
+            <div 
+              key={step.id}
+              className={`step ${currentStep === step.id ? 'active' : ''} ${isStepCompleted(step.id) ? 'completed' : ''}`}
             >
-              <CIcon icon={showFilters ? cilChevronTop : cilChevronBottom} />
-            </CButton>
-          </div>
-        </CCardHeader>
-        <CCollapse visible={showFilters}>
-          <CCardBody>
-            <CRow>
-              {config?.filters?.map(filter => (
-                <CCol key={filter.key} xs={12} md={6} className="mb-3">
-                  <label className="form-label">{filter.label}</label>
-                  {filter.type === 'select' && filter.dynamic && filter.entity === 'account' ? (
-                    // Динамическая загрузка статусов
-                    <CFormSelect
-                      value={filters[filter.key] || ''}
-                      onChange={(e) => handleFilterChange(filter.key, e.target.value)}
-                      disabled={statusesLoading}
-                    >
-                      <option value="">{filter.placeholder || 'Все'}</option>
-                      {statusOptions.map(option => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </CFormSelect>
-                  ) : filter.type === 'select' ? (
-                    // Статичные опции
-                    <CFormSelect
-                      value={filters[filter.key] || ''}
-                      onChange={(e) => handleFilterChange(filter.key, e.target.value)}
-                    >
-                      {filter.options?.map(opt => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </CFormSelect>
-                  ) : filter.type === 'checkbox' ? (
-                    <CFormCheck
-                      checked={!!filters[filter.key]}
-                      onChange={(e) => handleFilterChange(filter.key, e.target.checked)}
-                      label={filter.description}
-                    />
-                  ) : filter.type === 'date' ? (
-                    <CFormInput
-                      type="date"
-                      value={filters[filter.key] || ''}
-                      onChange={(e) => handleFilterChange(filter.key, e.target.value)}
-                    />
-                  ) : (
-                    <CFormInput
-                      type={filter.type}
-                      placeholder={filter.placeholder}
-                      value={filters[filter.key] || ''}
-                      onChange={(e) => handleFilterChange(filter.key, e.target.value)}
-                    />
-                  )}
-                  {filter.description && (
-                    <small className="text-muted">{filter.description}</small>
-                  )}
-                </CCol>
-              ))}
-            </CRow>
-            {Object.keys(filters).length > 0 && (
-              <div className="d-flex justify-content-end">
-                <CButton
-                  color="light"
-                  size="sm"
-                  onClick={clearFilters}
-                >
-                  Очистить фильтры
-                </CButton>
+              <div className="step-number">
+                {isStepCompleted(step.id) ? (
+                  <CIcon icon={cilCheckCircle} size="sm" />
+                ) : (
+                  <span>{index + 1}</span>
+                )}
               </div>
+              <span className="step-name">{step.label}</span>
+            </div>
+          ))}
+        </div>
+
+        {currentStep === 'type' && (
+          <div className="step-content">
+            <h5 className="mb-4">Что экспортировать?</h5>
+            
+            <CAlert color="info">
+              Найдено типов экспорта: {exportTypes.length}
+            </CAlert>
+
+            {exportTypes.length > 0 ? (
+              <CRow className="g-4">
+                <CCol md={12}>
+                  <CCard>
+                    <CCardBody>
+                      <h6>Тип экспорта</h6>
+                      <div className="export-types">
+                        {exportTypes.map(option => (
+                          <label 
+                            key={option.value}
+                            className={`export-type ${settings.export_type === option.value ? 'selected' : ''}`}
+                          >
+                            <input
+                              type="radio"
+                              value={option.value}
+                              checked={settings.export_type === option.value}
+                              onChange={(e) => setSettings(prev => ({ ...prev, export_type: e.target.value }))}
+                            />
+                            <div className="content">
+                              <div className="title">{option.title}</div>
+                              <div className="description">
+                                {option.value === 'selected' && selectedIds.length > 0 
+                                  ? `${option.description} (${selectedIds.length} записей)`
+                                  : option.description
+                                }
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </CCardBody>
+                  </CCard>
+                </CCol>
+              </CRow>
+            ) : (
+              <CAlert color="warning">
+                Типы экспорта не настроены в конфигурации
+              </CAlert>
             )}
-          </CCardBody>
-        </CCollapse>
-      </CCard>
-
-      {/* Оценка записей */}
-      {estimatedCount !== null && (
-        <CAlert color={estimatedCount > 10000 ? 'warning' : 'info'} className="mb-3">
-          <div className="d-flex justify-content-between align-items-center">
-            <div>
-              <strong>Будет экспортировано: {estimatedCount.toLocaleString()} записей</strong>
-              {estimatedCount > 10000 && (
-                <div className="small">
-                  <CIcon icon={cilWarning} className="me-1" />
-                  Большое количество записей может замедлить экспорт
-                </div>
-              )}
-            </div>
           </div>
-        </CAlert>
-      )}
+        )}
 
-      {/* Предупреждение о чувствительных данных */}
-      {(currentFormat?.isCustom && customTemplate.includes('password')) || 
-       (currentFormat?.template && currentFormat.template.includes('password')) && (
-        <CAlert color="warning" className="mb-3">
-          <CIcon icon={cilWarning} className="me-2" />
-          <strong>Внимание!</strong> Ваш формат содержит пароли и другие чувствительные данные.
-        </CAlert>
-      )}
+        {currentStep === 'format' && (
+          <div className="step-content">
+            <h5 className="mb-4">Формат и поля экспорта</h5>
+            
+            <CAlert color="info">
+              Найдено форматов: {formats.length}, Полей: {availableFields.length}
+            </CAlert>
 
-      {/* Кнопка экспорта */}
-      <div className="d-grid">
-        <CButton
-          color="success"
-          size="lg"
-          onClick={handleExport}
-          disabled={
-            isLoading || 
-            (currentFormat?.isCustom && !customTemplate.trim())
-          }
-        >
-          {isLoading ? (
-            <>
-              <CSpinner size="sm" className="me-2" />
-              Экспортирую данные...
-            </>
-          ) : (
-            <>
-              <CIcon icon={cilCloudDownload} className="me-2" />
-              Экспортировать {currentFormat?.label}
-            </>
-          )}
-        </CButton>
-      </div>
-
-      {/* Информация о формате */}
-      {currentFormat && (
-        <CAlert color="info" className="mt-3">
-          <div className="d-flex align-items-center">
-            <CIcon icon={cilCheckCircle} className="me-2" />
-            <div>
-              <strong>Экспорт в формате {currentFormat.label}</strong>
-              <br />
-              <small>{currentFormat.description}</small>
-              {currentFormat.isCustom && customTemplate && (
-                <>
-                  <br />
-                  <code className="small">{customTemplate}</code>
-                </>
-              )}
-            </div>
+            {formats.length > 0 ? (
+              <CRow className="g-4">
+                <CCol md={6}>
+                  <CCard>
+                    <CCardBody>
+                      <h6>Формат: {formatUpperCase}</h6>
+                      
+                      <div className="mb-3">
+                        <CFormLabel>Выберите формат</CFormLabel>
+                        <CFormSelect
+                          value={settings.format}
+                          onChange={(e) => setSettings(prev => ({ ...prev, format: e.target.value }))}
+                        >
+                          {formats.map(format => (
+                            <option key={format.value} value={format.value}>
+                              {format.label}
+                            </option>
+                          ))}
+                        </CFormSelect>
+                        {currentFormat?.description && (
+                          <div className="form-text">{currentFormat.description}</div>
+                        )}
+                      </div>
+                    </CCardBody>
+                  </CCard>
+                </CCol>
+                <CCol md={6}>
+                  <CCard>
+                    <CCardBody>
+                      <h6>Поля ({availableFields.length})</h6>
+                      {availableFields.length > 0 ? (
+                        <div>
+                          {availableFields.slice(0, 5).map(field => (
+                            <CBadge key={field.key} color="secondary" className="me-1 mb-1">
+                              {field.label}
+                            </CBadge>
+                          ))}
+                          {availableFields.length > 5 && (
+                            <CBadge color="info">
+                              +{availableFields.length - 5} еще
+                            </CBadge>
+                          )}
+                        </div>
+                      ) : (
+                        <CAlert color="warning">
+                          Поля не настроены в конфигурации
+                        </CAlert>
+                      )}
+                    </CCardBody>
+                  </CCard>
+                </CCol>
+              </CRow>
+            ) : (
+              <CAlert color="warning">
+                Форматы экспорта не настроены в конфигурации
+              </CAlert>
+            )}
           </div>
-        </CAlert>
-      )}
-    </div>
+        )}
+
+        {currentStep === 'preview' && (
+          <div className="step-content">
+            <h5 className="mb-4">Предпросмотр</h5>
+            
+            <CAlert color="success">
+              Готов к экспорту! Выбранных полей: {selectedFieldsList.length}
+            </CAlert>
+          </div>
+        )}
+      </CModalBody>
+      
+      <CModalFooter>
+        <div className="d-flex justify-content-between align-items-center w-100">
+          <small className="text-muted">
+            Шаг {steps.findIndex(s => s.id === currentStep) + 1} из {steps.length}
+          </small>
+          
+          <div>
+            <CButton
+              color="secondary"
+              variant="outline"
+              onClick={onClose}
+              disabled={exporting}
+              className="me-2"
+            >
+              Отмена
+            </CButton>
+            
+            {currentStep !== 'type' && (
+              <CButton
+                color="light"
+                onClick={previousStep}
+                disabled={exporting}
+                className="me-2"
+              >
+                Назад
+              </CButton>
+            )}
+            
+            {currentStep !== 'preview' ? (
+              <CButton
+                color="primary"
+                onClick={nextStep}
+                disabled={!canProceedToNext() || exporting}
+              >
+                Далее
+              </CButton>
+            ) : (
+              <CButton
+                color="success"
+                onClick={executeExport}
+                disabled={exporting || selectedFieldsList.length === 0}
+              >
+                {exporting ? (
+                  <>
+                    <CSpinner size="sm" className="me-2" />
+                    Экспортирую...
+                  </>
+                ) : (
+                  <>
+                    <CIcon icon={cilCloudDownload} className="me-2" />
+                    Экспортировать
+                  </>
+                )}
+              </CButton>
+            )}
+          </div>
+        </div>
+      </CModalFooter>
+    </CModal>
   )
 }
 
