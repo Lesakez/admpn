@@ -1,292 +1,456 @@
 // frontend/src/components/modals/panels/ExportPanel.scss
 
-.export-panel {
-  
-  // Описание
-  &__description {
-    margin-bottom: 1.5rem;
-    
-    .alert-info {
-      border-color: var(--cui-info-border-subtle);
-      background-color: var(--cui-info-bg-subtle);
-    }
+.export-modal {
+  .modal-dialog {
+    max-width: 1200px;
   }
 
-  // Формат экспорта
-  &__format {
-    margin-bottom: 1.5rem;
-  }
-
-  // Оценка количества
-  &__estimate {
-    margin-bottom: 1.5rem;
-    padding: 0.75rem 1rem;
-    border: 1px solid var(--cui-border-color-translucent);
-    border-radius: var(--cui-border-radius);
-    background: var(--cui-light-bg);
-    
-    strong {
-      color: var(--cui-emphasis-color);
-    }
-  }
-
-  // Расширенные настройки
-  &__advanced {
-    margin-bottom: 1.5rem;
-  }
-
-  &__advanced-toggle {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-    
-    .ms-2 {
-      margin-left: auto !important;
-      margin-right: 0 !important;
-    }
-  }
-
-  &__advanced-card {
-    border: 1px solid var(--cui-border-color-translucent);
-    background: var(--cui-tertiary-bg);
-    
-    .card-body {
-      padding: 1rem;
-    }
-  }
-
-  // Фильтры
-  &__filters {
-    margin-bottom: 1.5rem;
-  }
-
-  &__filters-toggle {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 0.75rem;
-    
-    .ms-2 {
-      margin-left: auto !important;
-      margin-right: 0 !important;
-    }
-  }
-
-  &__filters-card {
-    border: 1px solid var(--cui-border-color-translucent);
-    background: var(--cui-light-bg);
-    
-    .card-body {
-      padding: 1rem;
-    }
-  }
-
-  &__filters-actions {
-    margin-top: 1rem;
-    padding-top: 1rem;
-    border-top: 1px solid var(--cui-border-color-translucent);
-    text-align: center;
-  }
-
-  // Выбор полей для экспорта
-  &__fields {
-    margin-bottom: 1.5rem;
-  }
-
-  &__fields-card {
-    border: 1px solid var(--cui-border-color-translucent);
-    background: var(--cui-tertiary-bg);
-    max-height: 300px;
+  .modal-body {
+    min-height: 500px;
+    max-height: 70vh;
     overflow-y: auto;
+  }
+}
+
+.progress-steps {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: #e9ecef;
+    z-index: 1;
+  }
+
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 2;
+    background: #fff;
+    padding: 0 1rem;
     
-    .card-body {
-      padding: 1rem;
+    .step-number {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: #e9ecef;
+      color: #6c757d;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: all 0.3s ease;
     }
-    
-    .form-check {
-      margin-bottom: 0.5rem;
-    }
-    
-    .form-check-label {
+
+    .step-name {
+      font-size: 0.875rem;
+      color: #6c757d;
+      text-align: center;
       font-weight: 500;
-      color: var(--cui-body-color);
+      transition: color 0.3s ease;
     }
-    
-    .form-text {
-      margin-top: 0.25rem;
-      font-size: 0.75rem;
-      color: var(--cui-secondary-color);
+
+    &.active {
+      .step-number {
+        background-color: #0d6efd;
+        color: white;
+      }
+
+      .step-name {
+        color: #0d6efd;
+        font-weight: 600;
+      }
     }
-  }
 
-  // Загрузка статусов
-  .form-text {
-    .badge {
-      font-size: 0.6875rem;
-      padding: 0.25rem 0.5rem;
-      margin-right: 0.25rem;
-      margin-bottom: 0.25rem;
-    }
-  }
-  // Кнопка отправки
-  &__submit {
-    text-align: center;
-    margin-top: 1.5rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--cui-border-color-translucent);
-  }
+    &.completed {
+      .step-number {
+        background-color: #198754;
+        color: white;
+      }
 
-  // Состояния формы
-  .form-label {
-    font-weight: 600;
-    color: var(--cui-emphasis-color);
-    margin-bottom: 0.5rem;
-  }
-
-  .form-select,
-  .form-control {
-    border-color: var(--cui-border-color);
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-    
-    &:focus {
-      border-color: var(--cui-primary);
-      box-shadow: 0 0 0 0.25rem rgba(var(--cui-primary-rgb), 0.25);
-    }
-  }
-
-  .form-text {
-    font-size: 0.8125rem;
-    color: var(--cui-secondary-color);
-    margin-top: 0.25rem;
-  }
-
-  // Мультиселект
-  .form-select[multiple] {
-    min-height: 80px;
-    
-    option {
-      padding: 0.375rem 0.75rem;
-      
-      &:checked {
-        background: var(--cui-primary);
-        color: var(--cui-primary-text);
+      .step-name {
+        color: #198754;
       }
     }
   }
 
-  // Кнопки состояний
-  .btn-outline-secondary {
-    border-color: var(--cui-border-color);
-    color: var(--cui-body-color);
-    
-    &:hover {
-      background: var(--cui-secondary-bg);
-      border-color: var(--cui-secondary);
-    }
-  }
-
-  // Адаптивность
   @media (max-width: 768px) {
-    &__estimate {
-      padding: 0.5rem 0.75rem;
-      font-size: 0.875rem;
-    }
-    
-    &__advanced-toggle,
-    &__filters-toggle {
-      font-size: 0.875rem;
-      padding: 0.5rem 0.75rem;
-    }
-    
-    &__advanced-card,
-    &__filters-card {
-      .card-body {
-        padding: 0.75rem;
+    .step {
+      padding: 0 0.5rem;
+      
+      .step-name {
+        font-size: 0.75rem;
       }
-    }
-    
-    &__submit {
-      margin-top: 1rem;
-      padding-top: 1rem;
-    }
-    
-    .form-select[multiple] {
-      min-height: 60px;
-      font-size: 0.875rem;
     }
   }
+}
 
-  // Темная тема
-  [data-coreui-theme="dark"] & {
-    &__estimate {
-      background: var(--cui-dark-bg-subtle);
-      border-color: var(--cui-border-color);
-    }
+.step-content {
+  .export-types {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
 
-    &__advanced-card {
-      background: var(--cui-dark-bg);
-      border-color: var(--cui-border-color);
-    }
+    .export-type {
+      display: block;
+      padding: 1rem;
+      border: 2px solid #e9ecef;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      background: #fff;
 
-    &__filters-card {
-      background: var(--cui-dark-bg-subtle);
-      border-color: var(--cui-border-color);
-    }
-
-    .form-select,
-    .form-control {
-      background: var(--cui-dark-bg);
-      border-color: var(--cui-border-color);
-      color: var(--cui-body-color);
-      
-      &:focus {
-        background: var(--cui-dark-bg);
-        border-color: var(--cui-primary);
+      input[type="radio"] {
+        display: none;
       }
-    }
 
-    .form-select[multiple] {
-      option {
-        background: var(--cui-dark-bg);
-        color: var(--cui-body-color);
-        
-        &:checked {
-          background: var(--cui-primary);
-          color: var(--cui-primary-text);
+      .content {
+        .title {
+          font-weight: 600;
+          font-size: 1rem;
+          color: #212529;
+          margin-bottom: 0.5rem;
+        }
+
+        .description {
+          font-size: 0.875rem;
+          color: #6c757d;
+          line-height: 1.4;
+        }
+      }
+
+      &:hover {
+        border-color: #0d6efd;
+        background-color: #f8f9fa;
+      }
+
+      &.selected {
+        border-color: #0d6efd;
+        background-color: #e7f1ff;
+
+        .content .title {
+          color: #0d6efd;
         }
       }
     }
   }
 
-  // Анимации
-  .collapse {
-    transition: height 0.3s ease;
+  .format-selection {
+    .format-option {
+      display: flex;
+      align-items: center;
+      padding: 1rem;
+      border: 1px solid #dee2e6;
+      border-radius: 0.375rem;
+      margin-bottom: 0.5rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+
+      input[type="radio"] {
+        margin-right: 0.75rem;
+      }
+
+      .format-info {
+        flex: 1;
+
+        .format-label {
+          font-weight: 600;
+          margin-bottom: 0.25rem;
+        }
+
+        .format-description {
+          font-size: 0.875rem;
+          color: #6c757d;
+        }
+      }
+
+      &:hover {
+        border-color: #0d6efd;
+        background-color: #f8f9fa;
+      }
+
+      &.selected {
+        border-color: #0d6efd;
+        background-color: #e7f1ff;
+      }
+    }
   }
 
-  .btn {
-    transition: all 0.15s ease-in-out;
+  .fields-selection {
+    .available-fields {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #dee2e6;
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+
+      .field-category {
+        margin-bottom: 1rem;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
+
+        .category-header {
+          font-weight: 600;
+          font-size: 0.875rem;
+          color: #495057;
+          margin-bottom: 0.5rem;
+          padding: 0.25rem 0;
+          border-bottom: 1px solid #e9ecef;
+        }
+
+        .category-fields {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+          gap: 0.5rem;
+        }
+
+        .field-item {
+          display: flex;
+          align-items: center;
+          padding: 0.5rem;
+          border: 1px solid #e9ecef;
+          border-radius: 0.25rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+
+          .field-info {
+            flex: 1;
+
+            .field-label {
+              font-weight: 500;
+              font-size: 0.875rem;
+            }
+
+            .field-type {
+              font-size: 0.75rem;
+              color: #6c757d;
+            }
+          }
+
+          .field-sensitive {
+            margin-left: 0.5rem;
+            color: #dc3545;
+          }
+
+          &:hover {
+            border-color: #0d6efd;
+            background-color: #f8f9fa;
+          }
+        }
+      }
+    }
+
+    .selected-fields {
+      min-height: 200px;
+      border: 2px dashed #dee2e6;
+      border-radius: 0.375rem;
+      padding: 1rem;
+
+      &.has-fields {
+        border-style: solid;
+        border-color: #198754;
+        background-color: #f8fff9;
+      }
+
+      .selected-field {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.5rem;
+        margin-bottom: 0.5rem;
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 0.25rem;
+
+        .field-content {
+          display: flex;
+          align-items: center;
+          flex: 1;
+
+          .field-name {
+            font-weight: 500;
+          }
+
+          .field-duplicate {
+            margin-left: 0.5rem;
+            font-size: 0.75rem;
+            color: #6c757d;
+          }
+        }
+
+        .field-actions {
+          display: flex;
+          gap: 0.25rem;
+
+          .btn {
+            padding: 0.25rem;
+            font-size: 0.75rem;
+          }
+        }
+
+        &.sensitive {
+          border-color: #ffc107;
+          background-color: #fff3cd;
+        }
+      }
+
+      .empty-state {
+        text-align: center;
+        color: #6c757d;
+        font-style: italic;
+        padding: 2rem;
+      }
+    }
   }
 
-  // Улучшенные badges
-  .badge {
-    font-size: 0.75rem;
-    padding: 0.375rem 0.75rem;
-    border-radius: var(--cui-border-radius-sm);
-    
-    &.bg-primary {
-      background-color: var(--cui-primary) !important;
+  .preview-section {
+    .preview-table {
+      max-height: 400px;
+      overflow: auto;
+      border: 1px solid #dee2e6;
+      border-radius: 0.375rem;
+
+      table {
+        margin-bottom: 0;
+
+        th {
+          background-color: #f8f9fa;
+          border-top: none;
+          position: sticky;
+          top: 0;
+          z-index: 1;
+        }
+
+        td {
+          font-size: 0.875rem;
+          max-width: 150px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
     }
-    
-    &.bg-success {
-      background-color: var(--cui-success) !important;
+
+    .preview-stats {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+
+      .stat-item {
+        flex: 1;
+        text-align: center;
+        padding: 1rem;
+        background: #f8f9fa;
+        border-radius: 0.375rem;
+
+        .stat-value {
+          font-size: 1.5rem;
+          font-weight: 600;
+          color: #0d6efd;
+        }
+
+        .stat-label {
+          font-size: 0.875rem;
+          color: #6c757d;
+          margin-top: 0.25rem;
+        }
+      }
     }
-    
-    &.bg-warning {
-      background-color: var(--cui-warning) !important;
-      color: var(--cui-dark) !important;
+  }
+}
+
+// Дополнительные утилиты
+.field-search {
+  margin-bottom: 1rem;
+
+  .form-control {
+    border-radius: 0.375rem;
+  }
+}
+
+.template-selector {
+  .template-option {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    .template-name {
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .template-preview {
+      font-family: monospace;
+      font-size: 0.875rem;
+      color: #6c757d;
+      background: #f8f9fa;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      margin: 0.5rem 0;
+    }
+
+    .template-description {
+      font-size: 0.75rem;
+      color: #6c757d;
+    }
+
+    &:hover {
+      border-color: #0d6efd;
+      background-color: #f8f9fa;
+    }
+
+    &.selected {
+      border-color: #0d6efd;
+      background-color: #e7f1ff;
+    }
+  }
+}
+
+// Адаптивность
+@media (max-width: 992px) {
+  .export-modal .modal-dialog {
+    max-width: 95vw;
+  }
+
+  .step-content {
+    .export-types .export-type .content .title {
+      font-size: 0.875rem;
+    }
+
+    .fields-selection .available-fields .field-category .category-fields {
+      grid-template-columns: 1fr;
+    }
+  }
+}
+
+@media (max-width: 576px) {
+  .progress-steps {
+    .step .step-name {
+      display: none;
+    }
+  }
+
+  .step-content {
+    .preview-section .preview-stats {
+      flex-direction: column;
+      gap: 0.5rem;
     }
   }
 }

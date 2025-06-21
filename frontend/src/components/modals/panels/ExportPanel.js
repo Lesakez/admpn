@@ -64,11 +64,15 @@ const ExportPanel = ({
   // Логируем полную структуру конфигурации
   if (config) {
     console.log('Full config structure:', JSON.stringify(config, null, 2))
-    console.log('Config export section:', config.export)
+    console.log('Config export section:', config.export || config)
     if (config.export) {
       console.log('Export steps:', config.export.steps)
       console.log('Export exportTypes:', config.export.exportTypes)
       console.log('Export formats:', config.export.formats)
+    } else {
+      console.log('Direct config steps:', config.steps)
+      console.log('Direct config exportTypes:', config.exportTypes)
+      console.log('Direct config formats:', config.formats)
     }
   }
 
@@ -102,13 +106,14 @@ const ExportPanel = ({
   const [previewError, setPreviewError] = useState('')
 
   // Безопасное извлечение данных из конфигурации
-  const steps = config?.export?.steps || []
-  const exportTypes = config?.export?.exportTypes || []
-  const formats = config?.export?.formats || []
-  const templates = config?.export?.templates || {}
-  const fieldCategories = config?.export?.fieldCategories || []
-  const availableFields = config?.export?.availableFields || []
-  const filters = config?.export?.filters || []
+  // Поддерживаем два формата: config.export.* и config.*
+  const steps = config?.export?.steps || config?.steps || []
+  const exportTypes = config?.export?.exportTypes || config?.exportTypes || []
+  const formats = config?.export?.formats || config?.formats || []
+  const templates = config?.export?.templates || config?.templates || {}
+  const fieldCategories = config?.export?.fieldCategories || config?.fieldCategories || []
+  const availableFields = config?.export?.availableFields || config?.availableFields || []
+  const filters = config?.export?.filters || config?.filters || []
 
   console.log('Config data extracted:', {
     stepsLength: steps.length,
@@ -116,13 +121,16 @@ const ExportPanel = ({
     formatsLength: formats.length,
     fieldCategoriesLength: fieldCategories.length,
     availableFieldsLength: availableFields.length,
-    filtersLength: filters.length
+    filtersLength: filters.length,
+    configStructure: config?.export ? 'nested (config.export)' : 'flat (config.*)'
   })
 
   const formatUpperCase = useMemo(() => settings.format?.toUpperCase() || '', [settings.format])
   const today = useMemo(() => new Date().toISOString().split('T')[0], [])
   const defaultFilename = useMemo(() => {
-    const template = config?.export?.defaults?.filename_template || 'export_{format}_{date}'
+    const template = config?.export?.defaults?.filename_template || 
+                    config?.defaults?.filename_template || 
+                    'export_{format}_{date}'
     return template
       .replace('{format}', settings.format)
       .replace('{date}', today)
@@ -382,7 +390,7 @@ const ExportPanel = ({
         selected_fields: selectedFieldsList.map(item => item.field)
       }
       
-      const validation = config?.export?.validation
+      const validation = config?.export?.validation || config?.validation
       if (validation) {
         if (selectedFieldsList.length < (validation.minFields || 1)) {
           throw new Error(`Выберите минимум ${validation.minFields || 1} полей`)
@@ -428,18 +436,21 @@ const ExportPanel = ({
       onClose?.()
       
     } catch (error) {
-      toast.error(error.message || config?.export?.messages?.error || 'Ошибка экспорта')
+      const errorMsg = error.message || 
+                      config?.export?.messages?.error || 
+                      config?.messages?.error || 
+                      'Ошибка экспорта'
+      toast.error(errorMsg)
     } finally {
       setExporting(false)
     }
   }, [settings, selectedFieldsList, config, currentFormat, selectedIds, currentFilters, defaultFilename, displayFilename, previewData, onClose])
 
   useEffect(() => {
-    if (visible && config?.export?.defaults) {
-      const defaults = config.export.defaults
-      
-      if (defaults.fields && selectedFieldsList.length === 0) {
-        const defaultItems = defaults.fields.map(fieldKey => ({
+    const exportDefaults = config?.export?.defaults || config?.defaults
+    if (visible && exportDefaults) {
+      if (exportDefaults.fields && selectedFieldsList.length === 0) {
+        const defaultItems = exportDefaults.fields.map(fieldKey => ({
           field: fieldKey,
           isDuplicate: false,
           duplicateIndex: 1
@@ -541,7 +552,7 @@ const ExportPanel = ({
   }
 
   // Показываем ошибку если конфигурация пустая
-  if (!config || !config.export) {
+  if (!config) {
     return (
       <CModal visible={visible} onClose={onClose} size="lg">
         <CModalHeader>
@@ -552,7 +563,7 @@ const ExportPanel = ({
             <h6>Конфигурация экспорта не найдена</h6>
             <p className="mb-2">Тип: {type}</p>
             <p className="mb-0">Убедитесь что файл конфигурации существует по пути:</p>
-            <code>src/config/{type}ExportConfig.js</code>
+            <code>src/config/{type}ImportExportConfig.js</code>
           </CAlert>
           <div className="mt-3">
             <h6>Полученная конфигурация:</h6>
@@ -580,12 +591,12 @@ const ExportPanel = ({
         <CModalBody>
           <CAlert color="danger">
             <h6>Не настроены шаги экспорта</h6>
-            <p className="mb-0">В конфигурации export.steps пустой массив или отсутствует</p>
+            <p className="mb-0">В конфигурации steps пустой массив или отсутствует</p>
           </CAlert>
           <div className="mt-3">
-            <h6>Конфигурация export:</h6>
+            <h6>Конфигурация:</h6>
             <pre className="small text-muted">
-{JSON.stringify(config.export, null, 2)}
+{JSON.stringify(config, null, 2)}
             </pre>
           </div>
         </CModalBody>
@@ -609,7 +620,7 @@ const ExportPanel = ({
       <CModalHeader>
         <CModalTitle className="d-flex align-items-center">
           <CIcon icon={cilCloudDownload} className="me-2" size="lg" />
-          {config?.export?.title || 'Экспорт данных'}
+          {config?.export?.title || config?.title || 'Экспорт данных'}
           <CBadge color="primary" className="ms-2">
             {formatUpperCase}
           </CBadge>

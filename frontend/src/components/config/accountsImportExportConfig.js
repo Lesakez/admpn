@@ -125,10 +125,19 @@ export default {
         extension: 'json',
         mimeType: 'application/json',
         supportsFields: true
+      },
+      {
+        value: 'xml',
+        label: 'XML',
+        description: 'Данные в XML формате',
+        method: 'exportXML',
+        extension: 'xml',
+        mimeType: 'application/xml',
+        supportsFields: true
       }
     ],
 
-    // Готовые шаблоны для TXT
+    // Готовые шаблоны
     templates: {
       login_password: {
         name: 'Логин:Пароль',
@@ -144,9 +153,9 @@ export default {
       },
       full_account: {
         name: 'Полный аккаунт',
-        template: '{login}:{password}:{email}:{user_id}:{status}',
+        template: '{login}:{password}:{email}:{status}',
         description: 'Максимум информации',
-        fields: ['login', 'password', 'email', 'user_id', 'status']
+        fields: ['login', 'password', 'email', 'status']
       }
     },
 
@@ -158,25 +167,19 @@ export default {
         description: 'Базовая информация об аккаунте'
       },
       {
-        key: 'email',
-        name: 'Email данные',
-        description: 'Информация об email и восстановлении'
-      },
-      {
         key: 'security',
         name: 'Безопасность',
-        description: 'Пароли, 2FA и данные безопасности'
+        description: 'Пароли и данные безопасности'
       },
       {
         key: 'metadata',
         name: 'Метаданные',
-        description: 'Служебная информация и метрики'
+        description: 'Служебная информация'
       }
     ],
 
-    // Все доступные поля для экспорта
+    // Доступные поля для экспорта
     availableFields: [
-      // Основные поля
       { 
         key: 'id', 
         name: 'id', 
@@ -202,77 +205,26 @@ export default {
         category: 'security', 
         type: 'string',
         sensitive: true,
-        description: 'Пароль аккаунта'
+        description: 'Пароль для входа'
       },
       { 
         key: 'email', 
         name: 'email', 
         label: 'Email',
-        category: 'email', 
+        category: 'basic', 
         type: 'email',
         sensitive: false,
-        description: 'Основной email адрес'
-      },
-      { 
-        key: 'user_id', 
-        name: 'user_id', 
-        label: 'User ID',
-        category: 'basic', 
-        type: 'string',
-        sensitive: false,
-        description: 'ID пользователя в системе'
+        description: 'Адрес электронной почты'
       },
       { 
         key: 'status', 
         name: 'status', 
         label: 'Статус',
         category: 'basic', 
-        type: 'enum',
+        type: 'string',
         sensitive: false,
         description: 'Текущий статус аккаунта'
       },
-
-      // Email данные
-      { 
-        key: 'email_password', 
-        name: 'email_password', 
-        label: 'Пароль Email',
-        category: 'email', 
-        type: 'string',
-        sensitive: true,
-        description: 'Пароль от email аккаунта'
-      },
-      { 
-        key: 'recovery_email', 
-        name: 'recovery_email', 
-        label: 'Резервный Email',
-        category: 'email', 
-        type: 'email',
-        sensitive: false,
-        description: 'Email для восстановления'
-      },
-
-      // Безопасность
-      { 
-        key: 'phone', 
-        name: 'phone', 
-        label: 'Телефон',
-        category: 'security', 
-        type: 'string',
-        sensitive: false,
-        description: 'Номер телефона'
-      },
-      { 
-        key: 'two_fa_secret', 
-        name: 'two_fa_secret', 
-        label: '2FA секрет',
-        category: 'security', 
-        type: 'string',
-        sensitive: true,
-        description: 'Секретный ключ для 2FA'
-      },
-
-      // Метаданные
       { 
         key: 'created_at', 
         name: 'created_at', 
@@ -290,24 +242,6 @@ export default {
         type: 'datetime',
         sensitive: false,
         description: 'Дата последнего обновления'
-      },
-      { 
-        key: 'last_login', 
-        name: 'last_login', 
-        label: 'Последний вход',
-        category: 'metadata', 
-        type: 'datetime',
-        sensitive: false,
-        description: 'Дата последнего входа в систему'
-      },
-      { 
-        key: 'notes', 
-        name: 'notes', 
-        label: 'Заметки',
-        category: 'metadata', 
-        type: 'text',
-        sensitive: false,
-        description: 'Дополнительные заметки'
       }
     ],
 
