@@ -9,6 +9,7 @@ yarn-error.log*
 .env.local
 .env.production
 .env.staging
+*.env
 
 # Logs
 logs/
@@ -53,3 +54,35 @@ temp/
 # OS
 .DS_Store
 Thumbs.db
+
+# Docker specific for backend
+Dockerfile.prod
+docker-entrypoint-migrations.sh.backup
+
+# Migration files (кроме примеров)
+database/migrations/*.sql
+!database/migrations/.gitkeep
+!database/migrations/example_*.sql
+
+# Service files
+migrate.js.backup
+
+# Test files
+coverage/
+.nyc_output
+
+# PM2 files
+ecosystem.config.js
+.pm2/
+
+# Sequelize CLI
+.sequelizerc.backup
+
+# SSL for development
+*.pem
+*.key
+*.crt
+
+# Backup files
+*.backup
+*.bak
