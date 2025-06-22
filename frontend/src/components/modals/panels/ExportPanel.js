@@ -1,12 +1,6 @@
 // frontend/src/components/modals/panels/ExportPanel.js
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 import {
-  CModal,
-  CModalHeader,
-  CModalTitle,
-  CModalBody,
-  CModalFooter,
-  CButton,
   CCard,
   CCardBody,
   CCardHeader,
@@ -14,14 +8,22 @@ import {
   CFormCheck,
   CFormInput,
   CFormLabel,
-  CFormTextarea,
   CAlert,
   CSpinner,
   CBadge,
   CRow,
   CCol,
-  CTooltip,
-  CButtonGroup
+  CButton,
+  CButtonGroup,
+  CAccordion,
+  CAccordionItem,
+  CAccordionHeader,
+  CAccordionBody,
+  CFormTextarea,
+  CInputGroup,
+  CInputGroupText,
+  CListGroup,
+  CListGroupItem
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -35,46 +37,24 @@ import {
   cilCopy,
   cilArrowTop,
   cilArrowBottom,
-  cilList,
-  cilReload
+  cilMenu,
+  cilReload,
+  cilSearch,
+  cilX
 } from '@coreui/icons'
 import toast from 'react-hot-toast'
 import { useImportExportConfig } from '../../../hooks/useImportExportConfig'
 import './ExportPanel.scss'
 
 const ExportPanel = ({ 
-  visible, 
-  onClose, 
   type = 'accounts', 
   selectedIds = [], 
   currentFilters = {}, 
-  initialFormat = 'csv' 
+  initialFormat = 'csv',
+  onSuccess,
+  onExport
 }) => {
   const { config, isLoading: configLoading, error: configError } = useImportExportConfig(type)
-  
-  // Добавляем отладочные логи
-  console.log('ExportPanel render:', {
-    visible,
-    type,
-    configLoading,
-    configError,
-    config
-  })
-
-  // Логируем полную структуру конфигурации
-  if (config) {
-    console.log('Full config structure:', JSON.stringify(config, null, 2))
-    console.log('Config export section:', config.export || config)
-    if (config.export) {
-      console.log('Export steps:', config.export.steps)
-      console.log('Export exportTypes:', config.export.exportTypes)
-      console.log('Export formats:', config.export.formats)
-    } else {
-      console.log('Direct config steps:', config.steps)
-      console.log('Direct config exportTypes:', config.exportTypes)
-      console.log('Direct config formats:', config.formats)
-    }
-  }
 
   const [currentStep, setCurrentStep] = useState('type')
   const [exporting, setExporting] = useState(false)
@@ -100,13 +80,12 @@ const ExportPanel = ({
 
   const [selectedFieldsList, setSelectedFieldsList] = useState([])
   const [fieldsSearchQuery, setFieldsSearchQuery] = useState('')
-  const [statusSearchQuery, setStatusSearchQuery] = useState('')
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [previewData, setPreviewData] = useState(null)
   const [previewError, setPreviewError] = useState('')
+  const [draggedIndex, setDraggedIndex] = useState(null)
 
   // Безопасное извлечение данных из конфигурации
-  // Поддерживаем два формата: config.export.* и config.*
   const steps = config?.export?.steps || config?.steps || []
   const exportTypes = config?.export?.exportTypes || config?.exportTypes || []
   const formats = config?.export?.formats || config?.formats || []
@@ -114,16 +93,6 @@ const ExportPanel = ({
   const fieldCategories = config?.export?.fieldCategories || config?.fieldCategories || []
   const availableFields = config?.export?.availableFields || config?.availableFields || []
   const filters = config?.export?.filters || config?.filters || []
-
-  console.log('Config data extracted:', {
-    stepsLength: steps.length,
-    exportTypesLength: exportTypes.length,
-    formatsLength: formats.length,
-    fieldCategoriesLength: fieldCategories.length,
-    availableFieldsLength: availableFields.length,
-    filtersLength: filters.length,
-    configStructure: config?.export ? 'nested (config.export)' : 'flat (config.*)'
-  })
 
   const formatUpperCase = useMemo(() => settings.format?.toUpperCase() || '', [settings.format])
   const today = useMemo(() => new Date().toISOString().split('T')[0], [])
@@ -137,13 +106,6 @@ const ExportPanel = ({
       .replace('{type}', type)
   }, [config, settings.format, today, type])
 
-  const displayFilename = useMemo(() => {
-    const filename = settings.filename || defaultFilename
-    const currentFormat = formats.find(f => f.value === settings.format)
-    const extension = currentFormat?.extension || settings.format
-    return `${filename}.${extension}`
-  }, [settings.filename, settings.format, defaultFilename, formats])
-
   const currentFormat = useMemo(() => 
     formats.find(f => f.value === settings.format), 
     [formats, settings.format]
@@ -152,11 +114,11 @@ const ExportPanel = ({
   const filteredFields = useMemo(() => {
     if (!fieldsSearchQuery) return availableFields
     const query = fieldsSearchQuery.toLowerCase()
-    return availableFields.filter(field => {
-      const searchText = [field.name, field.label, field.description]
-        .filter(Boolean).join(' ').toLowerCase()
-      return searchText.includes(query)
-    })
+    return availableFields.filter(field => 
+      field.name?.toLowerCase().includes(query) ||
+      field.label?.toLowerCase().includes(query) ||
+      field.description?.toLowerCase().includes(query)
+    )
   }, [availableFields, fieldsSearchQuery])
 
   const fieldsByCategory = useMemo(() => {
@@ -167,13 +129,19 @@ const ExportPanel = ({
         fields: filteredFields.filter(field => field.category === category.key)
       }
     })
+    // Добавляем поля без категории
+    const uncategorizedFields = filteredFields.filter(field => 
+      !fieldCategories.some(cat => cat.key === field.category)
+    )
+    if (uncategorizedFields.length > 0) {
+      grouped.uncategorized = {
+        key: 'uncategorized',
+        name: 'Другие поля',
+        fields: uncategorizedFields
+      }
+    }
     return grouped
   }, [fieldCategories, filteredFields])
-
-  const autoTemplatePreview = useMemo(() => {
-    if (selectedFieldsList.length === 0) return ''
-    return selectedFieldsList.map(item => `{${item.field}}`).join(':')
-  }, [selectedFieldsList])
 
   const canProceedToNext = useCallback(() => {
     switch (currentStep) {
@@ -198,10 +166,6 @@ const ExportPanel = ({
     const currentIndex = steps.findIndex(s => s.id === currentStep)
     if (currentIndex < steps.length - 1) {
       setCurrentStep(steps[currentIndex + 1].id)
-      
-      if (steps[currentIndex + 1].id === 'preview') {
-        loadPreview()
-      }
     }
   }, [currentStep, steps])
 
@@ -213,173 +177,100 @@ const ExportPanel = ({
   }, [currentStep, steps])
 
   const addField = useCallback((field) => {
-    const existingCount = selectedFieldsList.filter(item => item.field === field.key).length
     const newItem = {
       field: field.key,
-      isDuplicate: existingCount > 0,
-      duplicateIndex: existingCount + 1
+      label: field.label || field.name,
+      sensitive: field.sensitive,
+      id: Date.now() + Math.random()
     }
-    
     setSelectedFieldsList(prev => [...prev, newItem])
-    updateDuplicateIndices(field.key, [...selectedFieldsList, newItem])
-  }, [selectedFieldsList])
-
-  const removeFieldAt = useCallback((index) => {
-    const removedField = selectedFieldsList[index]
-    const newList = selectedFieldsList.filter((_, i) => i !== index)
-    setSelectedFieldsList(newList)
-    updateDuplicateIndices(removedField.field, newList)
-  }, [selectedFieldsList])
-
-  const duplicateField = useCallback((index) => {
-    const fieldItem = selectedFieldsList[index]
-    const existingCount = selectedFieldsList.filter(item => item.field === fieldItem.field).length
-    
-    const newItem = {
-      field: fieldItem.field,
-      isDuplicate: true,
-      duplicateIndex: existingCount + 1
-    }
-    
-    const newList = [...selectedFieldsList]
-    newList.splice(index + 1, 0, newItem)
-    setSelectedFieldsList(newList)
-    updateDuplicateIndices(fieldItem.field, newList)
-  }, [selectedFieldsList])
-
-  const moveFieldUp = useCallback((index) => {
-    if (index === 0) return
-    
-    const newList = [...selectedFieldsList]
-    const temp = newList[index]
-    newList[index] = newList[index - 1]
-    newList[index - 1] = temp
-    setSelectedFieldsList(newList)
-    
-    const affectedFields = new Set([newList[index].field, newList[index - 1].field])
-    affectedFields.forEach(fieldName => updateDuplicateIndices(fieldName, newList))
-  }, [selectedFieldsList])
-
-  const moveFieldDown = useCallback((index) => {
-    if (index === selectedFieldsList.length - 1) return
-    
-    const newList = [...selectedFieldsList]
-    const temp = newList[index]
-    newList[index] = newList[index + 1]
-    newList[index + 1] = temp
-    setSelectedFieldsList(newList)
-    
-    const affectedFields = new Set([newList[index].field, newList[index + 1].field])
-    affectedFields.forEach(fieldName => updateDuplicateIndices(fieldName, newList))
-  }, [selectedFieldsList])
-
-  const updateDuplicateIndices = useCallback((fieldName, list = selectedFieldsList) => {
-    const fieldsOfType = list.filter(item => item.field === fieldName)
-    
-    fieldsOfType.forEach((item, index) => {
-      item.isDuplicate = index > 0
-      item.duplicateIndex = index + 1
-    })
   }, [])
 
-  const addAllFields = useCallback(() => {
-    const newItems = availableFields
-      .filter(field => !selectedFieldsList.some(item => item.field === field.key))
-      .map(field => ({
-        field: field.key,
-        isDuplicate: false,
-        duplicateIndex: 1
-      }))
-    
-    setSelectedFieldsList(prev => [...prev, ...newItems])
-  }, [availableFields, selectedFieldsList])
+  const removeFieldAt = useCallback((index) => {
+    setSelectedFieldsList(prev => prev.filter((_, i) => i !== index))
+  }, [])
 
-  const clearSelectedFields = useCallback(() => {
+  const clearAllFields = useCallback(() => {
     setSelectedFieldsList([])
   }, [])
 
-  const getFieldInfo = useCallback((fieldKey) => {
-    return availableFields.find(field => field.key === fieldKey)
+  const addAllFields = useCallback(() => {
+    const newItems = availableFields.map(field => ({
+      field: field.key,
+      label: field.label || field.name,
+      sensitive: field.sensitive,
+      id: Date.now() + Math.random() + Math.random()
+    }))
+    setSelectedFieldsList(newItems)
   }, [availableFields])
 
-  const getFieldLabel = useCallback((fieldKey) => {
-    const field = getFieldInfo(fieldKey)
-    return field?.label || field?.name || fieldKey
-  }, [getFieldInfo])
+  // Drag & Drop функции
+  const handleDragStart = useCallback((e, index) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }, [])
 
-  const applyTemplate = useCallback(() => {
-    const template = templates[selectedTemplate]
-    if (template) {
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }, [])
+
+  const handleDrop = useCallback((e, dropIndex) => {
+    e.preventDefault()
+    
+    if (draggedIndex === null || draggedIndex === dropIndex) return
+    
+    setSelectedFieldsList(prev => {
+      const newList = [...prev]
+      const draggedItem = newList[draggedIndex]
+      newList.splice(draggedIndex, 1)
+      newList.splice(dropIndex, 0, draggedItem)
+      return newList
+    })
+    
+    setDraggedIndex(null)
+  }, [draggedIndex])
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedIndex(null)
+  }, [])
+
+  const moveField = useCallback((fromIndex, toIndex) => {
+    setSelectedFieldsList(prev => {
+      const newList = [...prev]
+      const item = newList.splice(fromIndex, 1)[0]
+      newList.splice(toIndex, 0, item)
+      return newList
+    })
+  }, [])
+
+  const applyTemplate = useCallback((templateKey) => {
+    const template = templates[templateKey]
+    if (template && template.fields) {
+      const newItems = template.fields.map(fieldKey => {
+        const field = availableFields.find(f => f.key === fieldKey)
+        return {
+          field: fieldKey,
+          label: field?.label || field?.name || fieldKey,
+          sensitive: field?.sensitive || false,
+          id: Date.now() + Math.random() + Math.random()
+        }
+      }).filter(item => item.label !== fieldKey) // Убираем поля которых нет в availableFields
+      
+      setSelectedFieldsList(newItems)
       setSettings(prev => ({ ...prev, template: template.template }))
-      
-      if (template.fields?.length > 0) {
-        const newItems = template.fields.map(fieldName => ({
-          field: fieldName,
-          isDuplicate: false,
-          duplicateIndex: 1
-        }))
-        setSelectedFieldsList(newItems)
-        
-        template.fields.forEach(fieldName => updateDuplicateIndices(fieldName, newItems))
-      }
+      setSelectedTemplate(templateKey)
     }
-  }, [selectedTemplate, templates, updateDuplicateIndices])
+  }, [templates, availableFields])
 
-  const applyAutoTemplate = useCallback(() => {
-    if (selectedFieldsList.length > 0) {
-      setSettings(prev => ({ 
-        ...prev, 
-        template: selectedFieldsList.map(item => `{${item.field}}`).join(':')
-      }))
-    }
-  }, [selectedFieldsList])
-
-  const loadPreview = useCallback(async () => {
-    if (previewLoading) return
-    
-    try {
-      setPreviewLoading(true)
-      setPreviewError('')
-      
-      const previewSettings = {
-        ...settings,
-        selected_fields: selectedFieldsList.map(item => item.field),
-        export_type: settings.export_type,
-        account_ids: settings.export_type === 'selected' ? selectedIds : undefined,
-        ...currentFilters,
-        preview: true,
-        limit: 10
-      }
-      
-      const { accountsService } = await import('../../../services/accountsService')
-      const response = await accountsService.getExportPreview(previewSettings)
-      
-      setPreviewData(response.data)
-      
-    } catch (error) {
-      setPreviewError(error.message || 'Ошибка загрузки предпросмотра')
-      setPreviewData(null)
-    } finally {
-      setPreviewLoading(false)
-    }
-  }, [previewLoading, settings, selectedFieldsList, selectedIds, currentFilters])
-
-  const formatPreviewValue = useCallback((value, fieldKey) => {
-    if (value === null || value === undefined) return '—'
-    
-    const field = getFieldInfo(fieldKey)
-    const str = String(value)
-    
-    if (field?.sensitive && settings.mask_passwords) {
-      return '****'
-    }
-    
-    if (str.length > 30) {
-      return str.substring(0, 27) + '...'
-    }
-    
-    return str
-  }, [getFieldInfo, settings.mask_passwords])
+  const handleStatusFilterChange = useCallback((statusValue, checked) => {
+    setSettings(prev => ({
+      ...prev,
+      status_filters: checked
+        ? [...prev.status_filters, statusValue]
+        : prev.status_filters.filter(s => s !== statusValue)
+    }))
+  }, [])
 
   const executeExport = useCallback(async () => {
     try {
@@ -388,17 +279,6 @@ const ExportPanel = ({
       const exportSettings = {
         ...settings,
         selected_fields: selectedFieldsList.map(item => item.field)
-      }
-      
-      const validation = config?.export?.validation || config?.validation
-      if (validation) {
-        if (selectedFieldsList.length < (validation.minFields || 1)) {
-          throw new Error(`Выберите минимум ${validation.minFields || 1} полей`)
-        }
-        
-        if (previewData?.total_records > validation.maxRecords) {
-          throw new Error(`Слишком много записей (${previewData.total_records}). Максимум: ${validation.maxRecords}`)
-        }
       }
       
       if (exportSettings.export_type === 'selected') {
@@ -412,28 +292,39 @@ const ExportPanel = ({
       if (!exportSettings.filename) {
         exportSettings.filename = defaultFilename
       }
-      
-      const { accountsService } = await import('../../../services/accountsService')
-      const method = currentFormat?.method || 'exportAccounts'
-      
-      const response = await accountsService[method](exportSettings)
-      
-      const blob = new Blob([response.data], { 
-        type: currentFormat?.mimeType || 'application/octet-stream' 
+
+      if (onExport) {
+        await onExport(exportSettings)
+      } else {
+        const { accountsService } = await import('../../../services/accountsService')
+        const method = currentFormat?.method || 'exportAccounts'
+        
+        const response = await accountsService[method](exportSettings)
+        
+        const blob = new Blob([response.data], { 
+          type: currentFormat?.mimeType || 'application/octet-stream' 
+        })
+        
+        const displayFilename = `${exportSettings.filename}.${currentFormat?.extension || settings.format}`
+        
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.style.display = 'none'
+        a.href = url
+        a.download = displayFilename
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        
+        toast.success(`Файл ${displayFilename} скачан`)
+      }
+
+      onSuccess?.({
+        settings: exportSettings,
+        fieldsCount: selectedFieldsList.length,
+        recordsCount: previewData?.total_records || 0
       })
-      
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.style.display = 'none'
-      a.href = url
-      a.download = displayFilename
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-      
-      toast.success(`Файл ${displayFilename} скачан`)
-      onClose?.()
       
     } catch (error) {
       const errorMsg = error.message || 
@@ -444,404 +335,469 @@ const ExportPanel = ({
     } finally {
       setExporting(false)
     }
-  }, [settings, selectedFieldsList, config, currentFormat, selectedIds, currentFilters, defaultFilename, displayFilename, previewData, onClose])
+  }, [settings, selectedFieldsList, config, currentFormat, selectedIds, currentFilters, defaultFilename, previewData, onSuccess, onExport])
 
+  // Инициализация настроек из конфигурации
   useEffect(() => {
     const exportDefaults = config?.export?.defaults || config?.defaults
-    if (visible && exportDefaults) {
+    if (exportDefaults) {
+      setSettings(prev => ({
+        ...prev,
+        format: exportDefaults.format || initialFormat,
+        encoding: exportDefaults.encoding || 'utf-8',
+        include_header: exportDefaults.include_header ?? true,
+        mask_passwords: exportDefaults.mask_passwords ?? false,
+        csv_delimiter: exportDefaults.csv_delimiter || ',',
+        filename: exportDefaults.filename_template || ''
+      }))
+      
+      // Инициализация полей по умолчанию
       if (exportDefaults.fields && selectedFieldsList.length === 0) {
-        const defaultItems = exportDefaults.fields.map(fieldKey => ({
-          field: fieldKey,
-          isDuplicate: false,
-          duplicateIndex: 1
-        }))
+        const defaultItems = exportDefaults.fields.map(fieldKey => {
+          const field = availableFields.find(f => f.key === fieldKey)
+          return field ? {
+            field: fieldKey,
+            label: field.label || field.name,
+            sensitive: field.sensitive,
+            id: Date.now() + Math.random()
+          } : null
+        }).filter(Boolean)
+        
         setSelectedFieldsList(defaultItems)
       }
-      
-      if (settings.format === 'txt' && currentFormat?.defaultTemplate && !settings.template) {
-        setSettings(prev => ({ ...prev, template: currentFormat.defaultTemplate }))
-      }
     }
-  }, [visible, config, selectedFieldsList.length, settings.format, currentFormat, settings.template])
+  }, [config, availableFields, initialFormat, selectedFieldsList.length])
 
-  useEffect(() => {
-    if (currentFormat) {
-      const formatDefaults = {}
-      
-      if (currentFormat.value === 'csv' && currentFormat.options?.delimiters) {
-        formatDefaults.csv_delimiter = currentFormat.options.delimiters[0]?.value || ','
-      }
-      
-      if (currentFormat.value === 'txt' && currentFormat.defaultTemplate) {
-        formatDefaults.template = currentFormat.defaultTemplate
-      }
-      
-      if (Object.keys(formatDefaults).length > 0) {
-        setSettings(prev => ({ ...prev, ...formatDefaults }))
-      }
-    }
-  }, [currentFormat])
-
-  // Отладочная информация в консоль
-  useEffect(() => {
-    console.log('ExportPanel state update:', {
-      currentStep,
-      configLoading,
-      configError,
-      hasConfig: !!config,
-      hasSteps: steps.length > 0,
-      hasExportTypes: exportTypes.length > 0,
-      hasFormats: formats.length > 0
-    })
-  }, [currentStep, configLoading, configError, config, steps, exportTypes, formats])
-
-  // Показываем состояние загрузки
   if (configLoading) {
     return (
-      <CModal visible={visible} onClose={onClose} size="xl">
-        <CModalHeader>
-          <CModalTitle>Экспорт данных</CModalTitle>
-        </CModalHeader>
-        <CModalBody className="text-center py-5">
-          <CSpinner className="me-2" />
-          Загрузка конфигурации...
-          <div className="mt-2 text-muted">
-            <small>Загружается конфигурация для типа: {type}</small>
-          </div>
-        </CModalBody>
-        <CModalFooter>
-          <CButton color="secondary" onClick={onClose}>
-            Закрыть
-          </CButton>
-        </CModalFooter>
-      </CModal>
+      <div className="export-panel-loading">
+        <CSpinner className="me-2" />
+        Загрузка конфигурации экспорта...
+      </div>
     )
   }
 
-  // Показываем ошибку конфигурации
   if (configError) {
     return (
-      <CModal visible={visible} onClose={onClose} size="lg">
-        <CModalHeader>
-          <CModalTitle>Ошибка конфигурации</CModalTitle>
-        </CModalHeader>
-        <CModalBody>
-          <CAlert color="danger">
-            <h6>Ошибка загрузки конфигурации экспорта</h6>
-            <p className="mb-2">Тип: {type}</p>
-            <p className="mb-0">Ошибка: {configError.message}</p>
-          </CAlert>
-          <div className="mt-3">
-            <h6>Отладочная информация:</h6>
-            <pre className="small text-muted">
-{JSON.stringify({
-  type,
-  configError: configError.message,
-  stack: configError.stack
-}, null, 2)}
-            </pre>
-          </div>
-        </CModalBody>
-        <CModalFooter>
-          <CButton color="secondary" onClick={onClose}>
-            Закрыть
-          </CButton>
-        </CModalFooter>
-      </CModal>
+      <CAlert color="danger">
+        <h6>Ошибка загрузки конфигурации</h6>
+        <p className="mb-0">{configError.message}</p>
+      </CAlert>
     )
   }
 
-  // Показываем ошибку если конфигурация пустая
-  if (!config) {
+  if (!config || steps.length === 0) {
     return (
-      <CModal visible={visible} onClose={onClose} size="lg">
-        <CModalHeader>
-          <CModalTitle>Конфигурация не найдена</CModalTitle>
-        </CModalHeader>
-        <CModalBody>
-          <CAlert color="warning">
-            <h6>Конфигурация экспорта не найдена</h6>
-            <p className="mb-2">Тип: {type}</p>
-            <p className="mb-0">Убедитесь что файл конфигурации существует по пути:</p>
-            <code>src/config/{type}ImportExportConfig.js</code>
-          </CAlert>
-          <div className="mt-3">
-            <h6>Полученная конфигурация:</h6>
-            <pre className="small text-muted">
-{JSON.stringify(config, null, 2)}
-            </pre>
-          </div>
-        </CModalBody>
-        <CModalFooter>
-          <CButton color="secondary" onClick={onClose}>
-            Закрыть
-          </CButton>
-        </CModalFooter>
-      </CModal>
-    )
-  }
-
-  // Показываем ошибку если нет шагов
-  if (steps.length === 0) {
-    return (
-      <CModal visible={visible} onClose={onClose} size="lg">
-        <CModalHeader>
-          <CModalTitle>Некорректная конфигурация</CModalTitle>
-        </CModalHeader>
-        <CModalBody>
-          <CAlert color="danger">
-            <h6>Не настроены шаги экспорта</h6>
-            <p className="mb-0">В конфигурации steps пустой массив или отсутствует</p>
-          </CAlert>
-          <div className="mt-3">
-            <h6>Конфигурация:</h6>
-            <pre className="small text-muted">
-{JSON.stringify(config, null, 2)}
-            </pre>
-          </div>
-        </CModalBody>
-        <CModalFooter>
-          <CButton color="secondary" onClick={onClose}>
-            Закрыть
-          </CButton>
-        </CModalFooter>
-      </CModal>
+      <CAlert color="warning">
+        <h6>Конфигурация экспорта не найдена</h6>
+        <p className="mb-0">Убедитесь что настроена конфигурация для типа: {type}</p>
+      </CAlert>
     )
   }
 
   return (
-    <CModal
-      visible={visible}
-      onClose={onClose}
-      backdrop="static"
-      size="xl"
-      className="export-modal"
-    >
-      <CModalHeader>
-        <CModalTitle className="d-flex align-items-center">
-          <CIcon icon={cilCloudDownload} className="me-2" size="lg" />
-          {config?.export?.title || config?.title || 'Экспорт данных'}
-          <CBadge color="primary" className="ms-2">
-            {formatUpperCase}
-          </CBadge>
-          <CBadge color="info" className="ms-2">
-            {currentStep}
-          </CBadge>
-        </CModalTitle>
-      </CModalHeader>
-      
-      <CModalBody>
-        {/* Отладочная информация */}
-        <CAlert color="info" className="mb-3">
-          <strong>Debug:</strong> Шаг {currentStep}, Шагов: {steps.length}, Типов: {exportTypes.length}, Форматов: {formats.length}
-        </CAlert>
-
-        <div className="progress-steps mb-4">
-          {steps.map((step, index) => (
-            <div 
-              key={step.id}
-              className={`step ${currentStep === step.id ? 'active' : ''} ${isStepCompleted(step.id) ? 'completed' : ''}`}
-            >
-              <div className="step-number">
-                {isStepCompleted(step.id) ? (
-                  <CIcon icon={cilCheckCircle} size="sm" />
-                ) : (
-                  <span>{index + 1}</span>
-                )}
-              </div>
-              <span className="step-name">{step.label}</span>
+    <div className="export-panel">
+      {/* Прогресс шагов */}
+      <div className="export-steps">
+        {steps.map((step, index) => (
+          <div 
+            key={step.id}
+            className={`export-step ${currentStep === step.id ? 'active' : ''} ${isStepCompleted(step.id) ? 'completed' : ''}`}
+          >
+            <div className="step-indicator">
+              {isStepCompleted(step.id) ? (
+                <CIcon icon={cilCheckCircle} />
+              ) : (
+                <span>{index + 1}</span>
+              )}
             </div>
-          ))}
-        </div>
+            <div className="step-content">
+              <div className="step-title">{step.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
 
+      {/* Контент шагов */}
+      <div className="export-step-content">
         {currentStep === 'type' && (
-          <div className="step-content">
-            <h5 className="mb-4">Что экспортировать?</h5>
+          <div className="step-type">
+            <h5 className="mb-4">Выберите что экспортировать</h5>
             
-            <CAlert color="info">
-              Найдено типов экспорта: {exportTypes.length}
-            </CAlert>
-
-            {exportTypes.length > 0 ? (
-              <CRow className="g-4">
-                <CCol md={12}>
-                  <CCard>
-                    <CCardBody>
-                      <h6>Тип экспорта</h6>
-                      <div className="export-types">
-                        {exportTypes.map(option => (
-                          <label 
-                            key={option.value}
-                            className={`export-type ${settings.export_type === option.value ? 'selected' : ''}`}
-                          >
-                            <input
-                              type="radio"
-                              value={option.value}
-                              checked={settings.export_type === option.value}
-                              onChange={(e) => setSettings(prev => ({ ...prev, export_type: e.target.value }))}
-                            />
-                            <div className="content">
-                              <div className="title">{option.title}</div>
-                              <div className="description">
-                                {option.value === 'selected' && selectedIds.length > 0 
-                                  ? `${option.description} (${selectedIds.length} записей)`
-                                  : option.description
-                                }
-                              </div>
-                            </div>
-                          </label>
-                        ))}
-                      </div>
-                    </CCardBody>
-                  </CCard>
+            <CRow className="g-3">
+              {exportTypes.map(option => (
+                <CCol md={6} key={option.value}>
+                  <div 
+                    className={`export-type-card ${settings.export_type === option.value ? 'selected' : ''}`}
+                    onClick={() => setSettings(prev => ({ ...prev, export_type: option.value }))}
+                  >
+                    <div className="export-type-content">
+                      <h6>{option.title}</h6>
+                      <p>{option.description}</p>
+                      {option.value === 'selected' && selectedIds.length > 0 && (
+                        <CBadge color="primary">{selectedIds.length} записей</CBadge>
+                      )}
+                    </div>
+                    <div className="export-type-radio">
+                      <input
+                        type="radio"
+                        checked={settings.export_type === option.value}
+                        onChange={() => {}}
+                      />
+                    </div>
+                  </div>
                 </CCol>
-              </CRow>
-            ) : (
-              <CAlert color="warning">
-                Типы экспорта не настроены в конфигурации
-              </CAlert>
+              ))}
+            </CRow>
+
+            {/* Фильтры */}
+            {filters.length > 0 && settings.export_type === 'filtered' && (
+              <CCard className="mt-4">
+                <CCardHeader>
+                  <h6 className="mb-0">Фильтры экспорта</h6>
+                </CCardHeader>
+                <CCardBody>
+                  <CRow className="g-3">
+                    {filters.map(filter => (
+                      <CCol md={6} key={filter.key}>
+                        {filter.type === 'multiselect' && (
+                          <div>
+                            <CFormLabel>{filter.name}</CFormLabel>
+                            <div className="filter-options">
+                              {filter.options.map(option => (
+                                <CFormCheck
+                                  key={option.value}
+                                  id={`filter-${filter.key}-${option.value}`}
+                                  label={
+                                    <span>
+                                      <CBadge color={option.color || 'secondary'} className="me-2">
+                                        {option.label}
+                                      </CBadge>
+                                    </span>
+                                  }
+                                  checked={settings.status_filters.includes(option.value)}
+                                  onChange={(e) => handleStatusFilterChange(option.value, e.target.checked)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {filter.type === 'text' && (
+                          <div>
+                            <CFormLabel htmlFor={`filter-${filter.key}`}>{filter.name}</CFormLabel>
+                            <CFormInput
+                              id={`filter-${filter.key}`}
+                              placeholder={filter.placeholder}
+                              value={settings.search_query}
+                              onChange={(e) => setSettings(prev => ({ ...prev, search_query: e.target.value }))}
+                            />
+                          </div>
+                        )}
+
+                        {filter.type === 'daterange' && (
+                          <div>
+                            <CFormLabel>{filter.name}</CFormLabel>
+                            <CRow className="g-2">
+                              <CCol>
+                                <CFormInput
+                                  type="date"
+                                  placeholder="От"
+                                  value={settings.date_from}
+                                  onChange={(e) => setSettings(prev => ({ ...prev, date_from: e.target.value }))}
+                                />
+                              </CCol>
+                              <CCol>
+                                <CFormInput
+                                  type="date"
+                                  placeholder="До"
+                                  value={settings.date_to}
+                                  onChange={(e) => setSettings(prev => ({ ...prev, date_to: e.target.value }))}
+                                />
+                              </CCol>
+                            </CRow>
+                          </div>
+                        )}
+                      </CCol>
+                    ))}
+                  </CRow>
+                </CCardBody>
+              </CCard>
             )}
           </div>
         )}
 
         {currentStep === 'format' && (
-          <div className="step-content">
-            <h5 className="mb-4">Формат и поля экспорта</h5>
+          <div className="step-format">
+            <h5 className="mb-4">Настройте формат и поля</h5>
             
-            <CAlert color="info">
-              Найдено форматов: {formats.length}, Полей: {availableFields.length}
-            </CAlert>
+            <CRow className="g-4">
+              <CCol lg={4}>
+                <CCard className="h-100">
+                  <CCardHeader>
+                    <h6 className="mb-0">Формат экспорта</h6>
+                  </CCardHeader>
+                  <CCardBody>
+                    <CFormSelect
+                      value={settings.format}
+                      onChange={(e) => setSettings(prev => ({ ...prev, format: e.target.value }))}
+                      className="mb-3"
+                    >
+                      {formats.map(format => (
+                        <option key={format.value} value={format.value}>
+                          {format.label}
+                        </option>
+                      ))}
+                    </CFormSelect>
+                    
+                    {currentFormat?.description && (
+                      <CAlert color="info" className="mb-3">
+                        {currentFormat.description}
+                      </CAlert>
+                    )}
 
-            {formats.length > 0 ? (
-              <CRow className="g-4">
-                <CCol md={6}>
-                  <CCard>
-                    <CCardBody>
-                      <h6>Формат: {formatUpperCase}</h6>
-                      
-                      <div className="mb-3">
-                        <CFormLabel>Выберите формат</CFormLabel>
-                        <CFormSelect
-                          value={settings.format}
-                          onChange={(e) => setSettings(prev => ({ ...prev, format: e.target.value }))}
-                        >
-                          {formats.map(format => (
-                            <option key={format.value} value={format.value}>
-                              {format.label}
-                            </option>
-                          ))}
-                        </CFormSelect>
-                        {currentFormat?.description && (
-                          <div className="form-text">{currentFormat.description}</div>
-                        )}
+                    {Object.keys(templates).length > 0 && (
+                      <div>
+                        <CFormLabel>Быстрые шаблоны</CFormLabel>
+                        {Object.entries(templates).map(([key, template]) => (
+                          <CButton
+                            key={key}
+                            color="outline-primary"
+                            size="sm"
+                            className="d-block w-100 mb-2 text-start"
+                            onClick={() => applyTemplate(key)}
+                          >
+                            <strong>{template.name}</strong>
+                            <br />
+                            <small className="text-muted">{template.description}</small>
+                          </CButton>
+                        ))}
                       </div>
-                    </CCardBody>
-                  </CCard>
-                </CCol>
-                <CCol md={6}>
-                  <CCard>
-                    <CCardBody>
-                      <h6>Поля ({availableFields.length})</h6>
-                      {availableFields.length > 0 ? (
-                        <div>
-                          {availableFields.slice(0, 5).map(field => (
-                            <CBadge key={field.key} color="secondary" className="me-1 mb-1">
-                              {field.label}
-                            </CBadge>
-                          ))}
-                          {availableFields.length > 5 && (
-                            <CBadge color="info">
-                              +{availableFields.length - 5} еще
-                            </CBadge>
-                          )}
-                        </div>
-                      ) : (
-                        <CAlert color="warning">
-                          Поля не настроены в конфигурации
-                        </CAlert>
-                      )}
-                    </CCardBody>
-                  </CCard>
-                </CCol>
-              </CRow>
-            ) : (
-              <CAlert color="warning">
-                Форматы экспорта не настроены в конфигурации
-              </CAlert>
-            )}
+                    )}
+                  </CCardBody>
+                </CCard>
+              </CCol>
+
+              <CCol lg={4}>
+                <CCard className="h-100">
+                  <CCardHeader className="d-flex justify-content-between align-items-center">
+                    <h6 className="mb-0">Доступные поля</h6>
+                    <CButton
+                      size="sm"
+                      color="outline-primary"
+                      onClick={addAllFields}
+                    >
+                      Добавить все
+                    </CButton>
+                  </CCardHeader>
+                  <CCardBody>
+                    <CInputGroup className="mb-3">
+                      <CInputGroupText>
+                        <CIcon icon={cilSearch} />
+                      </CInputGroupText>
+                      <CFormInput
+                        placeholder="Поиск полей..."
+                        value={fieldsSearchQuery}
+                        onChange={(e) => setFieldsSearchQuery(e.target.value)}
+                      />
+                    </CInputGroup>
+
+                    <div className="available-fields">
+                      {Object.values(fieldsByCategory).map(category => (
+                        category.fields.length > 0 && (
+                          <div key={category.key} className="field-category">
+                            <h6 className="category-title">{category.name}</h6>
+                            {category.fields.map(field => (
+                              <div
+                                key={field.key}
+                                className="field-item"
+                                onClick={() => addField(field)}
+                              >
+                                <div className="field-info">
+                                  <span className="field-name">{field.label || field.name}</span>
+                                  {field.sensitive && (
+                                    <CBadge color="warning" size="sm" className="ms-2">
+                                      Sensitive
+                                    </CBadge>
+                                  )}
+                                </div>
+                                <CIcon icon={cilPlus} className="field-add" />
+                              </div>
+                            ))}
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </CCardBody>
+                </CCard>
+              </CCol>
+
+              <CCol lg={4}>
+                <CCard className="h-100">
+                  <CCardHeader className="d-flex justify-content-between align-items-center">
+                    <h6 className="mb-0">
+                      Выбранные поля ({selectedFieldsList.length})
+                    </h6>
+                    <CButton
+                      size="sm"
+                      color="outline-danger"
+                      onClick={clearAllFields}
+                      disabled={selectedFieldsList.length === 0}
+                    >
+                      Очистить
+                    </CButton>
+                  </CCardHeader>
+                  <CCardBody>
+                    {selectedFieldsList.length === 0 ? (
+                      <CAlert color="info">
+                        Перетащите поля сюда или выберите из списка
+                      </CAlert>
+                    ) : (
+                      <div className="selected-fields">
+                        {selectedFieldsList.map((item, index) => (
+                          <div
+                            key={item.id}
+                            className={`selected-field ${draggedIndex === index ? 'dragging' : ''}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragOver={handleDragOver}
+                            onDrop={(e) => handleDrop(e, index)}
+                            onDragEnd={handleDragEnd}
+                          >
+                            <CIcon icon={cilMenu} className="drag-handle" />
+                            <div className="field-content">
+                              <span className="field-name">{item.label}</span>
+                              {item.sensitive && (
+                                <CBadge color="warning" size="sm" className="ms-2">
+                                  Sensitive
+                                </CBadge>
+                              )}
+                            </div>
+                            <div className="field-actions">
+                              <CButton
+                                size="sm"
+                                color="outline-secondary"
+                                onClick={() => moveField(index, Math.max(0, index - 1))}
+                                disabled={index === 0}
+                              >
+                                <CIcon icon={cilArrowTop} size="sm" />
+                              </CButton>
+                              <CButton
+                                size="sm"
+                                color="outline-secondary"
+                                onClick={() => moveField(index, Math.min(selectedFieldsList.length - 1, index + 1))}
+                                disabled={index === selectedFieldsList.length - 1}
+                              >
+                                <CIcon icon={cilArrowBottom} size="sm" />
+                              </CButton>
+                              <CButton
+                                size="sm"
+                                color="outline-danger"
+                                onClick={() => removeFieldAt(index)}
+                              >
+                                <CIcon icon={cilX} size="sm" />
+                              </CButton>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CCardBody>
+                </CCard>
+              </CCol>
+            </CRow>
           </div>
         )}
 
         {currentStep === 'preview' && (
-          <div className="step-content">
-            <h5 className="mb-4">Предпросмотр</h5>
+          <div className="step-preview">
+            <h5 className="mb-4">Подтверждение экспорта</h5>
             
             <CAlert color="success">
-              Готов к экспорту! Выбранных полей: {selectedFieldsList.length}
+              <h6>Готово к экспорту!</h6>
+              <ul className="mb-0">
+                <li>Тип: {exportTypes.find(t => t.value === settings.export_type)?.title}</li>
+                <li>Формат: {currentFormat?.label}</li>
+                <li>Полей: {selectedFieldsList.length}</li>
+                {selectedIds.length > 0 && settings.export_type === 'selected' && (
+                  <li>Записей: {selectedIds.length}</li>
+                )}
+                {settings.status_filters.length > 0 && (
+                  <li>Фильтры статусов: {settings.status_filters.join(', ')}</li>
+                )}
+              </ul>
             </CAlert>
+
+            <CCard>
+              <CCardHeader>
+                <h6 className="mb-0">Выбранные поля</h6>
+              </CCardHeader>
+              <CCardBody>
+                <div className="field-preview">
+                  {selectedFieldsList.map((item, index) => (
+                    <CBadge
+                      key={item.id}
+                      color={item.sensitive ? 'warning' : 'primary'}
+                      className="me-2 mb-2"
+                    >
+                      {index + 1}. {item.label}
+                    </CBadge>
+                  ))}
+                </div>
+              </CCardBody>
+            </CCard>
           </div>
         )}
-      </CModalBody>
-      
-      <CModalFooter>
-        <div className="d-flex justify-content-between align-items-center w-100">
-          <small className="text-muted">
-            Шаг {steps.findIndex(s => s.id === currentStep) + 1} из {steps.length}
-          </small>
-          
-          <div>
+      </div>
+
+      {/* Навигация */}
+      <div className="export-navigation">
+        <div className="step-info">
+          Шаг {steps.findIndex(s => s.id === currentStep) + 1} из {steps.length}
+        </div>
+        
+        <div className="nav-buttons">
+          {currentStep !== 'type' && (
             <CButton
               color="secondary"
               variant="outline"
-              onClick={onClose}
+              onClick={previousStep}
               disabled={exporting}
-              className="me-2"
             >
-              Отмена
+              Назад
             </CButton>
-            
-            {currentStep !== 'type' && (
-              <CButton
-                color="light"
-                onClick={previousStep}
-                disabled={exporting}
-                className="me-2"
-              >
-                Назад
-              </CButton>
-            )}
-            
-            {currentStep !== 'preview' ? (
-              <CButton
-                color="primary"
-                onClick={nextStep}
-                disabled={!canProceedToNext() || exporting}
-              >
-                Далее
-              </CButton>
-            ) : (
-              <CButton
-                color="success"
-                onClick={executeExport}
-                disabled={exporting || selectedFieldsList.length === 0}
-              >
-                {exporting ? (
-                  <>
-                    <CSpinner size="sm" className="me-2" />
-                    Экспортирую...
-                  </>
-                ) : (
-                  <>
-                    <CIcon icon={cilCloudDownload} className="me-2" />
-                    Экспортировать
-                  </>
-                )}
-              </CButton>
-            )}
-          </div>
+          )}
+          
+          {currentStep !== 'preview' ? (
+            <CButton
+              color="primary"
+              onClick={nextStep}
+              disabled={!canProceedToNext() || exporting}
+            >
+              Далее
+            </CButton>
+          ) : (
+            <CButton
+              color="success"
+              onClick={executeExport}
+              disabled={exporting || selectedFieldsList.length === 0}
+            >
+              {exporting ? (
+                <>
+                  <CSpinner size="sm" className="me-2" />
+                  Экспортирую...
+                </>
+              ) : (
+                <>
+                  <CIcon icon={cilCloudDownload} className="me-2" />
+                  Экспортировать ({selectedFieldsList.length} полей)
+                </>
+              )}
+            </CButton>
+          )}
         </div>
-      </CModalFooter>
-    </CModal>
+      </div>
+    </div>
   )
 }
 

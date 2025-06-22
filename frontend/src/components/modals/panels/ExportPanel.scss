@@ -1,456 +1,473 @@
 // frontend/src/components/modals/panels/ExportPanel.scss
 
-.export-modal {
-  .modal-dialog {
-    max-width: 1200px;
-  }
-
-  .modal-body {
-    min-height: 500px;
-    max-height: 70vh;
-    overflow-y: auto;
+.export-panel {
+  padding: 1.5rem;
+  
+  // Загрузка
+  &-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem;
+    color: var(--cui-secondary);
   }
 }
 
-.progress-steps {
+// ===== ПРОГРЕСС ШАГОВ =====
+.export-steps {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 1rem 0;
+  justify-content: space-between;
+  margin-bottom: 2rem;
   position: relative;
-
+  
+  // Линия соединения
   &::before {
     content: '';
     position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
+    top: 20px;
+    left: 20px;
+    right: 20px;
     height: 2px;
-    background-color: #e9ecef;
+    background: var(--cui-border-color);
     z-index: 1;
   }
 
-  .step {
+  .export-step {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    background: var(--cui-body-bg);
+    padding: 0 1rem;
     position: relative;
     z-index: 2;
-    background: #fff;
-    padding: 0 1rem;
-    
-    .step-number {
+    transition: all 0.3s ease;
+
+    .step-indicator {
       width: 40px;
       height: 40px;
       border-radius: 50%;
-      background-color: #e9ecef;
-      color: #6c757d;
+      background: var(--cui-secondary-bg);
+      color: var(--cui-secondary);
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 600;
-      font-size: 0.875rem;
+      border: 2px solid var(--cui-border-color);
       transition: all 0.3s ease;
     }
 
-    .step-name {
-      font-size: 0.875rem;
-      color: #6c757d;
-      text-align: center;
-      font-weight: 500;
-      transition: color 0.3s ease;
+    .step-content {
+      margin-left: 0.75rem;
+
+      .step-title {
+        font-weight: 500;
+        color: var(--cui-body-color);
+        white-space: nowrap;
+      }
     }
 
     &.active {
-      .step-number {
-        background-color: #0d6efd;
+      .step-indicator {
+        background: var(--cui-primary);
         color: white;
+        border-color: var(--cui-primary);
+        transform: scale(1.1);
       }
 
-      .step-name {
-        color: #0d6efd;
+      .step-title {
+        color: var(--cui-primary);
         font-weight: 600;
       }
     }
 
     &.completed {
-      .step-number {
-        background-color: #198754;
+      .step-indicator {
+        background: var(--cui-success);
         color: white;
+        border-color: var(--cui-success);
       }
 
-      .step-name {
-        color: #198754;
-      }
-    }
-  }
-
-  @media (max-width: 768px) {
-    .step {
-      padding: 0 0.5rem;
-      
-      .step-name {
-        font-size: 0.75rem;
+      .step-title {
+        color: var(--cui-success);
       }
     }
   }
 }
 
-.step-content {
-  .export-types {
-    display: grid;
-    gap: 1rem;
-    margin-top: 1rem;
-
-    .export-type {
-      display: block;
-      padding: 1rem;
-      border: 2px solid #e9ecef;
-      border-radius: 0.5rem;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      background: #fff;
-
-      input[type="radio"] {
-        display: none;
-      }
-
-      .content {
-        .title {
-          font-weight: 600;
-          font-size: 1rem;
-          color: #212529;
-          margin-bottom: 0.5rem;
-        }
-
-        .description {
-          font-size: 0.875rem;
-          color: #6c757d;
-          line-height: 1.4;
-        }
-      }
-
-      &:hover {
-        border-color: #0d6efd;
-        background-color: #f8f9fa;
-      }
-
-      &.selected {
-        border-color: #0d6efd;
-        background-color: #e7f1ff;
-
-        .content .title {
-          color: #0d6efd;
-        }
-      }
-    }
-  }
-
-  .format-selection {
-    .format-option {
-      display: flex;
-      align-items: center;
-      padding: 1rem;
-      border: 1px solid #dee2e6;
-      border-radius: 0.375rem;
-      margin-bottom: 0.5rem;
-      cursor: pointer;
-      transition: all 0.3s ease;
-
-      input[type="radio"] {
-        margin-right: 0.75rem;
-      }
-
-      .format-info {
-        flex: 1;
-
-        .format-label {
-          font-weight: 600;
-          margin-bottom: 0.25rem;
-        }
-
-        .format-description {
-          font-size: 0.875rem;
-          color: #6c757d;
-        }
-      }
-
-      &:hover {
-        border-color: #0d6efd;
-        background-color: #f8f9fa;
-      }
-
-      &.selected {
-        border-color: #0d6efd;
-        background-color: #e7f1ff;
-      }
-    }
-  }
-
-  .fields-selection {
-    .available-fields {
-      max-height: 300px;
-      overflow-y: auto;
-      border: 1px solid #dee2e6;
-      border-radius: 0.375rem;
-      padding: 0.5rem;
-
-      .field-category {
-        margin-bottom: 1rem;
-
-        &:last-child {
-          margin-bottom: 0;
-        }
-
-        .category-header {
-          font-weight: 600;
-          font-size: 0.875rem;
-          color: #495057;
-          margin-bottom: 0.5rem;
-          padding: 0.25rem 0;
-          border-bottom: 1px solid #e9ecef;
-        }
-
-        .category-fields {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-          gap: 0.5rem;
-        }
-
-        .field-item {
-          display: flex;
-          align-items: center;
-          padding: 0.5rem;
-          border: 1px solid #e9ecef;
-          border-radius: 0.25rem;
-          cursor: pointer;
-          transition: all 0.2s ease;
-
-          .field-info {
-            flex: 1;
-
-            .field-label {
-              font-weight: 500;
-              font-size: 0.875rem;
-            }
-
-            .field-type {
-              font-size: 0.75rem;
-              color: #6c757d;
-            }
-          }
-
-          .field-sensitive {
-            margin-left: 0.5rem;
-            color: #dc3545;
-          }
-
-          &:hover {
-            border-color: #0d6efd;
-            background-color: #f8f9fa;
-          }
-        }
-      }
-    }
-
-    .selected-fields {
-      min-height: 200px;
-      border: 2px dashed #dee2e6;
-      border-radius: 0.375rem;
-      padding: 1rem;
-
-      &.has-fields {
-        border-style: solid;
-        border-color: #198754;
-        background-color: #f8fff9;
-      }
-
-      .selected-field {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0.5rem;
-        margin-bottom: 0.5rem;
-        background: #fff;
-        border: 1px solid #dee2e6;
-        border-radius: 0.25rem;
-
-        .field-content {
-          display: flex;
-          align-items: center;
-          flex: 1;
-
-          .field-name {
-            font-weight: 500;
-          }
-
-          .field-duplicate {
-            margin-left: 0.5rem;
-            font-size: 0.75rem;
-            color: #6c757d;
-          }
-        }
-
-        .field-actions {
-          display: flex;
-          gap: 0.25rem;
-
-          .btn {
-            padding: 0.25rem;
-            font-size: 0.75rem;
-          }
-        }
-
-        &.sensitive {
-          border-color: #ffc107;
-          background-color: #fff3cd;
-        }
-      }
-
-      .empty-state {
-        text-align: center;
-        color: #6c757d;
-        font-style: italic;
-        padding: 2rem;
-      }
-    }
-  }
-
-  .preview-section {
-    .preview-table {
-      max-height: 400px;
-      overflow: auto;
-      border: 1px solid #dee2e6;
-      border-radius: 0.375rem;
-
-      table {
-        margin-bottom: 0;
-
-        th {
-          background-color: #f8f9fa;
-          border-top: none;
-          position: sticky;
-          top: 0;
-          z-index: 1;
-        }
-
-        td {
-          font-size: 0.875rem;
-          max-width: 150px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-      }
-    }
-
-    .preview-stats {
-      display: flex;
-      gap: 1rem;
-      margin-bottom: 1rem;
-
-      .stat-item {
-        flex: 1;
-        text-align: center;
-        padding: 1rem;
-        background: #f8f9fa;
-        border-radius: 0.375rem;
-
-        .stat-value {
-          font-size: 1.5rem;
-          font-weight: 600;
-          color: #0d6efd;
-        }
-
-        .stat-label {
-          font-size: 0.875rem;
-          color: #6c757d;
-          margin-top: 0.25rem;
-        }
-      }
-    }
-  }
+// ===== КОНТЕНТ ШАГОВ =====
+.export-step-content {
+  min-height: 400px;
+  margin-bottom: 2rem;
 }
 
-// Дополнительные утилиты
-.field-search {
-  margin-bottom: 1rem;
-
-  .form-control {
-    border-radius: 0.375rem;
-  }
-}
-
-.template-selector {
-  .template-option {
-    padding: 0.75rem;
-    border: 1px solid #dee2e6;
-    border-radius: 0.25rem;
-    margin-bottom: 0.5rem;
+// Шаг 1: Тип экспорта
+.step-type {
+  .export-type-card {
+    border: 2px solid var(--cui-border-color);
+    border-radius: var(--cui-border-radius);
+    padding: 1.5rem;
     cursor: pointer;
-    transition: all 0.2s ease;
-
-    .template-name {
-      font-weight: 500;
-      margin-bottom: 0.25rem;
-    }
-
-    .template-preview {
-      font-family: monospace;
-      font-size: 0.875rem;
-      color: #6c757d;
-      background: #f8f9fa;
-      padding: 0.25rem 0.5rem;
-      border-radius: 0.25rem;
-      margin: 0.5rem 0;
-    }
-
-    .template-description {
-      font-size: 0.75rem;
-      color: #6c757d;
-    }
+    transition: all 0.3s ease;
+    background: var(--cui-body-bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
 
     &:hover {
-      border-color: #0d6efd;
-      background-color: #f8f9fa;
+      border-color: var(--cui-primary);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(var(--cui-primary-rgb), 0.15);
     }
 
     &.selected {
-      border-color: #0d6efd;
-      background-color: #e7f1ff;
+      border-color: var(--cui-primary);
+      background: rgba(var(--cui-primary-rgb), 0.05);
+
+      .export-type-content h6 {
+        color: var(--cui-primary);
+      }
+
+      .export-type-radio input {
+        accent-color: var(--cui-primary);
+      }
+    }
+
+    .export-type-content {
+      flex: 1;
+
+      h6 {
+        margin-bottom: 0.5rem;
+        color: var(--cui-body-color);
+        font-weight: 600;
+      }
+
+      p {
+        margin-bottom: 0.5rem;
+        color: var(--cui-secondary);
+        font-size: 0.875rem;
+      }
+    }
+
+    .export-type-radio {
+      margin-left: 1rem;
+
+      input[type="radio"] {
+        width: 20px;
+        height: 20px;
+        accent-color: var(--cui-primary);
+      }
+    }
+  }
+
+  .filter-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+
+    .form-check {
+      padding-left: 0;
+
+      .form-check-input {
+        margin-right: 0.5rem;
+        accent-color: var(--cui-primary);
+      }
+
+      .form-check-label {
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+      }
     }
   }
 }
 
-// Адаптивность
-@media (max-width: 992px) {
-  .export-modal .modal-dialog {
-    max-width: 95vw;
+// Шаг 2: Формат и поля
+.step-format {
+  .available-fields {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--cui-border-color);
+    border-radius: var(--cui-border-radius);
+    padding: 0.75rem;
+
+    .field-category {
+      margin-bottom: 1.5rem;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .category-title {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--cui-secondary);
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.25rem;
+        border-bottom: 1px solid var(--cui-border-color);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .field-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem;
+        border: 1px solid var(--cui-border-color);
+        border-radius: var(--cui-border-radius);
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: var(--cui-body-bg);
+
+        &:hover {
+          border-color: var(--cui-primary);
+          background: rgba(var(--cui-primary-rgb), 0.05);
+          transform: translateX(4px);
+
+          .field-add {
+            color: var(--cui-primary);
+            transform: scale(1.2);
+          }
+        }
+
+        .field-info {
+          display: flex;
+          align-items: center;
+
+          .field-name {
+            font-weight: 500;
+            color: var(--cui-body-color);
+          }
+        }
+
+        .field-add {
+          color: var(--cui-secondary);
+          transition: all 0.2s ease;
+        }
+      }
+    }
   }
 
-  .step-content {
-    .export-types .export-type .content .title {
+  .selected-fields {
+    max-height: 400px;
+    overflow-y: auto;
+
+    .selected-field {
+      display: flex;
+      align-items: center;
+      padding: 0.75rem;
+      border: 1px solid var(--cui-border-color);
+      border-radius: var(--cui-border-radius);
+      margin-bottom: 0.5rem;
+      background: var(--cui-body-bg);
+      transition: all 0.2s ease;
+      cursor: move;
+
+      &:hover {
+        background: var(--cui-tertiary-bg);
+        border-color: var(--cui-primary);
+      }
+
+      &.dragging {
+        opacity: 0.5;
+        transform: rotate(5deg);
+      }
+
+      .drag-handle {
+        color: var(--cui-secondary);
+        margin-right: 0.75rem;
+        cursor: grab;
+
+        &:active {
+          cursor: grabbing;
+        }
+      }
+
+      .field-content {
+        flex: 1;
+        display: flex;
+        align-items: center;
+
+        .field-name {
+          font-weight: 500;
+          color: var(--cui-body-color);
+        }
+      }
+
+      .field-actions {
+        display: flex;
+        gap: 0.25rem;
+
+        .btn {
+          padding: 0.25rem;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+      }
+    }
+  }
+
+  .selected-fields-preview {
+    max-height: 200px;
+    overflow-y: auto;
+
+    .badge {
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.75rem;
+
+      .btn {
+        background: none;
+        border: none;
+        color: inherit;
+        padding: 0;
+        margin-left: 0.25rem;
+        opacity: 0.7;
+
+        &:hover {
+          opacity: 1;
+        }
+      }
+    }
+  }
+}
+
+// Шаг 3: Предпросмотр
+.step-preview {
+  .field-preview {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+
+    .badge {
       font-size: 0.875rem;
-    }
-
-    .fields-selection .available-fields .field-category .category-fields {
-      grid-template-columns: 1fr;
+      padding: 0.5rem 0.75rem;
     }
   }
 }
 
-@media (max-width: 576px) {
-  .progress-steps {
-    .step .step-name {
+// ===== НАВИГАЦИЯ =====
+.export-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--cui-border-color);
+
+  .step-info {
+    color: var(--cui-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+
+  .nav-buttons {
+    display: flex;
+    gap: 0.75rem;
+
+    .btn {
+      min-width: 120px;
+    }
+  }
+}
+
+// ===== РЕСПОНСИВНОСТЬ =====
+@media (max-width: 768px) {
+  .export-panel {
+    padding: 1rem;
+  }
+
+  .export-steps {
+    flex-direction: column;
+    gap: 1rem;
+
+    &::before {
       display: none;
     }
-  }
 
-  .step-content {
-    .preview-section .preview-stats {
-      flex-direction: column;
-      gap: 0.5rem;
+    .export-step {
+      width: 100%;
+      justify-content: center;
+      padding: 0.75rem;
+      border: 1px solid var(--cui-border-color);
+      border-radius: var(--cui-border-radius);
     }
   }
+
+  .step-format {
+    .available-fields,
+    .selected-fields {
+      max-height: 250px;
+    }
+  }
+
+  .export-navigation {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+
+    .nav-buttons {
+      justify-content: center;
+    }
+  }
+}
+
+// ===== ТЕМНАЯ ТЕМА =====
+[data-coreui-theme="dark"] {
+  .export-panel {
+    .export-type-card {
+      &:hover {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    .available-fields,
+    .selected-fields {
+      border-color: var(--cui-border-color-translucent);
+
+      .field-item,
+      .selected-field {
+        border-color: var(--cui-border-color-translucent);
+
+        &:hover {
+          background: rgba(var(--cui-primary-rgb), 0.1);
+        }
+      }
+    }
+  }
+}
+
+// ===== АНИМАЦИИ =====
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.export-step-content {
+  animation: slideInUp 0.3s ease-out;
+}
+
+.field-item,
+.selected-field {
+  animation: fadeIn 0.2s ease-out;
 }
