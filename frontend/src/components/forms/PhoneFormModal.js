@@ -1,4 +1,6 @@
-import React from 'react'
+// frontend/src/components/forms/PhoneFormModal.js
+
+import React, { useEffect } from 'react'
 import {
   CModal,
   CModalHeader,
@@ -27,13 +29,15 @@ import {
   cilDevices,
   cilSettings,
   cilTask,
-  cilPeople,
-  cilBell,
-  cilUser,
+  cilGlobeAlt,
+  cilShieldAlt,
+  cilSave,
+  cilX
 } from '@coreui/icons'
 import { useForm } from 'react-hook-form'
 import { useCreatePhone, useUpdatePhone } from '../../hooks/usePhones'
 import { useProjects } from '../../hooks/useProjects'
+import PropTypes from 'prop-types'
 
 const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
   const createMutation = useCreatePhone()
@@ -46,18 +50,44 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
     formState: { errors },
     reset,
     watch,
+    setValue
   } = useForm({
     defaultValues: {
-      model: phone?.model || '',
-      device: phone?.device || '',
-      androidVersion: phone?.androidVersion || '',
-      ipAddress: phone?.ipAddress || '',
-      macAddress: phone?.macAddress || '',
-      status: phone?.status || 'free',
-      projectId: phone?.projectId || '',
-      notes: phone?.notes || '',
+      model: '',
+      device: '',
+      androidVersion: '',
+      ipAddress: '',
+      macAddress: '',
+      status: 'free',
+      projectId: '',
+      notes: '',
     }
   })
+
+  // Заполняем форму при изменении phone
+  useEffect(() => {
+    if (phone && isEdit) {
+      setValue('model', phone.model || '')
+      setValue('device', phone.device || '')
+      setValue('androidVersion', phone.androidVersion || '')
+      setValue('ipAddress', phone.ipAddress || '')
+      setValue('macAddress', phone.macAddress || '')
+      setValue('status', phone.status || 'free')
+      setValue('projectId', phone.projectId ? String(phone.projectId) : '')
+      setValue('notes', phone.notes || '')
+    } else {
+      reset({
+        model: '',
+        device: '',
+        androidVersion: '',
+        ipAddress: '',
+        macAddress: '',
+        status: 'free',
+        projectId: '',
+        notes: '',
+      })
+    }
+  }, [phone, isEdit, setValue, reset])
 
   const watchedStatus = watch('status')
 
@@ -89,39 +119,63 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
     onClose()
   }
 
-  const isLoading = createMutation.isLoading || updateMutation.isLoading
-  const projects = projectsData?.projects || []
+  const isLoading = createMutation.isPending || updateMutation.isPending
+  const projects = projectsData?.data?.projects || projectsData?.projects || []
 
   const getStatusColor = (status) => {
     const colors = {
       free: 'success',
       busy: 'warning', 
-      disabled: 'danger'
+      disabled: 'danger',
+      error: 'danger',
+      maintenance: 'info'
     }
     return colors[status] || 'secondary'
   }
 
-  const getStatusDescription = (status) => {
-    const descriptions = {
-      free: 'Устройство готово к использованию',
-      busy: 'Устройство в работе',
-      disabled: 'Устройство отключено'
+  const getStatusLabel = (status) => {
+    const labels = {
+      free: 'Свободен',
+      busy: 'Занят',
+      disabled: 'Отключен',
+      error: 'Ошибка',
+      maintenance: 'Обслуживание'
     }
-    return descriptions[status] || ''
+    return labels[status] || status
   }
+
+  const androidVersions = [
+    { value: '14', label: 'Android 14' },
+    { value: '13', label: 'Android 13' },
+    { value: '12', label: 'Android 12' },
+    { value: '11', label: 'Android 11' },
+    { value: '10', label: 'Android 10' },
+    { value: '9', label: 'Android 9' },
+    { value: '8', label: 'Android 8' },
+    { value: '7', label: 'Android 7' }
+  ]
+
+  const availableStatuses = [
+    { value: 'free', label: 'Свободен' },
+    { value: 'busy', label: 'Занят' },
+    { value: 'disabled', label: 'Отключен' },
+    { value: 'error', label: 'Ошибка' },
+    { value: 'maintenance', label: 'Обслуживание' }
+  ]
 
   return (
     <CModal 
       visible={visible} 
       onClose={handleClose} 
       size="lg"
-      className="phone-modal"
       backdrop="static"
+      scrollable
+      className="phone-form-modal"
     >
-      <CModalHeader className="border-bottom-0 pb-2">
+      <CModalHeader className="border-bottom">
         <div className="d-flex align-items-center">
           <div className="me-3">
-            <div className="avatar avatar-lg bg-info bg-opacity-10 text-info rounded-circle d-flex align-items-center justify-content-center">
+            <div className="avatar avatar-lg bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center">
               <CIcon icon={cilDevices} size="lg" />
             </div>
           </div>
@@ -129,11 +183,11 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
             <CModalTitle className="mb-1">
               {isEdit ? `Редактировать устройство` : 'Добавить новое устройство'}
             </CModalTitle>
-            {isEdit && (
+            {isEdit && phone && (
               <div className="d-flex align-items-center gap-2">
-                <span className="text-muted small">{phone?.model} • {phone?.device}</span>
-                <CBadge color={getStatusColor(phone?.status)} shape="rounded-pill">
-                  {phone?.status}
+                <span className="text-muted small">{phone.model || phone.device}</span>
+                <CBadge color={getStatusColor(phone.status)} shape="rounded-pill">
+                  {getStatusLabel(phone.status)}
                 </CBadge>
               </div>
             )}
@@ -141,20 +195,21 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
         </div>
       </CModalHeader>
       
-      <CForm onSubmit={handleSubmit(onSubmit)} className="h-100">
-        <CModalBody className="pt-2">
+      <CModalBody>
+        <CForm onSubmit={handleSubmit(onSubmit)} id="phone-form">
           <CRow>
-            {/* Основная информация */}
+            {/* Основная информация об устройстве */}
             <CCol xs={12}>
-              <CCard className="mb-4 border-0 bg-light">
-                <CCardHeader className="bg-transparent border-0 pb-0">
-                  <h6 className="mb-0 text-primary">
+              <CCard className="mb-4 border-0 shadow-sm">
+                <CCardHeader className="bg-light border-0">
+                  <h6 className="mb-0 text-primary d-flex align-items-center">
                     <CIcon icon={cilDevices} className="me-2" />
                     Основная информация
                   </h6>
                 </CCardHeader>
                 <CCardBody>
                   <CRow>
+                    {/* Модель устройства */}
                     <CCol md={6}>
                       <div className="mb-3">
                         <CFormLabel htmlFor="model" className="fw-semibold">
@@ -170,7 +225,14 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
                             invalid={!!errors.model}
                             {...register('model', { 
                               required: 'Модель устройства обязательна',
-                              minLength: { value: 2, message: 'Минимум 2 символа' }
+                              minLength: { 
+                                value: 2, 
+                                message: 'Минимум 2 символа' 
+                              },
+                              maxLength: {
+                                value: 100,
+                                message: 'Максимум 100 символов'
+                              }
                             })}
                           />
                         </CInputGroup>
@@ -182,6 +244,7 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
                       </div>
                     </CCol>
 
+                    {/* Кодовое имя устройства */}
                     <CCol md={6}>
                       <div className="mb-3">
                         <CFormLabel htmlFor="device" className="fw-semibold">
@@ -192,7 +255,11 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
                           placeholder="SM-G991B, iPhone14,5..."
                           invalid={!!errors.device}
                           {...register('device', { 
-                            required: 'Кодовое имя обязательно'
+                            required: 'Кодовое имя обязательно',
+                            maxLength: {
+                              value: 50,
+                              message: 'Максимум 50 символов'
+                            }
                           })}
                         />
                         {errors.device && (
@@ -200,45 +267,58 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
                             {errors.device.message}
                           </div>
                         )}
+                        <div className="form-text">
+                          Техническое название устройства
+                        </div>
                       </div>
                     </CCol>
 
+                    {/* Версия Android */}
                     <CCol md={6}>
                       <div className="mb-3">
-                        <CFormLabel htmlFor="androidVersion" className="fw-semibold">Версия Android</CFormLabel>
+                        <CFormLabel htmlFor="androidVersion" className="fw-semibold">
+                          Версия Android
+                        </CFormLabel>
                         <CFormSelect
                           id="androidVersion"
                           {...register('androidVersion')}
                         >
                           <option value="">Выберите версию</option>
-                          <option value="14">Android 14</option>
-                          <option value="13">Android 13</option>
-                          <option value="12">Android 12</option>
-                          <option value="11">Android 11</option>
-                          <option value="10">Android 10</option>
-                          <option value="9">Android 9</option>
-                          <option value="8.1">Android 8.1</option>
-                          <option value="8.0">Android 8.0</option>
+                          {androidVersions.map(version => (
+                            <option key={version.value} value={version.value}>
+                              {version.label}
+                            </option>
+                          ))}
                         </CFormSelect>
                       </div>
                     </CCol>
 
+                    {/* Статус устройства */}
                     <CCol md={6}>
                       <div className="mb-3">
-                        <CFormLabel htmlFor="status" className="fw-semibold">Статус устройства</CFormLabel>
-                        <CFormSelect 
-                          id="status" 
+                        <CFormLabel htmlFor="status" className="fw-semibold">
+                          Статус устройства
+                        </CFormLabel>
+                        <CFormSelect
+                          id="status"
                           {...register('status')}
-                          className="form-select-custom"
                         >
-                          <option value="free">🟢 Свободен</option>
-                          <option value="busy">🟡 Занят</option>
-                          <option value="disabled">🔴 Отключен</option>
+                          {availableStatuses.map(status => (
+                            <option key={status.value} value={status.value}>
+                              {status.label}
+                            </option>
+                          ))}
                         </CFormSelect>
-                        <div className="form-text">
-                          <CIcon icon={cilBell} className="me-1" />
-                          {getStatusDescription(watchedStatus)}
-                        </div>
+                        {watchedStatus && (
+                          <div className="mt-2">
+                            <CBadge 
+                              color={getStatusColor(watchedStatus)} 
+                              shape="rounded-pill"
+                            >
+                              {getStatusLabel(watchedStatus)}
+                            </CBadge>
+                          </div>
+                        )}
                       </div>
                     </CCol>
                   </CRow>
@@ -248,21 +328,24 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
 
             {/* Сетевые настройки */}
             <CCol xs={12}>
-              <CCard className="mb-4 border-0 bg-light">
-                <CCardHeader className="bg-transparent border-0 pb-0">
-                  <h6 className="mb-0 text-success">
-                    <CIcon icon={cilSettings} className="me-2" />
+              <CCard className="mb-4 border-0 shadow-sm">
+                <CCardHeader className="bg-light border-0">
+                  <h6 className="mb-0 text-primary d-flex align-items-center">
+                    <CIcon icon={cilGlobeAlt} className="me-2" />
                     Сетевые настройки
                   </h6>
                 </CCardHeader>
                 <CCardBody>
                   <CRow>
+                    {/* IP адрес */}
                     <CCol md={6}>
                       <div className="mb-3">
-                        <CFormLabel htmlFor="ipAddress" className="fw-semibold">IP адрес</CFormLabel>
+                        <CFormLabel htmlFor="ipAddress" className="fw-semibold">
+                          IP адрес
+                        </CFormLabel>
                         <CInputGroup>
                           <CInputGroupText>
-                            <CIcon icon={cilSettings} />
+                            <CIcon icon={cilGlobeAlt} />
                           </CInputGroupText>
                           <CFormInput
                             id="ipAddress"
@@ -271,7 +354,7 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
                             {...register('ipAddress', {
                               pattern: {
                                 value: /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/,
-                                message: 'Некорректный IP адрес'
+                                message: 'Неверный формат IP адреса'
                               }
                             })}
                           />
@@ -284,26 +367,36 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
                       </div>
                     </CCol>
 
+                    {/* MAC адрес */}
                     <CCol md={6}>
                       <div className="mb-3">
-                        <CFormLabel htmlFor="macAddress" className="fw-semibold">MAC адрес</CFormLabel>
-                        <CFormInput
-                          id="macAddress"
-                          placeholder="00:1B:44:11:3A:B7"
-                          invalid={!!errors.macAddress}
-                          {...register('macAddress', {
-                            pattern: {
-                              value: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
-                              message: 'Формат должен быть XX:XX:XX:XX:XX:XX'
-                            }
-                          })}
-                        />
+                        <CFormLabel htmlFor="macAddress" className="fw-semibold">
+                          MAC адрес
+                        </CFormLabel>
+                        <CInputGroup>
+                          <CInputGroupText>
+                            <CIcon icon={cilShieldAlt} />
+                          </CInputGroupText>
+                          <CFormInput
+                            id="macAddress"
+                            placeholder="AA:BB:CC:DD:EE:FF"
+                            invalid={!!errors.macAddress}
+                            {...register('macAddress', {
+                              pattern: {
+                                value: /^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/,
+                                message: 'Неверный формат MAC адреса'
+                              }
+                            })}
+                          />
+                        </CInputGroup>
                         {errors.macAddress && (
                           <div className="text-danger small mt-1">
                             {errors.macAddress.message}
                           </div>
                         )}
-                        <div className="form-text">Используйте формат XX:XX:XX:XX:XX:XX</div>
+                        <div className="form-text">
+                          Формат: AA:BB:CC:DD:EE:FF
+                        </div>
                       </div>
                     </CCol>
                   </CRow>
@@ -311,21 +404,27 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
               </CCard>
             </CCol>
 
-            {/* Управление проектами */}
+            {/* Привязка к проекту и заметки */}
             <CCol xs={12}>
-              <CCard className="mb-4 border-0 bg-light">
-                <CCardHeader className="bg-transparent border-0 pb-0">
-                  <h6 className="mb-0 text-warning">
-                    <CIcon icon={cilPeople} className="me-2" />
-                    Привязка к проекту
+              <CCard className="mb-4 border-0 shadow-sm">
+                <CCardHeader className="bg-light border-0">
+                  <h6 className="mb-0 text-primary d-flex align-items-center">
+                    <CIcon icon={cilTask} className="me-2" />
+                    Дополнительная информация
                   </h6>
                 </CCardHeader>
                 <CCardBody>
                   <CRow>
+                    {/* Проект */}
                     <CCol md={6}>
                       <div className="mb-3">
-                        <CFormLabel htmlFor="projectId" className="fw-semibold">Проект</CFormLabel>
-                        <CFormSelect id="projectId" {...register('projectId')}>
+                        <CFormLabel htmlFor="projectId" className="fw-semibold">
+                          Проект
+                        </CFormLabel>
+                        <CFormSelect 
+                          id="projectId" 
+                          {...register('projectId')}
+                        >
                           <option value="">Без проекта</option>
                           {projects.map((project) => (
                             <option key={project.id} value={project.id}>
@@ -336,18 +435,36 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
                         <div className="form-text">
                           Выберите проект для привязки устройства
                         </div>
+                        {projects.length === 0 && (
+                          <div className="text-warning small mt-1">
+                            Нет доступных проектов
+                          </div>
+                        )}
                       </div>
                     </CCol>
 
-                    <CCol xs={12}>
+                    {/* Заметки */}
+                    <CCol md={6}>
                       <div className="mb-3">
-                        <CFormLabel htmlFor="notes" className="fw-semibold">Заметки</CFormLabel>
+                        <CFormLabel htmlFor="notes" className="fw-semibold">
+                          Заметки
+                        </CFormLabel>
                         <CFormTextarea
                           id="notes"
                           rows={3}
                           placeholder="Дополнительная информация об устройстве..."
-                          {...register('notes')}
+                          {...register('notes', {
+                            maxLength: {
+                              value: 1000,
+                              message: 'Максимум 1000 символов'
+                            }
+                          })}
                         />
+                        {errors.notes && (
+                          <div className="text-danger small mt-1">
+                            {errors.notes.message}
+                          </div>
+                        )}
                       </div>
                     </CCol>
                   </CRow>
@@ -355,131 +472,128 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
               </CCard>
             </CCol>
 
-            {/* Информация о статусах (только при редактировании) */}
-            {isEdit && (
+            {/* История статусов (только при редактировании) */}
+            {isEdit && phone && (
               <CCol xs={12}>
                 <CAlert color="info" className="border-0">
-                  <h6 className="alert-heading mb-2">История статусов</h6>
+                  <h6 className="alert-heading mb-3 d-flex align-items-center">
+                    <CIcon icon={cilSettings} className="me-2" />
+                    История статусов устройства
+                  </h6>
                   <CRow className="small">
-                    {phone?.dateSetStatusFree && (
-                      <CCol md={4}>
-                        <strong>Свободен с:</strong><br />
-                        {new Date(phone.dateSetStatusFree).toLocaleString('ru-RU')}
+                    {phone.dateSetStatusFree && (
+                      <CCol md={4} className="mb-2">
+                        <div className="d-flex flex-column">
+                          <strong className="text-success">Свободен с:</strong>
+                          <span className="text-muted">
+                            {new Date(phone.dateSetStatusFree).toLocaleString('ru-RU')}
+                          </span>
+                        </div>
                       </CCol>
                     )}
-                    {phone?.dateSetStatusBusy && (
-                      <CCol md={4}>
-                        <strong>Занят с:</strong><br />
-                        {new Date(phone.dateSetStatusBusy).toLocaleString('ru-RU')}
+                    {phone.dateSetStatusBusy && (
+                      <CCol md={4} className="mb-2">
+                        <div className="d-flex flex-column">
+                          <strong className="text-warning">Занят с:</strong>
+                          <span className="text-muted">
+                            {new Date(phone.dateSetStatusBusy).toLocaleString('ru-RU')}
+                          </span>
+                        </div>
                       </CCol>
                     )}
-                    {phone?.dateLastReboot && (
-                      <CCol md={4}>
-                        <strong>Последняя перезагрузка:</strong><br />
-                        {new Date(phone.dateLastReboot).toLocaleString('ru-RU')}
+                    {phone.dateLastReboot && (
+                      <CCol md={4} className="mb-2">
+                        <div className="d-flex flex-column">
+                          <strong className="text-info">Последняя перезагрузка:</strong>
+                          <span className="text-muted">
+                            {new Date(phone.dateLastReboot).toLocaleString('ru-RU')}
+                          </span>
+                        </div>
                       </CCol>
                     )}
                   </CRow>
+                  {!phone.dateSetStatusFree && !phone.dateSetStatusBusy && !phone.dateLastReboot && (
+                    <div className="text-muted">
+                      <em>История статусов пока отсутствует</em>
+                    </div>
+                  )}
                 </CAlert>
               </CCol>
             )}
           </CRow>
-        </CModalBody>
+        </CForm>
+      </CModalBody>
 
-        <CModalFooter className="border-top-0 pt-2">
-          <div className="d-flex justify-content-between w-100">
-            <div className="d-flex align-items-center text-muted small">
-              {isEdit ? (
-                <span>ID устройства: #{phone?.id}</span>
-              ) : (
-                <span>Новое устройство будет добавлено в систему</span>
-              )}
-            </div>
-            <div className="d-flex gap-2">
-              <CButton 
-                color="light" 
-                onClick={handleClose}
-                disabled={isLoading}
-                className="px-4"
-              >
-                Отмена
-              </CButton>
-              <CButton 
-                color="primary" 
-                type="submit"
-                disabled={isLoading}
-                className="px-4"
-              >
-                {isLoading ? (
-                  <>
-                    <CSpinner size="sm" className="me-2" />
-                    {isEdit ? 'Сохранение...' : 'Добавление...'}
-                  </>
-                ) : (
-                  <>
-                    <CIcon icon={cilTask} className="me-2" />
-                    {isEdit ? 'Сохранить' : 'Добавить'}
-                  </>
-                )}
-              </CButton>
-            </div>
+      <CModalFooter className="border-top">
+        <div className="d-flex justify-content-between align-items-center w-100">
+          <div className="text-muted small">
+            {isEdit ? (
+              <span>ID устройства: #{phone?.id}</span>
+            ) : (
+              <span>Новое устройство будет добавлено в систему</span>
+            )}
           </div>
-        </CModalFooter>
-      </CForm>
-
-      <style jsx>{`
-        .phone-modal .modal-content {
-          border: none;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          border-radius: 1rem;
-        }
-        
-        .avatar {
-          width: 3rem;
-          height: 3rem;
-        }
-        
-        .form-select-custom {
-          cursor: pointer;
-        }
-        
-        .form-label.fw-semibold {
-          color: var(--cui-body-color);
-          margin-bottom: 0.5rem;
-        }
-        
-        .input-group-text {
-          background-color: var(--cui-body-secondary-bg);
-          border-color: var(--cui-border-color);
-        }
-        
-        .form-control:focus {
-          box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
-        }
-        
-        .card {
-          transition: all 0.2s ease;
-          background-color: var(--cui-body-tertiary-bg) !important;
-        }
-        
-        .card:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        
-        @media (prefers-color-scheme: dark) {
-          .phone-modal .modal-content {
-            background-color: var(--cui-dark);
-            color: var(--cui-light);
-          }
-          
-          .card {
-            background-color: var(--cui-dark-bg-subtle) !important;
-          }
-        }
-      `}</style>
+          <div className="d-flex gap-2">
+            <CButton 
+              color="light" 
+              onClick={handleClose}
+              disabled={isLoading}
+              className="px-4"
+            >
+              <CIcon icon={cilX} className="me-2" />
+              Отмена
+            </CButton>
+            <CButton 
+              color="primary" 
+              type="submit"
+              form="phone-form"
+              disabled={isLoading}
+              className="px-4"
+            >
+              {isLoading ? (
+                <>
+                  <CSpinner size="sm" className="me-2" />
+                  {isEdit ? 'Сохранение...' : 'Добавление...'}
+                </>
+              ) : (
+                <>
+                  <CIcon icon={cilSave} className="me-2" />
+                  {isEdit ? 'Сохранить изменения' : 'Добавить устройство'}
+                </>
+              )}
+            </CButton>
+          </div>
+        </div>
+      </CModalFooter>
     </CModal>
   )
+}
+
+PhoneFormModal.propTypes = {
+  visible: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  phone: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    model: PropTypes.string,
+    device: PropTypes.string,
+    androidVersion: PropTypes.string,
+    ipAddress: PropTypes.string,
+    macAddress: PropTypes.string,
+    status: PropTypes.string,
+    projectId: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    notes: PropTypes.string,
+    dateSetStatusFree: PropTypes.string,
+    dateSetStatusBusy: PropTypes.string,
+    dateLastReboot: PropTypes.string,
+    createdAt: PropTypes.string,
+    updatedAt: PropTypes.string
+  }),
+  isEdit: PropTypes.bool
+}
+
+PhoneFormModal.defaultProps = {
+  phone: null,
+  isEdit: false
 }
 
 export default PhoneFormModal

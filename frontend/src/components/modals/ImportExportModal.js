@@ -65,10 +65,26 @@ const ImportExportModal = ({
 
   if (isLoading) {
     return (
-      <CModal visible={visible} onClose={handleClose} size="lg">
-        <CModalBody className="text-center py-5">
-          <CSpinner color="primary" className="mb-3" />
-          <div>Загрузка конфигурации...</div>
+      <CModal 
+        visible={visible} 
+        onClose={handleClose} 
+        size="lg"
+        className="ultra-modal"
+        backdrop="static"
+      >
+        <CModalBody className="loading-state">
+          <div className="loading-content">
+            <div className="loading-animation">
+              <CSpinner color="primary" className="spinner-lg" />
+              <div className="loading-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+            <h4>Загрузка конфигурации</h4>
+            <p>Подготавливаем всё необходимое для работы...</p>
+          </div>
         </CModalBody>
       </CModal>
     )
@@ -76,17 +92,28 @@ const ImportExportModal = ({
 
   if (error) {
     return (
-      <CModal visible={visible} onClose={handleClose} size="lg">
-        <CModalHeader>
-          <CModalTitle>Ошибка</CModalTitle>
+      <CModal 
+        visible={visible} 
+        onClose={handleClose} 
+        size="lg"
+        className="ultra-modal"
+      >
+        <CModalHeader className="error-header">
+          <CModalTitle>
+            <CIcon icon={cilX} className="me-2" />
+            Ошибка загрузки
+          </CModalTitle>
         </CModalHeader>
-        <CModalBody>
-          <CAlert color="danger">
-            Не удалось загрузить конфигурацию: {error.message}
-          </CAlert>
+        <CModalBody className="error-content">
+          <div className="error-illustration">
+            <div className="error-icon">⚠️</div>
+            <h4>Что-то пошло не так</h4>
+            <p>Не удалось загрузить конфигурацию: {error.message}</p>
+          </div>
         </CModalBody>
-        <CModalFooter>
-          <CButton color="secondary" onClick={handleClose}>
+        <CModalFooter className="error-footer">
+          <CButton color="secondary" onClick={handleClose} className="modern-btn">
+            <CIcon icon={cilX} className="me-2" />
             Закрыть
           </CButton>
         </CModalFooter>
@@ -99,65 +126,71 @@ const ImportExportModal = ({
       visible={visible}
       onClose={handleClose}
       size="xl"
-      className="epic-modal"
+      className="ultra-modal"
+      backdrop="static"
     >
-      <CModalHeader>
-        <CModalTitle>
-          {config?.title || `${activeTab === 'import' ? 'Импорт' : 'Экспорт'} ${type}`}
+      <CModalHeader className="ultra-header">
+        <CModalTitle className="ultra-title">
+          <div className="title-icon">
+            <CIcon icon={activeTab === 'import' ? cilCloudUpload : cilCloudDownload} />
+          </div>
+          <div className="title-content">
+            <h3>{config?.title || `${activeTab === 'import' ? 'Импорт' : 'Экспорт'} ${type}`}</h3>
+            {config?.description && (
+              <p>{config.description}</p>
+            )}
+          </div>
         </CModalTitle>
       </CModalHeader>
 
-      <CModalBody className="p-0">
-        <div className="form-layout">
-          {/* Табы если доступны оба режима */}
+      <CModalBody className="ultra-body">
+        <div className="ultra-layout">
+          {/* Современные табы если доступны оба режима */}
           {availableTabs.length > 1 && (
-            <div className="form-layout__tabs">
-              <CNav variant="tabs" className="modern-tabs">
+            <div className="ultra-tabs">
+              <div className="tabs-container">
                 {availableTabs.map(tab => (
-                  <CNavItem key={tab.key}>
-                    <CNavLink
-                      active={activeTab === tab.key}
-                      onClick={() => setActiveTab(tab.key)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <CIcon icon={tab.icon} className="me-2" />
-                      {tab.label}
-                    </CNavLink>
-                  </CNavItem>
+                  <button
+                    key={tab.key}
+                    className={`tab-button ${activeTab === tab.key ? 'active' : ''}`}
+                    onClick={() => setActiveTab(tab.key)}
+                  >
+                    <div className="tab-icon">
+                      <CIcon icon={tab.icon} />
+                    </div>
+                    <span className="tab-label">{tab.label}</span>
+                    <div className="tab-indicator"></div>
+                  </button>
                 ))}
-              </CNav>
+              </div>
             </div>
           )}
 
-          {/* Контент */}
-          <div className="form-layout__content">
-            <CTabContent>
-              {availableTabs.find(t => t.key === 'import') && (
-                <CTabPane visible={activeTab === 'import'}>
-                  <ImportPanel
-                    config={config?.import}
-                    type={type}
-                    onSuccess={handleSuccess}
-                  />
-                </CTabPane>
+          {/* Контент с крутой анимацией */}
+          <div className="ultra-content">
+            <div className={`content-panel ${activeTab === 'import' ? 'import-panel' : 'export-panel'}`}>
+              {availableTabs.find(t => t.key === 'import') && activeTab === 'import' && (
+                <ImportPanel
+                  config={config?.import}
+                  type={type}
+                  onSuccess={handleSuccess}
+                />
               )}
               
-              {availableTabs.find(t => t.key === 'export') && (
-                <CTabPane visible={activeTab === 'export'}>
-                  <ExportPanel
-                    config={config?.export}
-                    type={type}
-                    onSuccess={handleSuccess}
-                  />
-                </CTabPane>
+              {availableTabs.find(t => t.key === 'export') && activeTab === 'export' && (
+                <ExportPanel
+                  config={config?.export}
+                  type={type}
+                  onSuccess={handleSuccess}
+                />
               )}
-            </CTabContent>
+            </div>
           </div>
         </div>
       </CModalBody>
 
-      <CModalFooter>
-        <CButton color="secondary" onClick={handleClose}>
+      <CModalFooter className="ultra-footer">
+        <CButton color="secondary" onClick={handleClose} className="modern-btn">
           <CIcon icon={cilX} className="me-2" />
           Закрыть
         </CButton>
