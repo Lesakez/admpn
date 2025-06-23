@@ -169,7 +169,6 @@ const PhoneFormModal = ({ visible, onClose, phone = null, isEdit = false }) => {
       onClose={handleClose} 
       size="lg"
       backdrop="static"
-      scrollable
       className="phone-form-modal"
     >
       <CModalHeader className="border-bottom">
