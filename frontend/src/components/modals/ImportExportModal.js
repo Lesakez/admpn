@@ -1,6 +1,6 @@
 // frontend/src/components/modals/ImportExportModal.js
 
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   CModal,
   CModalHeader,
@@ -22,8 +22,6 @@ import {
   cilCloudUpload,
   cilCloudDownload,
   cilX,
-  cilCode,
-  cilSettings,
   cilCheck,
 } from '@coreui/icons'
 import ImportPanel from './panels/ImportPanel'
@@ -34,8 +32,8 @@ const ImportExportModal = ({
   visible, 
   onClose, 
   onSuccess,
-  type = 'accounts', // accounts, proxies, profiles, phones, projects
-  mode = 'both', // 'import', 'export', 'both'
+  type = 'accounts',
+  mode = 'both',
   selectedIds = [],
   currentFilters = {},
   title,
@@ -45,112 +43,24 @@ const ImportExportModal = ({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  // Конфигурация для разных типов сущностей
-  const getEntityConfig = (entityType) => {
-    const configs = {
-      accounts: {
-        title: 'Аккаунты',
-        icon: cilCode,
-        importFormats: [
-          { value: 'login:password', label: 'Логин:Пароль', example: 'user123:pass123' },
-          { value: 'email:password', label: 'Email:Пароль', example: 'user@mail.com:pass123' },
-          { value: 'login:email:password', label: 'Логин:Email:Пароль', example: 'user123:user@mail.com:pass123' },
-          { value: 'json', label: 'JSON формат', example: '{"login":"user123","password":"pass123"}' }
-        ],
-        exportFormats: ['csv', 'txt', 'json', 'xlsx'],
-        service: 'accountsService'
-      },
-      proxies: {
-        title: 'Прокси',
-        icon: cilSettings,
-        importFormats: [
-          { value: 'ip:port', label: 'IP:Порт', example: '192.168.1.1:8080' },
-          { value: 'ip:port:login:password', label: 'IP:Порт:Логин:Пароль', example: '192.168.1.1:8080:user:pass' },
-          { value: 'protocol://ip:port', label: 'Протокол://IP:Порт', example: 'http://192.168.1.1:8080' }
-        ],
-        exportFormats: ['txt', 'csv', 'json'],
-        service: 'proxiesService'
-      },
-      phones: {
-        title: 'Устройства',
-        icon: cilCloudUpload,
-        importFormats: [
-          { value: 'model:device', label: 'Модель:Устройство', example: 'Samsung Galaxy S21:SM-G991B' },
-          { value: 'json', label: 'JSON формат', example: '{"model":"Samsung Galaxy S21","device":"SM-G991B"}' }
-        ],
-        exportFormats: ['csv', 'json', 'xlsx'],
-        service: 'phonesService'
-      },
-      profiles: {
-        title: 'Профили',
-        icon: cilCheck,
-        importFormats: [
-          { value: 'name:platform', label: 'Имя:Платформа', example: 'Profile1:Facebook' },
-          { value: 'json', label: 'JSON формат', example: '{"name":"Profile1","platform":"Facebook"}' }
-        ],
-        exportFormats: ['csv', 'json', 'xlsx'],
-        service: 'profilesService'
-      },
-      projects: {
-        title: 'Проекты',
-        icon: cilSettings,
-        importFormats: [
-          { value: 'name:description', label: 'Название:Описание', example: 'Project1:Description text' },
-          { value: 'json', label: 'JSON формат', example: '{"name":"Project1","description":"Description"}' }
-        ],
-        exportFormats: ['csv', 'json', 'xlsx'],
-        service: 'projectsService'
-      }
-    }
-    return configs[entityType] || configs.accounts
-  }
-
-  const entityConfig = getEntityConfig(type)
-
-  // Определяем доступные табы на основе mode
-  const availableTabs = useMemo(() => {
-    const tabs = []
-    if (mode === 'import' || mode === 'both') {
-      tabs.push({ 
-        key: 'import', 
-        label: 'Импорт', 
-        icon: cilCloudUpload,
-        description: `Импортировать ${entityConfig.title.toLowerCase()}`
-      })
-    }
-    if (mode === 'export' || mode === 'both') {
-      tabs.push({ 
-        key: 'export', 
-        label: 'Экспорт', 
-        icon: cilCloudDownload,
-        description: `Экспортировать ${entityConfig.title.toLowerCase()}`
-      })
-    }
-    return tabs
-  }, [mode, entityConfig])
-
   // Устанавливаем активный таб по умолчанию
   useEffect(() => {
-    if (availableTabs.length > 0) {
-      const firstAvailableTab = availableTabs[0].key
-      if (!availableTabs.find(t => t.key === activeTab)) {
-        setActiveTab(firstAvailableTab)
-      }
+    if (mode === 'import') {
+      setActiveTab('import')
+    } else if (mode === 'export') {
+      setActiveTab('export')
+    } else {
+      setActiveTab('import') // default для 'both'
     }
-  }, [availableTabs, activeTab])
+  }, [mode])
 
   // Сброс состояния при открытии/закрытии модалки
   useEffect(() => {
     if (visible) {
       setError(null)
       setIsLoading(false)
-    } else {
-      // Сброс на первый доступный таб при закрытии
-      if (availableTabs.length > 0) {
-        setActiveTab(availableTabs[0].key)
-      }
     }
-  }, [visible, availableTabs])
+  }, [visible])
 
   const handleClose = () => {
     setError(null)
@@ -163,7 +73,6 @@ const ImportExportModal = ({
     if (onSuccess) {
       onSuccess(result)
     }
-    // Автоматически закрываем модалку после успешной операции
     setTimeout(() => {
       handleClose()
     }, 1500)
@@ -177,14 +86,20 @@ const ImportExportModal = ({
   const getModalTitle = () => {
     if (title) return title
     
-    const baseTitle = `${entityConfig.title}: `
-    const activeTabData = availableTabs.find(t => t.key === activeTab)
-    
-    if (availableTabs.length === 1) {
-      return baseTitle + activeTabData?.label
+    const typeNames = {
+      accounts: 'Аккаунты',
+      proxies: 'Прокси', 
+      profiles: 'Профили',
+      phones: 'Телефоны',
+      projects: 'Проекты'
     }
     
-    return baseTitle + 'Импорт / Экспорт'
+    const entityName = typeNames[type] || 'Данные'
+    
+    if (mode === 'import') return `Импорт ${entityName.toLowerCase()}`
+    if (mode === 'export') return `Экспорт ${entityName.toLowerCase()}`
+    
+    return `${entityName}: Импорт / Экспорт`
   }
 
   const getSelectionInfo = () => {
@@ -200,6 +115,10 @@ const ImportExportModal = ({
     return 'Все элементы'
   }
 
+  // Определяем доступные табы
+  const showImportTab = mode === 'both' || mode === 'import'
+  const showExportTab = mode === 'both' || mode === 'export'
+
   return (
     <CModal 
       visible={visible} 
@@ -209,127 +128,96 @@ const ImportExportModal = ({
       className="import-export-modal"
     >
       <CModalHeader className="border-bottom">
-        <div className="d-flex align-items-center">
-          <div className="me-3">
-            <div className="avatar avatar-lg bg-primary bg-opacity-10 text-primary rounded-circle d-flex align-items-center justify-content-center">
-              <CIcon icon={entityConfig.icon} size="lg" />
-            </div>
-          </div>
-          <div className="flex-grow-1">
-            <CModalTitle className="mb-1">
-              {getModalTitle()}
-            </CModalTitle>
-            <div className="d-flex align-items-center gap-3">
-              <CBadge color="info" className="text-dark">
-                {getSelectionInfo()}
+        <div className="d-flex align-items-center justify-content-between w-100">
+          <CModalTitle className="d-flex align-items-center">
+            <CIcon 
+              icon={activeTab === 'import' ? cilCloudUpload : cilCloudDownload} 
+              className="me-2" 
+            />
+            {getModalTitle()}
+            {selectedIds.length > 0 && (
+              <CBadge color="primary" className="ms-2">
+                {selectedIds.length}
               </CBadge>
-              {availableTabs.length > 1 && (
-                <CBadge color="light" className="text-dark">
-                  {availableTabs.find(t => t.key === activeTab)?.description}
-                </CBadge>
-              )}
-            </div>
-          </div>
+            )}
+          </CModalTitle>
         </div>
       </CModalHeader>
 
       <CModalBody className="p-0">
         {error && (
-          <div className="p-3">
-            <CAlert color="danger" className="mb-0">
-              <h6 className="mb-2">Ошибка</h6>
-              {error}
-            </CAlert>
-          </div>
+          <CAlert color="danger" className="m-3 mb-0">
+            {error}
+          </CAlert>
         )}
 
-        {/* Навигация по табам (только если больше одного таба) */}
-        {availableTabs.length > 1 && (
-          <div className="border-bottom">
-            <CNav variant="tabs" className="px-3">
-              {availableTabs.map(tab => (
-                <CNavItem key={tab.key}>
-                  <CNavLink 
-                    active={activeTab === tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    className="d-flex align-items-center gap-2"
-                    disabled={isLoading}
-                  >
-                    <CIcon icon={tab.icon} />
-                    {tab.label}
-                  </CNavLink>
-                </CNavItem>
-              ))}
-            </CNav>
-          </div>
+        {/* Табы только если режим 'both' */}
+        {mode === 'both' && (
+          <CNav variant="tabs" className="border-bottom">
+            {showImportTab && (
+              <CNavItem>
+                <CNavLink
+                  active={activeTab === 'import'}
+                  onClick={() => setActiveTab('import')}
+                  className="d-flex align-items-center"
+                >
+                  <CIcon icon={cilCloudUpload} className="me-2" />
+                  Импорт
+                </CNavLink>
+              </CNavItem>
+            )}
+            {showExportTab && (
+              <CNavItem>
+                <CNavLink
+                  active={activeTab === 'export'}
+                  onClick={() => setActiveTab('export')}
+                  className="d-flex align-items-center"
+                >
+                  <CIcon icon={cilCloudDownload} className="me-2" />
+                  Экспорт
+                </CNavLink>
+              </CNavItem>
+            )}
+          </CNav>
         )}
 
-        {/* Контент табов */}
-        <CTabContent className="p-0">
-          {availableTabs.find(t => t.key === 'import') && activeTab === 'import' && (
-            <CTabPane visible={activeTab === 'import'} className="p-0">
-              <ImportPanel
-                type={type}
-                config={{
-                  formats: entityConfig.importFormats,
-                  delimiters: [
-                    { value: '\n', label: 'Новая строка' },
-                    { value: '\r\n', label: 'Windows (CRLF)' },
-                    { value: ';', label: 'Точка с запятой' },
-                    { value: ',', label: 'Запятая' }
-                  ],
-                  service: entityConfig.service,
-                  defaultValues: {
-                    format: entityConfig.importFormats[0]?.value || '',
-                    delimiter: '\n'
-                  }
-                }}
-                onSuccess={handleSuccess}
-                onError={handleError}
-                onLoadingChange={setIsLoading}
-              />
+        <CTabContent>
+          {/* Import Tab */}
+          {showImportTab && (
+            <CTabPane visible={activeTab === 'import'}>
+              <div className="p-3">
+                <ImportPanel
+                  type={type}
+                  onSuccess={handleSuccess}
+                  onError={handleError}
+                  onLoadingChange={setIsLoading}
+                />
+              </div>
             </CTabPane>
           )}
-          
-          {availableTabs.find(t => t.key === 'export') && activeTab === 'export' && (
-            <CTabPane visible={activeTab === 'export'} className="p-0">
-              <ExportPanel
-                type={type}
-                selectedIds={selectedIds}
-                currentFilters={currentFilters}
-                config={{
-                  formats: entityConfig.exportFormats,
-                  service: entityConfig.service
-                }}
-                onSuccess={handleSuccess}
-                onError={handleError}
-                onLoadingChange={setIsLoading}
-              />
+
+          {/* Export Tab */}
+          {showExportTab && (
+            <CTabPane visible={activeTab === 'export'}>
+              <div className="p-3">
+                <ExportPanel
+                  type={type}
+                  selectedIds={selectedIds}
+                  currentFilters={currentFilters}
+                  onSuccess={handleSuccess}
+                  onError={handleError}
+                  onLoadingChange={setIsLoading}
+                />
+              </div>
             </CTabPane>
           )}
         </CTabContent>
-
-        {/* Индикатор загрузки */}
-        {isLoading && (
-          <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center bg-white bg-opacity-75" style={{ zIndex: 1000 }}>
-            <div className="text-center">
-              <CSpinner color="primary" className="mb-3" />
-              <div className="text-muted">
-                {activeTab === 'import' ? 'Импортируем данные...' : 'Экспортируем данные...'}
-              </div>
-            </div>
-          </div>
-        )}
       </CModalBody>
 
-      <CModalFooter className="border-top bg-light">
+      <CModalFooter className="border-top">
         <div className="d-flex justify-content-between align-items-center w-100">
           <div className="text-muted small">
-            {activeTab === 'import' ? (
-              <span>Поддерживаемые форматы: {entityConfig.importFormats.map(f => f.label).join(', ')}</span>
-            ) : (
-              <span>Форматы экспорта: {entityConfig.exportFormats.join(', ').toUpperCase()}</span>
-            )}
+            {getSelectionInfo()}
           </div>
           <CButton 
             color="light" 

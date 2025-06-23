@@ -3,23 +3,26 @@ const express = require('express');
 const accountController = require('../controllers/accountController');
 const { validateAccount, validateAccountUpdate } = require('../validators/accountValidator');
 
-
 const router = express.Router();
 
-// GET /api/accounts/fields - получить поля аккаунтов для фильтрации
+// НОВЫЕ РОУТЫ для конфигурации импорта/экспорта (должны быть ПЕРЕД динамическими)
+router.get('/import/config', accountController.getImportConfig);
+router.get('/export/config', accountController.getExportConfig);
+router.get('/export/fields', accountController.getExportFields);
+
+// GET /api/accounts/fields - получить поля аккаунтов для фильтрации (старый метод)
 router.get('/fields', accountController.getAccountFields);
 
 // GET /api/accounts/stats - статистика аккаунтов
 router.get('/stats', accountController.getAccountStats);
 
-// GET /api/accounts/export/json - экспорт в JSON
+// Экспорт (старые роуты для совместимости)
 router.get('/export/json', accountController.exportAccountsJSON);
-
-// GET /api/accounts/export/csv - экспорт в CSV
 router.get('/export/csv', accountController.exportAccountsCSV);
-
-// GET /api/accounts/export/txt - экспорт в TXT
 router.get('/export/txt', accountController.exportAccountsTXT);
+
+// Новый универсальный роут экспорта
+router.post('/export', accountController.exportAccounts);
 
 // GET /api/accounts - получить список аккаунтов
 router.get('/', accountController.getAccounts);
@@ -42,7 +45,7 @@ router.post('/bulk-delete', accountController.bulkDeleteAccounts);
 // POST /api/accounts/bulk-update-status - массовое обновление статуса
 router.post('/bulk-update-status', accountController.bulkUpdateStatus);
 
-// POST /api/accounts/export/custom - кастомный экспорт
+// POST /api/accounts/export/custom - кастомный экспорт (старый роут)
 router.post('/export/custom', accountController.exportAccountsCustom);
 
 // POST /api/accounts/:id/status - изменить статус аккаунта

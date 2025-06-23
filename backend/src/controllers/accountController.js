@@ -59,6 +59,155 @@ const getModelMetadata = () => {
   };
 };
 
+// ======================
+// НОВЫЕ МЕТОДЫ ИМПОРТА/ЭКСПОРТА
+// ======================
+
+/**
+ * Получить конфигурацию импорта
+ * Возвращает только серверные данные
+ */
+const getImportConfig = async (req, res, next) => {
+  try {
+    const metadata = getModelMetadata();
+    
+    const config = {
+      maxFileSize: 10 * 1024 * 1024, // 10MB
+      maxRecords: 10000,
+      importableFields: metadata.importableFields,
+      fieldTypes: Object.keys(metadata.fields).reduce((acc, fieldName) => {
+        acc[fieldName] = metadata.fields[fieldName].type;
+        return acc;
+      }, {})
+    };
+    
+    res.json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Получить конфигурацию экспорта
+ * Возвращает только серверные ограничения
+ */
+const getExportConfig = async (req, res, next) => {
+  try {
+    const config = {
+      maxRecords: 100000,
+      maxFileSize: 100 * 1024 * 1024, // 100MB
+      supportedFormats: ['csv', 'json', 'txt'],
+      exportTypes: [
+        {
+          value: 'all',
+          title: 'Все аккаунты',
+          description: 'Экспорт всех аккаунтов без фильтров',
+          icon: 'cilTask'
+        },
+        {
+          value: 'filtered',
+          title: 'Фильтрованный экспорт',
+          description: 'С учетом текущих фильтров',
+          icon: 'cilFilter'
+        },
+        {
+          value: 'selected',
+          title: 'Выбранные записи',
+          description: 'Только предварительно выбранные аккаунты',
+          icon: 'cilCheck'
+        }
+      ],
+      formats: [
+        {
+          value: 'csv',
+          label: 'CSV (Excel)',
+          description: 'Таблица для Excel с выбранными полями',
+          extension: 'csv',
+          mimeType: 'text/csv',
+          supportsFields: true,
+          supportsHeaders: true
+        },
+        {
+          value: 'json',
+          label: 'JSON',
+          description: 'Полные данные в JSON формате',
+          extension: 'json',
+          mimeType: 'application/json',
+          supportsFields: true
+        },
+        {
+          value: 'txt',
+          label: 'TXT (Кастомный)',
+          description: 'Текстовый формат с настраиваемым шаблоном',
+          extension: 'txt',
+          mimeType: 'text/plain',
+          supportsTemplate: true,
+          supportsFields: true,
+          defaultTemplate: '{login}:{password}:{email}'
+        }
+      ]
+    };
+    
+    res.json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Получить доступные поля для экспорта
+ * Динамически из модели
+ */
+const getExportFields = async (req, res, next) => {
+  try {
+    const metadata = getModelMetadata();
+    
+    const fieldLabels = {
+      id: 'ID',
+      login: 'Логин',
+      password: 'Пароль',
+      email: 'Email',
+      emailPassword: 'Пароль Email',
+      emailPasswordRecovery: 'Резервный пароль Email',
+      status: 'Статус',
+      createdAt: 'Дата создания',
+      updatedAt: 'Дата обновления',
+      twoFA: '2FA код',
+      proxy: 'Прокси',
+      phoneNumber: 'Номер телефона'
+    };
+    
+    const fields = metadata.exportableFields.map(fieldName => {
+      const field = metadata.fields[fieldName];
+      return {
+        key: fieldName,
+        label: fieldLabels[fieldName] || fieldName.charAt(0).toUpperCase() + fieldName.slice(1),
+        type: field.type,
+        required: fieldName === 'id',
+        defaultSelected: ['id', 'login', 'email', 'status'].includes(fieldName),
+        sensitive: metadata.sensitiveFields.includes(fieldName)
+      };
+    });
+    
+    res.json({
+      success: true,
+      data: fields
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ======================
+// ВСЕ ОСТАЛЬНЫЕ СУЩЕСТВУЮЩИЕ МЕТОДЫ
+// ======================
+
 // Динамически получить уникальные значения для полей
 const getFieldValues = async (fieldName, limit = 100) => {
   try {
@@ -925,7 +1074,12 @@ module.exports = {
   getAccountFields,
   getAccountStats,
   
-  // Импорт/экспорт
+  // НОВЫЕ МЕТОДЫ импорта/экспорта
+  getImportConfig,
+  getExportConfig,
+  getExportFields,
+  
+  // Импорт/экспорт операции
   importAccountsFromText,
   exportAccounts,
   
