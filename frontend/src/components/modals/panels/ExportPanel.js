@@ -1,3 +1,5 @@
+// frontend/src/components/modals/panels/ExportPanel.js
+
 import React, { useState, useEffect, useCallback } from 'react'
 import {
   CCard,
@@ -25,6 +27,10 @@ import {
   CTableHeaderCell,
   CTableBody,
   CTableDataCell,
+  CDropdown,
+  CDropdownToggle,
+  CDropdownMenu,
+  CDropdownItem,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -41,8 +47,13 @@ import {
   cilList,
   cilCopy,
   cilTrash,
-  cilCheck, // Добавлен импорт cilCheck
+  cilCheck,
+  cilPlus,
+  cilArrowTop,
+  cilArrowBottom,
+  cilMove,
 } from '@coreui/icons'
+import './ExportPanel.scss' // Подключение стилей
 
 const ExportPanel = ({
   type = 'accounts',
@@ -80,6 +91,10 @@ const ExportPanel = ({
   // Selected fields for export
   const [selectedFields, setSelectedFields] = useState([])
   
+  // Drag & Drop state
+  const [draggedIndex, setDraggedIndex] = useState(null)
+  const [dragOverIndex, setDragOverIndex] = useState(null)
+  
   // Export settings
   const [settings, setSettings] = useState({
     exportType: selectedIds.length > 0 ? 'selected' : 'filtered',
@@ -100,10 +115,47 @@ const ExportPanel = ({
   // Load status options from server
   const loadStatusOptions = async () => {
     try {
-      let response
+      // Способ 1: Получить из конфигурации статусов (правильный путь!)
+      let response = await fetch('/api/config/statuses')
+      const statusConfig = await response.json()
+      
+      console.log('Status config response:', statusConfig)
+      
       let statusData = []
       
-      try {
+      if (statusConfig.success && statusConfig.data && statusConfig.data.statuses) {
+        const typeUpper = type.toUpperCase()
+        console.log('Looking for type:', typeUpper)
+        console.log('Available types in config:', Object.keys(statusConfig.data.statuses))
+        
+        const statusesForType = statusConfig.data.statuses[typeUpper]
+        console.log('Statuses for type:', statusesForType)
+        
+        if (statusesForType) {
+          statusData = Object.values(statusesForType).map(status => {
+            const description = statusConfig.data.descriptions[status] || status
+            const color = getStatusColorFromConfig(status, statusConfig.data.colors[status])
+            
+            console.log(`Status: ${status}, Description: ${description}, Color: ${color}`)
+            
+            return {
+              value: status,
+              label: description,
+              color: color
+            }
+          })
+          
+          console.log('Generated status data from config:', statusData)
+        } else {
+          console.log(`No statuses found for type ${typeUpper}`)
+        }
+      } else {
+        console.log('Invalid status config structure')
+      }
+      
+      // Способ 2: Fallback - получить из метаданных полей
+      if (statusData.length === 0) {
+        console.log('Trying fields API as fallback...')
         response = await fetch(`/api/${type}/fields`)
         const fieldsData = await response.json()
         
@@ -115,35 +167,66 @@ const ExportPanel = ({
               label: status.charAt(0).toUpperCase() + status.slice(1),
               color: getStatusColor(status)
             }))
+            console.log('Got statuses from fields API:', statusData)
           }
         }
-      } catch (err) {
-        console.log('Could not get statuses from fields API')
       }
       
+      // Способ 3: Fallback - получить уникальные значения из базы
       if (statusData.length === 0) {
-        statusData = [
-          { value: 'active', label: 'Активный', color: 'success' },
-          { value: 'inactive', label: 'Неактивный', color: 'secondary' },
-          { value: 'banned', label: 'Заблокирован', color: 'danger' },
-          { value: 'working', label: 'В работе', color: 'warning' },
-          { value: 'free', label: 'Свободный', color: 'info' },
-          { value: 'busy', label: 'Занят', color: 'warning' },
-          { value: 'suspended', label: 'Приостановлен', color: 'danger' },
-          { value: 'pending', label: 'В ожидании', color: 'primary' },
-          { value: 'verified', label: 'Проверен', color: 'success' },
-          { value: 'unverified', label: 'Не проверен', color: 'secondary' }
-        ]
+        console.log('No statuses from config or fields, trying to get unique values from database')
+        statusData = await loadUniqueStatuses()
       }
       
+      console.log('Final loaded statuses:', statusData)
       setStatusOptions(statusData)
       
     } catch (error) {
       console.error('Error loading status options:', error)
-      setStatusOptions([
-        { value: 'active', label: 'Активный', color: 'success' },
-        { value: 'inactive', label: 'Неактивный', color: 'secondary' }
-      ])
+      setStatusOptions([])
+    }
+  }
+
+  // Определить цвет статуса из конфигурации или fallback
+  const getStatusColorFromConfig = (status, configColor) => {
+    if (configColor) {
+      // Преобразуем HEX в Bootstrap цвета
+      const colorMap = {
+        '#10b981': 'success',  // зеленый
+        '#ef4444': 'danger',   // красный
+        '#f59e0b': 'warning',  // оранжевый
+        '#3b82f6': 'primary',  // синий
+        '#6b7280': 'secondary', // серый
+        '#8b5cf6': 'info',     // фиолетовый
+        '#f97316': 'warning'   // оранжевый
+      }
+      return colorMap[configColor] || 'secondary'
+    }
+    
+    return getStatusColor(status)
+  }
+
+  // Загрузить уникальные статусы из данных
+  const loadUniqueStatuses = async () => {
+    try {
+      const response = await fetch(`/api/${type}?limit=1000&fields=status`)
+      const data = await response.json()
+      
+      if (data.success && data.data) {
+        const accounts = data.data.accounts || data.data.data || data.data
+        const uniqueStatuses = [...new Set(accounts.map(item => item.status).filter(Boolean))]
+        
+        return uniqueStatuses.map(status => ({
+          value: status,
+          label: status.charAt(0).toUpperCase() + status.slice(1),
+          color: getStatusColor(status)
+        }))
+      }
+      
+      return []
+    } catch (error) {
+      console.error('Error loading unique statuses:', error)
+      return []
     }
   }
 
@@ -315,6 +398,11 @@ const ExportPanel = ({
     })
   }
 
+  const addField = (field) => {
+    const fieldName = typeof field === 'string' ? field : field.name || field.key
+    setSelectedFields(prev => [...prev, fieldName])
+  }
+
   const addAllFields = () => {
     const allFieldNames = (Array.isArray(availableFields) ? availableFields : []).map(field => 
       typeof field === 'string' ? field : field.name || field.key
@@ -324,6 +412,71 @@ const ExportPanel = ({
 
   const clearSelectedFields = () => {
     setSelectedFields([])
+  }
+
+  const removeField = (fieldName) => {
+    setSelectedFields(prev => prev.filter(f => f !== fieldName))
+  }
+
+  // Drag & Drop functionality
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverIndex(index)
+  }
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null)
+  }
+
+  const handleDrop = (e, dropIndex) => {
+    e.preventDefault()
+    
+    if (draggedIndex === null || draggedIndex === dropIndex) {
+      setDraggedIndex(null)
+      setDragOverIndex(null)
+      return
+    }
+
+    const newFields = [...selectedFields]
+    const draggedField = newFields[draggedIndex]
+    
+    // Remove dragged item
+    newFields.splice(draggedIndex, 1)
+    
+    // Insert at new position
+    const insertIndex = draggedIndex < dropIndex ? dropIndex - 1 : dropIndex
+    newFields.splice(insertIndex, 0, draggedField)
+    
+    setSelectedFields(newFields)
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null)
+    setDragOverIndex(null)
+  }
+
+  const moveFieldUp = (index) => {
+    if (index > 0) {
+      const newFields = [...selectedFields]
+      ;[newFields[index - 1], newFields[index]] = [newFields[index], newFields[index - 1]]
+      setSelectedFields(newFields)
+    }
+  }
+
+  const moveFieldDown = (index) => {
+    if (index < selectedFields.length - 1) {
+      const newFields = [...selectedFields]
+      ;[newFields[index], newFields[index + 1]] = [newFields[index + 1], newFields[index]]
+      setSelectedFields(newFields)
+    }
   }
 
   // Step navigation
@@ -807,15 +960,31 @@ const ExportPanel = ({
                           const fieldName = typeof field === 'string' ? field : field.name || field.key
                           const fieldLabel = typeof field === 'string' ? field : field.label || field.name || field.key
                           const isSelected = selectedFields.includes(fieldName)
+                          const canAddMore = !isSelected || selectedFields.filter(f => f === fieldName).length < 3
                           
                           return (
-                            <div
-                              key={fieldName}
-                              className={`field-chip ${isSelected ? 'selected' : ''}`}
-                              onClick={() => toggleField(field)}
-                            >
-                              <span className="field-name">{fieldLabel}</span>
-                              {isSelected && <CIcon icon={cilCheck} size="sm" />}
+                            <div key={fieldName} className="field-chip-container">
+                              <div
+                                className={`field-chip ${isSelected ? 'selected' : ''}`}
+                                onClick={() => toggleField(field)}
+                              >
+                                <span className="field-name">{fieldLabel}</span>
+                                {isSelected && <CIcon icon={cilCheck} size="sm" />}
+                              </div>
+                              {canAddMore && (
+                                <CButton
+                                  size="sm"
+                                  color="outline-primary"
+                                  className="add-field-btn"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    addField(field)
+                                  }}
+                                  title="Добавить еще раз"
+                                >
+                                  <CIcon icon={cilPlus} size="sm" />
+                                </CButton>
+                              )}
                             </div>
                           )
                         })}
@@ -841,16 +1010,50 @@ const ExportPanel = ({
                                            field?.label || field?.name || field?.key || fieldName
                           
                           return (
-                            <div key={fieldName} className="selected-field-item">
+                            <div 
+                              key={`${fieldName}-${index}`} 
+                              className={`selected-field-item ${draggedIndex === index ? 'dragging' : ''} ${dragOverIndex === index ? 'drag-over' : ''}`}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, index)}
+                              onDragOver={(e) => handleDragOver(e, index)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, index)}
+                              onDragEnd={handleDragEnd}
+                            >
+                              <div className="drag-handle">
+                                <CIcon icon={cilMove} size="sm" />
+                              </div>
                               <span className="field-order">{index + 1}</span>
                               <span className="field-label">{fieldLabel}</span>
-                              <CButton
-                                size="sm"
-                                color="outline-danger"
-                                onClick={() => toggleField({ name: fieldName })}
-                              >
-                                <CIcon icon={cilX} size="sm" />
-                              </CButton>
+                              
+                              <div className="field-actions">
+                                <CButton
+                                  size="sm"
+                                  color="outline-secondary"
+                                  onClick={() => moveFieldUp(index)}
+                                  disabled={index === 0}
+                                  title="Переместить вверх"
+                                >
+                                  <CIcon icon={cilArrowTop} size="sm" />
+                                </CButton>
+                                <CButton
+                                  size="sm"
+                                  color="outline-secondary"
+                                  onClick={() => moveFieldDown(index)}
+                                  disabled={index === selectedFields.length - 1}
+                                  title="Переместить вниз"
+                                >
+                                  <CIcon icon={cilArrowBottom} size="sm" />
+                                </CButton>
+                                <CButton
+                                  size="sm"
+                                  color="outline-danger"
+                                  onClick={() => removeField(fieldName)}
+                                  title="Удалить"
+                                >
+                                  <CIcon icon={cilX} size="sm" />
+                                </CButton>
+                              </div>
                             </div>
                           )
                         })}
