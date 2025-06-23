@@ -1,8 +1,9 @@
+// backend/src/services/PhoneService.js
+
 const PhoneRepository = require('../repositories/PhoneRepository');
 const ActivityService = require('./ActivityService');
 const logger = require('../utils/logger');
 const { NotFoundError, ValidationError, ConflictError } = require('../middleware/errorHandler');
-
 
 class PhoneService {
   constructor() {
@@ -67,12 +68,9 @@ class PhoneService {
    */
   async createPhone(phoneData) {
     try {
-      // Подготавливаем данные с правильными датами статуса
       const preparedData = this.preparePhoneData(phoneData);
-      
       const phone = await this.phoneRepository.create(preparedData);
 
-      // Логируем создание
       await this.activityService.logPhoneActivity(
         phone.id,
         'create',
@@ -80,8 +78,6 @@ class PhoneService {
       );
 
       logger.info('Phone created successfully', { phoneId: phone.id, model: phone.model });
-
-      // Возвращаем с проектом
       return await this.phoneRepository.findWithProject(phone.id);
     } catch (error) {
       logger.error('Error creating phone:', error);
@@ -96,14 +92,12 @@ class PhoneService {
     try {
       const phone = await this.getPhoneById(id);
       
-      // Обрабатываем изменение статуса
       if (updateData.status && updateData.status !== phone.status) {
         updateData = this.handleStatusChange(updateData, phone.status);
       }
 
       await this.phoneRepository.update(id, updateData);
 
-      // Логируем обновление
       await this.activityService.logPhoneActivity(
         phone.id,
         'update',
@@ -111,8 +105,6 @@ class PhoneService {
       );
 
       logger.info('Phone updated successfully', { phoneId: phone.id });
-
-      // Возвращаем обновленный телефон
       return await this.phoneRepository.findWithProject(id);
     } catch (error) {
       logger.error('Error updating phone:', error);
@@ -134,7 +126,6 @@ class PhoneService {
 
       await this.phoneRepository.delete(id);
 
-      // Логируем удаление
       await this.activityService.logPhoneActivity(
         phoneInfo.id,
         'delete',
@@ -142,7 +133,6 @@ class PhoneService {
       );
 
       logger.info('Phone deleted successfully', { phoneId: phoneInfo.id });
-
       return { message: 'Устройство успешно удалено' };
     } catch (error) {
       logger.error('Error deleting phone:', error);
@@ -164,7 +154,6 @@ class PhoneService {
       
       await this.phoneRepository.update(id, updateData);
 
-      // Логируем изменение статуса
       await this.activityService.logPhoneActivity(
         phone.id,
         'status_toggle',
@@ -177,7 +166,6 @@ class PhoneService {
         newStatus 
       });
 
-      // Возвращаем обновленный телефон
       return await this.phoneRepository.findWithProject(id);
     } catch (error) {
       logger.error('Error toggling phone status:', error);
@@ -196,7 +184,6 @@ class PhoneService {
         dateLastReboot: new Date()
       });
 
-      // Логируем перезагрузку
       await this.activityService.logPhoneActivity(
         phone.id,
         'reboot',
@@ -204,8 +191,6 @@ class PhoneService {
       );
 
       logger.info('Phone rebooted successfully', { phoneId: phone.id });
-
-      // Возвращаем обновленный телефон
       return await this.phoneRepository.findWithProject(id);
     } catch (error) {
       logger.error('Error rebooting phone:', error);
@@ -220,7 +205,6 @@ class PhoneService {
     try {
       const stats = await this.phoneRepository.getStatusStats();
       
-      // Преобразуем в удобный формат
       const statusCounts = {
         free: 0,
         busy: 0,
@@ -263,7 +247,6 @@ class PhoneService {
       const updateData = this.handleStatusChange({ status }, null);
       const updatedCount = await this.phoneRepository.bulkUpdate(phoneIds, updateData);
 
-      // Логируем массовое обновление
       await this.activityService.logBulkActivity(
         'phone',
         phoneIds,
@@ -287,6 +270,269 @@ class PhoneService {
     }
   }
 
+  /**
+   * Массовое удаление
+   */
+  async bulkDelete(ids) {
+    try {
+      if (!Array.isArray(ids) || ids.length === 0) {
+        throw new Error('Не указаны ID для удаления');
+      }
+
+      const deletedCount = await this.phoneRepository.bulkDelete(ids);
+
+      await this.activityService.logBulkActivity(
+        'phone',
+        ids,
+        'bulk_delete',
+        `Массовое удаление ${ids.length} устройств`
+      );
+
+      logger.info('Bulk phone delete completed', { 
+        phoneIds: ids.length,
+        deletedCount 
+      });
+
+      return {
+        deletedCount,
+        message: `Удалено ${deletedCount} устройств`
+      };
+    } catch (error) {
+      logger.error('Error bulk deleting phones:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Поиск телефонов
+   */
+  async searchPhones(searchText, options = {}) {
+    try {
+      const { limit = 10 } = options;
+      return await this.phoneRepository.search(searchText, { limit });
+    } catch (error) {
+      logger.error('Error searching phones:', error);
+      throw new Error('Ошибка поиска устройств');
+    }
+  }
+
+  // ========================================================================
+  // МЕТОДЫ ИМПОРТА/ЭКСПОРТА
+  // ========================================================================
+
+  /**
+   * Получить конфигурацию импорта (данные получаем динамически)
+   */
+  async getImportConfig() {
+    try {
+      const { Phone } = require('../models');
+      const attributes = Phone.rawAttributes;
+      
+      // Получаем поля динамически из модели
+      const importableFields = Object.keys(attributes).filter(fieldName => {
+        const field = attributes[fieldName];
+        return !field.primaryKey && !field.autoIncrement && 
+               !['createdAt', 'updatedAt', 'dateSetStatusFree', 'dateSetStatusBusy', 'dateLastReboot'].includes(fieldName);
+      });
+
+      return {
+        availableFields: importableFields
+      };
+    } catch (error) {
+      logger.error('Error getting import config:', error);
+      throw new Error('Ошибка получения конфигурации импорта');
+    }
+  }
+
+  /**
+   * Получить конфигурацию экспорта
+   */
+  async getExportConfig() {
+    try {
+      return {};
+    } catch (error) {
+      logger.error('Error getting export config:', error);
+      throw new Error('Ошибка получения конфигурации экспорта');
+    }
+  }
+
+  /**
+   * Получить доступные поля для экспорта (динамически из модели)
+   */
+  async getExportFields() {
+    try {
+      const { Phone } = require('../models');
+      const attributes = Phone.rawAttributes;
+
+      const fields = Object.keys(attributes).map(fieldName => {
+        const field = attributes[fieldName];
+        return {
+          key: fieldName,
+          label: fieldName,
+          type: field.type.constructor.name.toLowerCase(),
+          required: fieldName === 'id' || fieldName === 'model' || fieldName === 'device',
+          sensitive: false,
+          description: '',
+          defaultSelected: ['id', 'model', 'device', 'status'].includes(fieldName)
+        };
+      });
+
+      return fields;
+    } catch (error) {
+      logger.error('Error getting export fields:', error);
+      throw new Error('Ошибка получения полей для экспорта');
+    }
+  }
+
+  /**
+   * Импорт устройств из текста
+   */
+  async importFromText(params) {
+    try {
+      const { text, format, delimiter = '\n', options = {} } = params;
+
+      if (!text || !format) {
+        throw new ValidationError('Текст и формат обязательны');
+      }
+
+      const lines = text.split(delimiter).filter(line => line.trim());
+      
+      const results = {
+        processed: lines.length,
+        imported: 0,
+        updated: 0,
+        errors: 0,
+        errorDetails: []
+      };
+
+      for (const line of lines) {
+        try {
+          const phoneData = this.parseImportLine(line.trim(), format);
+          if (phoneData) {
+            await this.createPhone(phoneData);
+            results.imported++;
+          }
+        } catch (error) {
+          results.errors++;
+          results.errorDetails.push({
+            line: line.trim(),
+            error: error.message
+          });
+        }
+      }
+
+      return results;
+    } catch (error) {
+      logger.error('Error importing phones from text:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Универсальный экспорт
+   */
+  async export(params) {
+    try {
+      const { format = 'csv', ...otherParams } = params;
+
+      switch (format) {
+        case 'csv':
+          return await this.exportCSV(otherParams);
+        case 'json':
+          return await this.exportJSON(otherParams);
+        case 'txt':
+          return await this.exportTXT(otherParams);
+        default:
+          throw new Error(`Неподдерживаемый формат: ${format}`);
+      }
+    } catch (error) {
+      logger.error('Error exporting phones:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Экспорт в CSV
+   */
+  async exportCSV(params) {
+    try {
+      const phones = await this.getPhoneDataForExport(params);
+      const fields = params.fields || ['id', 'model', 'device', 'status'];
+      
+      let csv = '';
+      if (params.include_headers !== false) {
+        csv += fields.join(params.delimiter || ',') + '\n';
+      }
+
+      phones.forEach(phone => {
+        const row = fields.map(field => phone[field] || '').join(params.delimiter || ',');
+        csv += row + '\n';
+      });
+
+      return {
+        content: csv,
+        contentType: 'text/csv',
+        filename: `phones_${new Date().toISOString().split('T')[0]}.csv`
+      };
+    } catch (error) {
+      logger.error('Error exporting phones to CSV:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Экспорт в JSON
+   */
+  async exportJSON(params) {
+    try {
+      const phones = await this.getPhoneDataForExport(params);
+      const fields = params.fields;
+      
+      let data = phones;
+      if (fields && Array.isArray(fields)) {
+        data = phones.map(phone => {
+          const filtered = {};
+          fields.forEach(field => {
+            filtered[field] = phone[field];
+          });
+          return filtered;
+        });
+      }
+
+      return {
+        content: JSON.stringify(data, null, 2),
+        contentType: 'application/json',
+        filename: `phones_${new Date().toISOString().split('T')[0]}.json`
+      };
+    } catch (error) {
+      logger.error('Error exporting phones to JSON:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Экспорт в TXT
+   */
+  async exportTXT(params) {
+    try {
+      const phones = await this.getPhoneDataForExport(params);
+      
+      let txt = '';
+      phones.forEach(phone => {
+        txt += `${phone.model || ''}:${phone.device || ''}\n`;
+      });
+
+      return {
+        content: txt,
+        contentType: 'text/plain',
+        filename: `phones_${new Date().toISOString().split('T')[0]}.txt`
+      };
+    } catch (error) {
+      logger.error('Error exporting phones to TXT:', error);
+      throw error;
+    }
+  }
+
   // ========================================================================
   // ПРИВАТНЫЕ МЕТОДЫ
   // ========================================================================
@@ -298,7 +544,6 @@ class PhoneService {
     const data = { ...phoneData };
     const now = new Date();
 
-    // Устанавливаем правильные даты для статуса
     if (data.status === 'free') {
       data.dateSetStatusFree = now;
       data.dateSetStatusBusy = null;
@@ -307,9 +552,7 @@ class PhoneService {
       data.dateSetStatusFree = null;
     }
 
-    // Устанавливаем дату последней перезагрузки
     data.dateLastReboot = now;
-
     return data;
   }
 
@@ -331,6 +574,45 @@ class PhoneService {
     }
 
     return data;
+  }
+
+  /**
+   * Парсинг строки импорта
+   */
+  parseImportLine(line, format) {
+    try {
+      switch (format) {
+        case 'model:device':
+          const [model, device] = line.split(':');
+          return model && device ? { model, device } : null;
+        
+        case 'json':
+          return JSON.parse(line);
+        
+        default:
+          return null;
+      }
+    } catch (error) {
+      return null;
+    }
+  }
+
+  /**
+   * Получить данные телефонов для экспорта
+   */
+  async getPhoneDataForExport(params) {
+    try {
+      const { selectedIds, filters, export_type } = params;
+
+      if (export_type === 'selected' && selectedIds && selectedIds.length > 0) {
+        return await this.phoneRepository.findByIds(selectedIds);
+      }
+
+      return await this.phoneRepository.findAll(filters || {});
+    } catch (error) {
+      logger.error('Error getting phone data for export:', error);
+      throw error;
+    }
   }
 }
 

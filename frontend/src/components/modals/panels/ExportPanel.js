@@ -1,5 +1,6 @@
 // frontend/src/components/modals/panels/ExportPanel.js
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+
+import React, { useState, useCallback, useEffect } from 'react'
 import {
   CCard,
   CCardBody,
@@ -16,491 +17,653 @@ import {
   CButton,
   CInputGroup,
   CInputGroupText,
-} from '@coreui/react';
-import CIcon from '@coreui/icons-react';
+  CProgress,
+  CProgressBar,
+  CForm,
+} from '@coreui/react'
+import CIcon from '@coreui/icons-react'
 import {
   cilCloudDownload,
   cilCheckCircle,
   cilFilter,
   cilCode,
-  cilPlus,
   cilX,
   cilSettings,
-  cilGlobeAlt,
-  cilEyedropper,
   cilSearch,
-} from '@coreui/icons';
-import toast from 'react-hot-toast';
-import { accountsService } from '../../../services/accountsService';
-import { useQuery } from '@tanstack/react-query';
-import './ExportPanel.scss';
+  cilFile,
+  cilTask,
+} from '@coreui/icons'
+import toast from 'react-hot-toast'
+import { useForm } from 'react-hook-form'
+import { useQuery } from '@tanstack/react-query'
 
 const ExportPanel = ({
   type = 'accounts',
   selectedIds = [],
   currentFilters = {},
-  initialFormat = 'csv',
+  config,
   onSuccess,
-  onExport,
+  onError,
+  onLoadingChange,
 }) => {
-  const { data: fieldsData, isLoading: fieldsLoading, error } = useQuery({
-    queryKey: [type, 'fields'],
+  const [isExporting, setIsExporting] = useState(false)
+  const [exportProgress, setExportProgress] = useState(0)
+  const [selectedFields, setSelectedFields] = useState([])
+  const [searchTerm, setSearchTerm] = useState('')
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+    setValue,
+  } = useForm({
+    defaultValues: {
+      export_type: selectedIds.length > 0 ? 'selected' : 'all',
+      format: 'csv',
+      include_headers: true,
+      delimiter: ',',
+      encoding: 'utf-8',
+    }
+  })
+
+  // Получаем конфигурацию экспорта с сервера
+  const { data: exportConfig, isLoading: configLoading, error: configError } = useQuery({
+    queryKey: [type, 'export-config'],
     queryFn: async () => {
-      const response = await accountsService.getFields();
-      return response.data.data;
+      const serviceModule = await getExportService()()
+      const service = serviceModule.default || serviceModule[getServiceName()]
+      
+      if (service?.getExportConfig) {
+        const response = await service.getExportConfig()
+        return response.data?.data || response.data
+      }
+      
+      throw new Error('Метод getExportConfig не найден в сервисе')
     },
-  });
+  })
 
-  const [currentStep, setCurrentStep] = useState('type');
-  const [exporting, setExporting] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true); // Флаг для первой загрузки
+  // Получаем доступные поля с сервера
+  const { data: fieldsData, isLoading: fieldsLoading, error: fieldsError } = useQuery({
+    queryKey: [type, 'export-fields'],
+    queryFn: async () => {
+      const serviceModule = await getExportService()()
+      const service = serviceModule.default || serviceModule[getServiceName()]
+      
+      if (service?.getExportFields) {
+        const response = await service.getExportFields()
+        return response.data?.data || response.data
+      }
+      
+      throw new Error('Метод getExportFields не найден в сервисе')
+    },
+  })
 
-  const [settings, setSettings] = useState({
-    export_type: selectedIds.length > 0 ? 'selected' : 'all',
-    format: initialFormat,
-    encoding: 'utf-8',
-    include_header: true,
-    mask_passwords: false,
-    csv_delimiter: ',',
-    filename: '',
-    status_filters: [],
-  });
+  const watchedFormat = watch('format')
+  const watchedExportType = watch('export_type')
 
-  const [selectedFieldsList, setSelectedFieldsList] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const exportTypes = useMemo(() => [
-    { value: 'all', title: 'Все записи', description: 'Экспортировать все записи из базы данных', icon: cilFilter },
-    { value: 'selected', title: 'Выбранные записи', description: `Экспортировать ${selectedIds.length} выбранных записей`, icon: cilCheckCircle, disabled: selectedIds.length === 0 },
-    { value: 'filtered', title: 'По текущим фильтрам', description: 'Экспортировать записи согласно активным фильтрам', icon: cilGlobeAlt },
-  ], [selectedIds.length]);
-
-  const availableFormats = useMemo(() => [
-    { value: 'csv', label: 'CSV', extension: 'csv', icon: cilEyedropper, method: 'exportCSV', mimeType: 'text/csv' },
-    { value: 'json', label: 'JSON', extension: 'json', icon: cilCode, method: 'exportJSON', mimeType: 'application/json' },
-    { value: 'txt', label: 'TXT', extension: 'txt', icon: cilGlobeAlt, method: 'exportTXT', mimeType: 'text/plain' },
-  ], []);
-
-  const availableFields = useMemo(() => {
-    if (!fieldsData?.fields) return [];
-    return Object.entries(fieldsData.fields)
-      .map(([key, field]) => ({
-        key,
-        label: field.label || key,
-        name: field.name || key,
-        sensitive: field.isSensitive || false,
-        type: field.type || 'string',
-      }))
-      .filter(field => field.label.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [fieldsData, searchQuery]);
-
-  const availableStatuses = useMemo(() => {
-    const statusField = fieldsData?.fields?.status;
-    return statusField?.possibleValues || [];
-  }, [fieldsData]);
-
-  const steps = [
-    { id: 'type', label: 'Тип экспорта' },
-    { id: 'format', label: 'Настройки' },
-    { id: 'preview', label: 'Экспорт' },
-  ];
-
-  const currentFormat = availableFormats.find(f => f.value === settings.format);
-
-  const nextStep = () => {
-    const currentIndex = steps.findIndex(s => s.id === currentStep);
-    if (currentIndex < steps.length - 1) {
-      setCurrentStep(steps[currentIndex + 1].id);
+  // Получаем сервис для экспорта
+  const getExportService = useCallback(() => {
+    const services = {
+      accounts: () => import('../../../services/accountsService'),
+      proxies: () => import('../../../services/proxiesService'),
+      phones: () => import('../../../services/phonesService'),
+      profiles: () => import('../../../services/profilesService'),
+      projects: () => import('../../../services/projectsService'),
     }
-  };
+    return services[type] || services.accounts
+  }, [type])
 
-  const prevStep = () => {
-    const currentIndex = steps.findIndex(s => s.id === currentStep);
-    if (currentIndex > 0) {
-      setCurrentStep(steps[currentIndex - 1].id);
+  const getServiceName = () => {
+    return `${type}Service`
+  }
+
+  // Инициализация полей после загрузки конфигурации
+  useEffect(() => {
+    if (fieldsData && fieldsData.length > 0) {
+      // Выбираем поля по умолчанию на основе серверной конфигурации
+      const defaultFields = fieldsData.filter(field => 
+        field.defaultSelected || field.required
+      )
+      setSelectedFields(defaultFields)
     }
-  };
+  }, [fieldsData])
 
-  const addField = (field) => {
-    if (!selectedFieldsList.find(f => f.key === field.key)) {
-      setSelectedFieldsList(prev => [...prev, field]);
+  // Уведомляем родителя о состоянии загрузки
+  useEffect(() => {
+    if (onLoadingChange) {
+      onLoadingChange(isExporting)
     }
-  };
+  }, [isExporting, onLoadingChange])
 
-  const removeField = (fieldKey) => {
-    setSelectedFieldsList(prev => prev.filter(f => f.key !== fieldKey));
-  };
+  // Получаем типы экспорта из конфигурации
+  const getExportTypes = () => {
+    if (!exportConfig?.exportTypes) {
+      return [
+        { 
+          value: 'all', 
+          label: 'Все записи', 
+          description: 'Экспортировать все записи с учетом фильтров',
+          icon: cilTask
+        }
+      ]
+    }
 
+    return exportConfig.exportTypes.map(type => ({
+      ...type,
+      disabled: type.value === 'selected' && selectedIds.length === 0,
+      description: type.value === 'selected' 
+        ? `Экспортировать ${selectedIds.length} выбранных записей`
+        : type.description
+    }))
+  }
+
+  // Получаем форматы экспорта из конфигурации
+  const getExportFormats = () => {
+    if (!exportConfig?.formats) {
+      return [
+        { value: 'csv', label: 'CSV', description: 'Comma Separated Values' }
+      ]
+    }
+    return exportConfig.formats
+  }
+
+  // Обработка выбора/снятия выбора поля
   const toggleField = (field) => {
-    setSelectedFieldsList(prev =>
-      prev.find(f => f.key === field.key)
-        ? prev.filter(f => f.key !== field.key)
-        : [...prev, field]
-    );
-  };
+    setSelectedFields(prev => {
+      const isSelected = prev.find(f => f.key === field.key)
+      if (isSelected) {
+        if (field.required) {
+          toast.warning('Это поле обязательно для экспорта')
+          return prev
+        }
+        return prev.filter(f => f.key !== field.key)
+      } else {
+        return [...prev, field]
+      }
+    })
+  }
 
-  const addAllFields = () => {
-    setSelectedFieldsList([...availableFields]);
-  };
+  // Фильтрация полей по поиску
+  const filteredFields = fieldsData?.filter(field =>
+    field.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    field.key.toLowerCase().includes(searchTerm.toLowerCase())
+  ) || []
 
-  const clearAllFields = () => {
-    setSelectedFieldsList([]);
-    setInitialLoad(false); // Отключаем автоматическое добавление после очистки
-  };
+  // Обработка экспорта
+  const onSubmit = async (data) => {
+    if (selectedFields.length === 0) {
+      toast.error('Выберите хотя бы одно поле для экспорта')
+      return
+    }
 
-  const updateStatusFilters = (statusValue) => {
-    setSettings(prev => ({
-      ...prev,
-      status_filters: prev.status_filters.includes(statusValue)
-        ? prev.status_filters.filter(s => s !== statusValue)
-        : [...prev.status_filters, statusValue],
-    }));
-  };
+    setIsExporting(true)
+    setExportProgress(0)
 
-  const executeExport = async () => {
     try {
-      setExporting(true);
+      const serviceModule = await getExportService()()
+      const service = serviceModule.default || serviceModule[getServiceName()]
 
-      const exportParams = {
-        format: settings.format,
-        fields: selectedFieldsList.map(f => f.key),
-        include_header: settings.include_header,
-        mask_passwords: settings.mask_passwords,
-        csv_delimiter: settings.csv_delimiter,
-        filename: settings.filename || `${type}_export_${new Date().toISOString().slice(0, 10)}`,
-      };
-
-      if (settings.export_type === 'selected') {
-        exportParams.account_ids = selectedIds;
+      if (!service) {
+        throw new Error('Сервис экспорта не найден')
       }
 
-      if (settings.export_type === 'filtered') {
-        Object.assign(exportParams, currentFilters);
-        if (settings.status_filters.length > 0) {
-          exportParams.status = settings.status_filters;
+      // Имитация прогресса
+      const progressInterval = setInterval(() => {
+        setExportProgress(prev => Math.min(prev + 10, 90))
+      }, 200)
+
+      const exportParams = {
+        ...data,
+        fields: selectedFields.map(f => f.key),
+        selectedIds: data.export_type === 'selected' ? selectedIds : undefined,
+        filters: data.export_type === 'filtered' ? currentFilters : undefined,
+      }
+
+      // Используем универсальный метод экспорта
+      const result = await service.export(exportParams)
+
+      clearInterval(progressInterval)
+      setExportProgress(100)
+
+      // Обработка результата экспорта
+      if (result.data) {
+        // Если сервер возвращает прямую ссылку на скачивание
+        if (result.data.downloadUrl) {
+          const link = document.createElement('a')
+          link.href = result.data.downloadUrl
+          link.download = result.data.filename
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+        } 
+        // Если сервер возвращает данные для скачивания
+        else if (result.data.content) {
+          const blob = new Blob([result.data.content], { 
+            type: result.data.contentType || getContentType(data.format)
+          })
+          const url = window.URL.createObjectURL(blob)
+          const link = document.createElement('a')
+          link.href = url
+          link.download = result.data.filename || `${type}_export_${new Date().toISOString().split('T')[0]}.${data.format}`
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
+          window.URL.revokeObjectURL(url)
         }
       }
 
-      let response;
-      const method = accountsService[`export${currentFormat?.method.charAt(0).toUpperCase() + currentFormat?.method.slice(1)}`];
-      if (!method) throw new Error('Метод экспорта не найден');
-      response = await method(exportParams);
+      toast.success('Экспорт завершен! Файл сохранен')
+      
+      if (onSuccess) {
+        onSuccess({
+          format: data.format,
+          fieldsCount: selectedFields.length,
+          recordsCount: result.data.recordsCount || 0
+        })
+      }
 
-      const blob = new Blob([response.data], { type: currentFormat?.mimeType || 'application/octet-stream' });
-      const filename = `${exportParams.filename}.${currentFormat?.extension}`;
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      toast.success(`Файл ${filename} скачан успешно!`);
-      onSuccess?.({
-        settings: exportParams,
-        fieldsCount: selectedFieldsList.length,
-      });
     } catch (error) {
-      console.error('Export error:', error);
-      toast.error('Ошибка экспорта: ' + (error.response?.data?.error || error.message));
+      console.error('Export error:', error)
+      const errorMessage = error.response?.data?.error || error.message || 'Ошибка экспорта'
+      toast.error(errorMessage)
+      
+      if (onError) {
+        onError(error)
+      }
     } finally {
-      setExporting(false);
+      setIsExporting(false)
+      setExportProgress(0)
     }
-  };
+  }
 
-  useEffect(() => {
-    if (availableFields.length > 0 && selectedFieldsList.length === 0 && initialLoad) {
-      const defaultKeys = ['login', 'email', 'status', 'createdAt'];
-      const defaultFields = availableFields.filter(f => defaultKeys.some(key => f.key.includes(key))).slice(0, 4) || availableFields.slice(0, 4);
-      setSelectedFieldsList(defaultFields);
-      setInitialLoad(false); // Отключаем после первой загрузки
+  const getContentType = (format) => {
+    const types = {
+      csv: 'text/csv;charset=utf-8;',
+      json: 'application/json;charset=utf-8;',
+      txt: 'text/plain;charset=utf-8;',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     }
-  }, [availableFields, selectedFieldsList.length, initialLoad]);
+    return types[format] || types.csv
+  }
 
-  if (fieldsLoading) {
+  // Показываем загрузку конфигурации
+  if (configLoading || fieldsLoading) {
     return (
-      <div className="export-panel-loading">
-        <CSpinner color="primary" />
-        <p>Загрузка конфигурации экспорта...</p>
+      <div className="export-panel p-4 text-center">
+        <CSpinner color="primary" className="mb-3" />
+        <div>Загрузка конфигурации экспорта...</div>
       </div>
-    );
+    )
   }
 
-  if (error) {
+  // Показываем ошибку загрузки
+  if (configError || fieldsError) {
     return (
-      <CAlert color="danger">
-        Ошибка загрузки полей: {error.message}
-      </CAlert>
-    );
+      <div className="export-panel p-4">
+        <CAlert color="danger">
+          <h6>Ошибка загрузки конфигурации</h6>
+          <p className="mb-0">{configError?.message || fieldsError?.message}</p>
+        </CAlert>
+      </div>
+    )
   }
+
+  const exportTypes = getExportTypes()
+  const exportFormats = getExportFormats()
 
   return (
-    <div className="compact-export-panel">
-      <div className="compact-progress">
-        {steps.map((step, index) => (
-          <div
-            key={step.id}
-            className={`progress-dot ${currentStep === step.id ? 'active' : ''} ${steps.findIndex(s => s.id === currentStep) > index ? 'completed' : ''}`}
-          >
-            <span className="dot-number">{index + 1}</span>
-            <span className="dot-label">{step.label}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="compact-content">
-        {currentStep === 'type' && (
-          <div className="step-section">
-            <h4 className="section-title">Выберите тип экспорта</h4>
-            <div className="export-type-grid">
-              {exportTypes.map(type => (
-                <div
-                  key={type.value}
-                  className={`type-card ${settings.export_type === type.value ? 'selected' : ''} ${type.disabled ? 'disabled' : ''}`}
-                  onClick={() => !type.disabled && setSettings(prev => ({ ...prev, export_type: type.value }))}
-                >
-                  <CIcon icon={type.icon} size="lg" />
-                  <div className="type-info">
-                    <h5>{type.title}</h5>
-                    <p>{type.description}</p>
+    <div className="export-panel p-4">
+      <CForm onSubmit={handleSubmit(onSubmit)}>
+        <CRow>
+          {/* Настройки экспорта */}
+          <CCol lg={6}>
+            <CCard className="mb-4">
+              <CCardHeader>
+                <h6 className="mb-0 d-flex align-items-center">
+                  <CIcon icon={cilSettings} className="me-2" />
+                  Настройки экспорта
+                </h6>
+              </CCardHeader>
+              <CCardBody>
+                {/* Тип экспорта */}
+                <div className="mb-4">
+                  <CFormLabel className="fw-semibold mb-3">
+                    Что экспортировать? <span className="text-danger">*</span>
+                  </CFormLabel>
+                  <div className="export-type-grid">
+                    {exportTypes.map(exportType => (
+                      <div
+                        key={exportType.value}
+                        className={`export-type-card ${watch('export_type') === exportType.value ? 'selected' : ''} ${exportType.disabled ? 'disabled' : ''}`}
+                        onClick={() => !exportType.disabled && setValue('export_type', exportType.value)}
+                      >
+                        <div className="d-flex align-items-start">
+                          <CIcon icon={exportType.icon || cilTask} className="me-2 mt-1" />
+                          <div className="flex-grow-1">
+                            <div className="fw-semibold">{exportType.label}</div>
+                            <div className="small text-muted">{exportType.description}</div>
+                          </div>
+                          <CFormCheck
+                            type="radio"
+                            {...register('export_type', { required: 'Выберите тип экспорта' })}
+                            value={exportType.value}
+                            checked={watch('export_type') === exportType.value}
+                            disabled={exportType.disabled}
+                            readOnly
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {settings.export_type === type.value && (
-                    <CIcon icon={cilCheckCircle} className="selected-icon" />
+                  {errors.export_type && (
+                    <div className="text-danger small mt-2">{errors.export_type.message}</div>
                   )}
                 </div>
-              ))}
-            </div>
 
-            {settings.export_type === 'filtered' && availableStatuses.length > 0 && (
-              <div className="filter-section">
-                <h5>Дополнительные фильтры</h5>
-                <div className="status-checkboxes">
-                  {availableStatuses.map(status => (
-                    <CFormCheck
-                      key={status}
-                      id={`status-${status}`}
-                      label={status}
-                      checked={settings.status_filters.includes(status)}
-                      onChange={() => updateStatusFilters(status)}
-                    />
-                  ))}
+                {/* Формат файла */}
+                <div className="mb-3">
+                  <CFormLabel htmlFor="format" className="fw-semibold">
+                    Формат файла <span className="text-danger">*</span>
+                  </CFormLabel>
+                  <CFormSelect
+                    id="format"
+                    {...register('format', { required: 'Выберите формат' })}
+                  >
+                    {exportFormats.map(format => (
+                      <option key={format.value} value={format.value}>
+                        {format.label} {format.description && `- ${format.description}`}
+                      </option>
+                    ))}
+                  </CFormSelect>
+                  {errors.format && (
+                    <div className="text-danger small mt-1">{errors.format.message}</div>
+                  )}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
 
-        {currentStep === 'format' && (
-          <div className="step-section">
-            <CRow className="format-row">
-              <CCol md={6}>
-                <h5>Формат файла</h5>
-                <div className="format-buttons">
-                  {availableFormats.map(format => (
-                    <button
-                      key={format.value}
-                      className={`format-btn ${settings.format === format.value ? 'active' : ''}`}
-                      onClick={() => setSettings(prev => ({ ...prev, format: format.value }))}
-                    >
-                      <CIcon icon={format.icon} />
-                      <span>{format.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </CCol>
-
-              <CCol md={6}>
-                <h5>Настройки</h5>
-                <div className="settings-compact">
-                  <CInputGroup size="sm" className="mb-2">
-                    <CInputGroupText>Файл</CInputGroupText>
-                    <CFormInput
-                      value={settings.filename}
-                      onChange={(e) => setSettings(prev => ({ ...prev, filename: e.target.value }))}
-                      placeholder={`${type}_export_${new Date().toISOString().slice(0, 10)}`}
-                    />
-                    <CInputGroupText>.{currentFormat?.extension}</CInputGroupText>
-                  </CInputGroup>
-
-                  <div className="checkbox-row">
-                    <CFormCheck
-                      id="include_header"
-                      label="Заголовки"
-                      checked={settings.include_header}
-                      onChange={(e) => setSettings(prev => ({ ...prev, include_header: e.target.checked }))}
-                      size="sm"
-                    />
-                    <CFormCheck
-                      id="mask_passwords"
-                      label="Маскировать"
-                      checked={settings.mask_passwords}
-                      onChange={(e) => setSettings(prev => ({ ...prev, mask_passwords: e.target.checked }))}
-                      size="sm"
-                    />
-                  </div>
-                </div>
-              </CCol>
-            </CRow>
-
-            <div className="fields-section">
-              <div className="fields-header">
-                <h5>Поля для экспорта ({selectedFieldsList.length})</h5>
-                <div className="fields-actions">
-                  <CButton size="sm" color="outline-primary" onClick={addAllFields}>
-                    Все ({availableFields.length})
-                  </CButton>
-                  <CButton size="sm" color="outline-secondary" onClick={clearAllFields}>
-                    Очистить
-                  </CButton>
-                </div>
-              </div>
-
-              <div className="fields-container">
-                <CInputGroup size="sm" className="search-field">
-                  <CInputGroupText>
-                    <CIcon icon={cilSearch} />
-                  </CInputGroupText>
-                  <CFormInput
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Поиск полей..."
-                  />
-                </CInputGroup>
-
-                <div className="available-fields-list">
-                  {availableFields.map(field => (
-                    <div
-                      key={field.key}
-                      className={`field-item ${selectedFieldsList.find(f => f.key === field.key) ? 'selected' : ''}`}
-                      onClick={() => toggleField(field)}
-                    >
+                {/* Дополнительные настройки из конфигурации */}
+                {exportConfig?.additionalSettings?.map(setting => (
+                  <div key={setting.key} className="mb-3">
+                    {setting.type === 'checkbox' ? (
                       <CFormCheck
-                        id={`field-${field.key}`}
-                        label={field.label}
-                        checked={selectedFieldsList.find(f => f.key === field.key)}
-                        onChange={() => toggleField(field)}
+                        id={setting.key}
+                        label={setting.label}
+                        {...register(setting.key)}
                       />
-                      {field.sensitive && <CBadge color="warning" size="sm">S</CBadge>}
-                    </div>
-                  ))}
+                    ) : setting.type === 'select' ? (
+                      <>
+                        <CFormLabel htmlFor={setting.key} className="fw-semibold">
+                          {setting.label}
+                        </CFormLabel>
+                        <CFormSelect
+                          id={setting.key}
+                          {...register(setting.key)}
+                        >
+                          {setting.options?.map(option => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </CFormSelect>
+                      </>
+                    ) : (
+                      <>
+                        <CFormLabel htmlFor={setting.key} className="fw-semibold">
+                          {setting.label}
+                        </CFormLabel>
+                        <CFormInput
+                          id={setting.key}
+                          type={setting.type || 'text'}
+                          placeholder={setting.placeholder}
+                          {...register(setting.key)}
+                        />
+                      </>
+                    )}
+                  </div>
+                ))}
+              </CCardBody>
+            </CCard>
+          </CCol>
+
+          {/* Выбор полей */}
+          <CCol lg={6}>
+            <CCard className="mb-4">
+              <CCardHeader>
+                <div className="d-flex justify-content-between align-items-center">
+                  <h6 className="mb-0 d-flex align-items-center">
+                    <CIcon icon={cilTask} className="me-2" />
+                    Поля для экспорта
+                  </h6>
+                  <CBadge color="primary">
+                    Выбрано: {selectedFields.length}
+                  </CBadge>
+                </div>
+              </CCardHeader>
+              <CCardBody>
+                {/* Поиск полей */}
+                <div className="mb-3">
+                  <CInputGroup>
+                    <CInputGroupText>
+                      <CIcon icon={cilSearch} />
+                    </CInputGroupText>
+                    <CFormInput
+                      placeholder="Найти поле..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                  </CInputGroup>
                 </div>
 
-                <div className="selected-fields-list">
-                  <small className="text-muted">Выбранные поля:</small>
-                  {selectedFieldsList.map((field, index) => (
-                    <div key={field.key} className="field-item selected">
-                      <span className="field-order">{index + 1}</span>
-                      <span>{field.label}</span>
-                      {field.sensitive && <CBadge color="warning" size="sm">S</CBadge>}
-                      <CIcon icon={cilX} size="sm" onClick={() => removeField(field.key)} className="remove-icon" />
-                    </div>
-                  ))}
+                {/* Список полей */}
+                <div className="fields-list" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                  {filteredFields.map(field => {
+                    const isSelected = selectedFields.find(f => f.key === field.key)
+                    return (
+                      <div
+                        key={field.key}
+                        className={`field-item ${isSelected ? 'selected' : ''} ${field.required ? 'required' : ''}`}
+                        onClick={() => toggleField(field)}
+                      >
+                        <div className="d-flex align-items-center">
+                          <CFormCheck
+                            checked={!!isSelected}
+                            disabled={field.required}
+                            readOnly
+                            className="me-2"
+                          />
+                          <div className="flex-grow-1">
+                            <div className="fw-semibold d-flex align-items-center">
+                              {field.label}
+                              {field.required && (
+                                <CBadge color="danger" size="sm" className="ms-2">
+                                  Обязательно
+                                </CBadge>
+                              )}
+                              {field.sensitive && (
+                                <CBadge color="warning" size="sm" className="ms-2">
+                                  Конфиденциально
+                                </CBadge>
+                              )}
+                            </div>
+                            <div className="small text-muted">
+                              {field.key} • {field.type}
+                              {field.description && ` • ${field.description}`}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-              </div>
-            </div>
-          </div>
-        )}
 
-        {currentStep === 'preview' && (
-          <div className="step-section">
-            <div className="export-ready">
-              <div className="ready-icon">
-                <CIcon icon={cilCheckCircle} size="xl" />
-              </div>
-              <h4>Готово к экспорту!</h4>
-
-              <div className="export-info">
-                <div className="info-grid">
-                  <div className="info-item">
-                    <span className="label">Тип:</span>
-                    <span className="value">{exportTypes.find(t => t.value === settings.export_type)?.title}</span>
+                {filteredFields.length === 0 && searchTerm && (
+                  <div className="text-center text-muted py-3">
+                    <CIcon icon={cilSearch} className="mb-2" />
+                    <div>Поля не найдены</div>
                   </div>
-                  <div className="info-item">
-                    <span className="label">Формат:</span>
-                    <span className="value">{currentFormat?.label}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="label">Полей:</span>
-                    <span className="value">{selectedFieldsList.length}</span>
-                  </div>
-                  <div className="info-item">
-                    <span className="label">Файл:</span>
-                    <span className="value">{settings.filename || `${type}_export_${new Date().toISOString().slice(0, 10)}`}.{currentFormat?.extension}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="selected-fields-preview">
-                <small className="text-muted mb-2 d-block">Выбранные поля:</small>
-                <div className="fields-badges">
-                  {selectedFieldsList.map((field, index) => (
-                    <CBadge
-                      key={field.key}
-                      color={field.sensitive ? 'warning' : 'info'}
-                      className="field-badge"
-                    >
-                      {index + 1}. {field.label}
-                    </CBadge>
-                  ))}
-                </div>
-              </div>
-
-              <CButton
-                color="success"
-                size="lg"
-                onClick={executeExport}
-                disabled={exporting || selectedFieldsList.length === 0}
-                className="export-button"
-              >
-                {exporting ? (
-                  <>
-                    <CSpinner size="sm" className="me-2" />
-                    Экспортирую...
-                  </>
-                ) : (
-                  <>
-                    <CIcon icon={cilCloudDownload} className="me-2" />
-                    Экспортировать ({selectedFieldsList.length} полей)
-                  </>
                 )}
-              </CButton>
-            </div>
-          </div>
-        )}
-      </div>
+              </CCardBody>
+            </CCard>
+          </CCol>
+        </CRow>
 
-      <div className="compact-navigation">
-        {currentStep !== 'type' && (
-          <CButton
-            color="secondary"
-            variant="outline"
-            onClick={prevStep}
-            disabled={exporting}
-            size="sm"
-          >
-            Назад
-          </CButton>
+        {/* Предпросмотр настроек */}
+        {selectedFields.length > 0 && (
+          <CCard className="mb-4">
+            <CCardHeader>
+              <h6 className="mb-0 d-flex align-items-center">
+                <CIcon icon={cilCheckCircle} className="me-2" />
+                Предпросмотр экспорта
+              </h6>
+            </CCardHeader>
+            <CCardBody>
+              <CRow>
+                <CCol md={3}>
+                  <div className="export-info-item">
+                    <div className="label">Тип экспорта</div>
+                    <div className="value">
+                      {exportTypes.find(t => t.value === watch('export_type'))?.label}
+                    </div>
+                  </div>
+                </CCol>
+                <CCol md={2}>
+                  <div className="export-info-item">
+                    <div className="label">Формат</div>
+                    <div className="value">{watch('format').toUpperCase()}</div>
+                  </div>
+                </CCol>
+                <CCol md={2}>
+                  <div className="export-info-item">
+                    <div className="label">Полей</div>
+                    <div className="value">{selectedFields.length}</div>
+                  </div>
+                </CCol>
+                <CCol md={5}>
+                  <div className="export-info-item">
+                    <div className="label">Выбранные поля</div>
+                    <div className="selected-fields-preview">
+                      {selectedFields.slice(0, 3).map(f => f.label).join(', ')}
+                      {selectedFields.length > 3 && ` и еще ${selectedFields.length - 3}...`}
+                    </div>
+                  </div>
+                </CCol>
+              </CRow>
+            </CCardBody>
+          </CCard>
         )}
 
-        {currentStep !== 'preview' && (
+        {/* Прогресс экспорта */}
+        {isExporting && (
+          <CCard className="mb-4">
+            <CCardBody>
+              <div className="d-flex justify-content-between mb-2">
+                <span>Экспорт данных...</span>
+                <span>{exportProgress}%</span>
+              </div>
+              <CProgress>
+                <CProgressBar value={exportProgress} />
+              </CProgress>
+            </CCardBody>
+          </CCard>
+        )}
+
+        {/* Кнопка экспорта */}
+        <div className="d-flex justify-content-end">
           <CButton
+            type="submit"
             color="primary"
-            onClick={nextStep}
-            disabled={
-              (currentStep === 'type' && !settings.export_type) ||
-              (currentStep === 'format' && selectedFieldsList.length === 0)
-            }
-            size="sm"
+            disabled={isExporting || selectedFields.length === 0}
+            className="px-4"
           >
-            Далее
+            {isExporting ? (
+              <>
+                <CSpinner size="sm" className="me-2" />
+                Экспорт...
+              </>
+            ) : (
+              <>
+                <CIcon icon={cilCloudDownload} className="me-2" />
+                Экспортировать ({selectedFields.length} полей)
+              </>
+            )}
           </CButton>
-        )}
-      </div>
-    </div>
-  );
-};
+        </div>
+      </CForm>
 
-export default ExportPanel;
+      <style jsx>{`
+        .export-type-grid {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+        }
+
+        .export-type-card {
+          border: 2px solid var(--cui-border-color);
+          border-radius: 0.75rem;
+          padding: 1rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          background: var(--cui-body-bg);
+        }
+
+        .export-type-card:hover:not(.disabled) {
+          border-color: var(--cui-primary);
+          background: var(--cui-primary-bg-subtle);
+        }
+
+        .export-type-card.selected {
+          border-color: var(--cui-primary);
+          background: var(--cui-primary-bg-subtle);
+        }
+
+        .export-type-card.disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .field-item {
+          border: 1px solid var(--cui-border-color);
+          border-radius: 0.5rem;
+          padding: 0.75rem;
+          margin-bottom: 0.5rem;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          background: var(--cui-body-bg);
+        }
+
+        .field-item:hover:not(.required) {
+          border-color: var(--cui-primary);
+          background: var(--cui-primary-bg-subtle);
+        }
+
+        .field-item.selected {
+          border-color: var(--cui-success);
+          background: var(--cui-success-bg-subtle);
+        }
+
+        .field-item.required {
+          border-color: var(--cui-info);
+          background: var(--cui-info-bg-subtle);
+        }
+
+        .export-info-item .label {
+          font-size: 0.75rem;
+          color: var(--cui-secondary-color);
+          margin-bottom: 0.25rem;
+        }
+
+        .export-info-item .value {
+          font-weight: 500;
+          color: var(--cui-body-color);
+        }
+
+        .selected-fields-preview {
+          font-size: 0.875rem;
+          color: var(--cui-body-color);
+        }
+      `}</style>
+    </div>
+  )
+}
+
+export default ExportPanel

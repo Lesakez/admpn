@@ -1,5 +1,6 @@
 // frontend/src/components/modals/panels/ImportPanel.js
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   CButton,
   CForm,
@@ -13,6 +14,7 @@ import {
   CCol,
   CCard,
   CCardBody,
+  CCardHeader,
   CProgress,
   CProgressBar,
   CTable,
@@ -21,6 +23,8 @@ import {
   CTableHeaderCell,
   CTableBody,
   CTableDataCell,
+  CBadge,
+  CButtonGroup,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -32,18 +36,26 @@ import {
   cilWarning,
   cilTrash,
   cilReload,
+  cilTask,
+  cilCode,
+  cilDataTransferUp,
 } from '@coreui/icons'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
-import './ImportPanel.scss'
 
-const ImportPanel = ({ config, type, onSuccess }) => {
+const ImportPanel = ({ 
+  type, 
+  config, 
+  onSuccess, 
+  onError, 
+  onLoadingChange 
+}) => {
   const [isLoading, setIsLoading] = useState(false)
-  const [service, setService] = useState(null)
   const [progress, setProgress] = useState(0)
   const [importResult, setImportResult] = useState(null)
   const [dragActive, setDragActive] = useState(false)
   const [previewData, setPreviewData] = useState(null)
+  const [validationErrors, setValidationErrors] = useState([])
   const fileInputRef = useRef(null)
 
   const {
@@ -67,23 +79,24 @@ const ImportPanel = ({ config, type, onSuccess }) => {
   const watchedText = watch('text')
   const watchedDelimiter = watch('delimiter')
 
-  // Динамическая загрузка сервиса
-  useEffect(() => {
-    if (!config?.service) return
-
-    const loadService = async () => {
-      try {
-        const serviceModule = await import(`../../../services/${config.service}.js`)
-        const serviceInstance = serviceModule[config.service] || serviceModule.default
-        setService(serviceInstance)
-      } catch (error) {
-        console.error(`Failed to load service ${config.service}:`, error)
-        toast.error(`Ошибка загрузки сервиса: ${config.service}`)
-      }
+  // Получаем сервис для импорта
+  const getImportService = useCallback(() => {
+    const services = {
+      accounts: () => import('../../../services/accountsService'),
+      proxies: () => import('../../../services/proxiesService'),
+      phones: () => import('../../../services/phonesService'),
+      profiles: () => import('../../../services/profilesService'),
+      projects: () => import('../../../services/projectsService'),
     }
+    return services[type] || services.accounts
+  }, [type])
 
-    loadService()
-  }, [config?.service])
+  // Уведомляем родителя о состоянии загрузки
+  useEffect(() => {
+    if (onLoadingChange) {
+      onLoadingChange(isLoading)
+    }
+  }, [isLoading, onLoadingChange])
 
   // Автоматический предпросмотр данных
   useEffect(() => {
@@ -91,6 +104,7 @@ const ImportPanel = ({ config, type, onSuccess }) => {
       generatePreview()
     } else {
       setPreviewData(null)
+      setValidationErrors([])
     }
   }, [watchedText, watchedDelimiter, watchedFormat])
 
@@ -98,6 +112,7 @@ const ImportPanel = ({ config, type, onSuccess }) => {
   useEffect(() => {
     if (importResult) {
       setImportResult(null)
+      setProgress(0)
     }
   }, [watchedText, watchedFormat, watchedDelimiter])
 
@@ -105,471 +120,453 @@ const ImportPanel = ({ config, type, onSuccess }) => {
     return config?.formats?.find(f => f.value === watchedFormat)
   }
 
-  const generatePreview = () => {     
+  const parseLineByFormat = (line, format) => {
+    const trimmedLine = line.trim()
+    if (!trimmedLine) return null
+
+    try {
+      switch (format) {
+        case 'login:password':
+          const [login, password] = trimmedLine.split(':')
+          return login && password ? { login, password } : null
+
+        case 'email:password':
+          const [email, emailPassword] = trimmedLine.split(':')
+          return email && emailPassword && email.includes('@') ? { email, password: emailPassword } : null
+
+        case 'login:email:password':
+          const [loginPart, emailPart, passwordPart] = trimmedLine.split(':')
+          return loginPart && emailPart && passwordPart && emailPart.includes('@') 
+            ? { login: loginPart, email: emailPart, password: passwordPart } : null
+
+        case 'ip:port':
+          const [ip, port] = trimmedLine.split(':')
+          const portNum = parseInt(port)
+          return ip && portNum && portNum > 0 && portNum <= 65535 ? { ip, port: portNum } : null
+
+        case 'ip:port:login:password':
+          const [proxyIp, proxyPort, proxyLogin, proxyPassword] = trimmedLine.split(':')
+          const proxyPortNum = parseInt(proxyPort)
+          return proxyIp && proxyPortNum && proxyLogin && proxyPassword 
+            ? { ip: proxyIp, port: proxyPortNum, login: proxyLogin, password: proxyPassword } : null
+
+        case 'protocol://ip:port':
+          const urlMatch = trimmedLine.match(/^(https?|socks[45]?):\/\/([^:]+):(\d+)$/)
+          if (urlMatch) {
+            const [, protocol, ip, port] = urlMatch
+            return { protocol, ip, port: parseInt(port) }
+          }
+          return null
+
+        case 'model:device':
+          const [model, device] = trimmedLine.split(':')
+          return model && device ? { model, device } : null
+
+        case 'name:platform':
+          const [name, platform] = trimmedLine.split(':')
+          return name && platform ? { name, platform } : null
+
+        case 'name:description':
+          const [projectName, description] = trimmedLine.split(':')
+          return projectName ? { name: projectName, description: description || '' } : null
+
+        case 'json':
+          return JSON.parse(trimmedLine)
+
+        default:
+          return { raw: trimmedLine }
+      }
+    } catch (error) {
+      return null
+    }
+  }
+
+  const generatePreview = () => {
     try {
       const lines = watchedText.split(watchedDelimiter).filter(line => line.trim())
-      const format = getCurrentFormat()
-      
-      if (!format || lines.length === 0) {
-        setPreviewData(null)
-        return
-      }
+      const samples = []
+      const errors = []
+      let validCount = 0
+      let invalidCount = 0
 
-      const preview = {
-        totalLines: lines.length,
-        validLines: 0,
-        invalidLines: 0,
-        samples: []
-      }
-
-      // Анализируем первые 5 строк как примеры
-      const sampleLines = lines.slice(0, 5)
-      
-      sampleLines.forEach((line, index) => {
-        const parsed = parseLineByFormat(line, format)
-        preview.samples.push({
-          line: index + 1,
-          raw: line,
-          parsed,
-          valid: parsed.valid
-        })
+      lines.slice(0, 10).forEach((line, index) => {
+        const parsed = parseLineByFormat(line, watchedFormat)
+        const isValid = parsed !== null
         
-        if (parsed.valid) {
-          preview.validLines++
+        if (isValid) {
+          validCount++
         } else {
-          preview.invalidLines++
+          invalidCount++
+          errors.push({
+            line: index + 1,
+            text: line.trim(),
+            error: 'Неверный формат данных'
+          })
         }
+
+        samples.push({
+          line: index + 1,
+          raw: line.trim(),
+          parsed,
+          valid: isValid
+        })
       })
 
-      // Примерная оценка для всех строк
-      const validRatio = preview.validLines / sampleLines.length
-      preview.estimatedValid = Math.round(lines.length * validRatio)
-      preview.estimatedInvalid = lines.length - preview.estimatedValid
+      // Оценка для всех строк
+      const totalLines = lines.length
+      const sampleRate = Math.min(10, totalLines) / totalLines
+      const estimatedValid = Math.round(validCount / sampleRate)
+      const estimatedInvalid = Math.round(invalidCount / sampleRate)
 
-      setPreviewData(preview)
+      setPreviewData({
+        totalLines,
+        estimatedValid,
+        estimatedInvalid,
+        samples,
+        hasData: samples.length > 0
+      })
+
+      setValidationErrors(errors)
     } catch (error) {
-      console.error('Preview generation error:', error)
       setPreviewData(null)
+      setValidationErrors([{ line: 0, text: 'Ошибка парсинга', error: error.message }])
     }
   }
 
-  const parseLineByFormat = (line, format) => {
-    if (!line?.trim()) {
-      return { valid: false, reason: 'Пустая строка' }
+  const handleDragEvents = useCallback((e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }, [])
+
+  const handleDragEnter = useCallback((e) => {
+    handleDragEvents(e)
+    setDragActive(true)
+  }, [handleDragEvents])
+
+  const handleDragLeave = useCallback((e) => {
+    handleDragEvents(e)
+    setDragActive(false)
+  }, [handleDragEvents])
+
+  const handleDrop = useCallback((e) => {
+    handleDragEvents(e)
+    setDragActive(false)
+
+    const files = e.dataTransfer?.files
+    if (files && files.length > 0) {
+      handleFileUpload(files[0])
     }
-
-    try {
-      // Динамический парсинг на основе формата
-      if (format.parser && typeof format.parser === 'function') {
-        return format.parser(line)
-      }
-
-      // Стандартный парсинг для базовых форматов
-      if (format.value.includes(':')) {
-        const parts = line.split(':')
-        if (parts.length < 2) {
-          return { valid: false, reason: 'Неверный формат' }
-        }
-        
-        const result = { valid: true }
-        const formatParts = format.value.split(':')
-        
-        formatParts.forEach((part, index) => {
-          result[part] = parts[index]?.trim() || ''
-        })
-        
-        return result
-      }
-
-      // Парсинг через кастомный разделитель
-      if (format.separator) {
-        const parts = line.split(format.separator)
-        if (parts.length < (format.requiredFields || 1)) {
-          return { valid: false, reason: 'Недостаточно полей' }
-        }
-        
-        const result = { valid: true }
-        format.fields?.forEach((field, index) => {
-          result[field] = parts[index]?.trim() || ''
-        })
-        
-        return result
-      }
-
-      return { valid: true, data: line }
-    } catch (error) {
-      return { valid: false, reason: 'Ошибка парсинга' }
-    }
-  }
+  }, [handleDragEvents])
 
   const handleFileUpload = (file) => {
     if (!file) return
 
-    // Динамическая проверка типов файлов
-    if (config?.acceptedFileTypes) {
-      const allowedTypes = config.acceptedFileTypes.split(',').map(t => t.trim())
-      const fileExtension = '.' + file.name.split('.').pop().toLowerCase()
-      if (!allowedTypes.includes(fileExtension)) {
-        toast.error(`Неподдерживаемый тип файла. Разрешены: ${config.acceptedFileTypes}`)
-        return
-      }
-    }
-
-    // Динамическая проверка размера
-    if (config?.maxFileSize && file.size > config.maxFileSize) {
-      const maxSizeMB = Math.round(config.maxFileSize / 1024 / 1024)
-      toast.error(`Файл слишком большой. Максимальный размер: ${maxSizeMB}MB`)
-      return
-    }
-
     const reader = new FileReader()
     reader.onload = (e) => {
-      setValue('text', e.target.result)
-      toast.success(`Файл "${file.name}" загружен`)
+      const content = e.target?.result
+      if (typeof content === 'string') {
+        setValue('text', content)
+        toast.success(`Файл "${file.name}" загружен успешно`)
+      }
     }
     reader.onerror = () => {
-      toast.error('Ошибка при чтении файла')
+      toast.error('Ошибка чтения файла')
     }
-    reader.readAsText(file, config?.encoding || 'UTF-8')
-  }
-
-  const handleDrag = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true)
-    } else if (e.type === 'dragleave') {
-      setDragActive(false)
-    }
-  }
-
-  const handleDrop = (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setDragActive(false)
-    
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleFileInputChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileUpload(e.target.files[0])
-    }
+    reader.readAsText(file)
   }
 
   const onSubmit = async (data) => {
-    if (!service) {
-      toast.error('Сервис недоступен')
-      return
-    }
-
-    if (!data.text?.trim()) {
-      toast.error('Введите данные для импорта')
+    if (!previewData || previewData.estimatedValid === 0) {
+      toast.error('Нет валидных данных для импорта')
       return
     }
 
     setIsLoading(true)
     setProgress(0)
-    setImportResult(null)
 
     try {
-      // Прогресс-бар
+      const serviceModule = await getImportService()()
+      const service = serviceModule.default || serviceModule[config.service]
+
+      if (!service?.importFromText) {
+        throw new Error('Сервис импорта не найден')
+      }
+
+      // Имитация прогресса
       const progressInterval = setInterval(() => {
         setProgress(prev => Math.min(prev + 10, 90))
       }, 200)
 
-      // Подготовка данных для импорта
-      const importPayload = {
+      const result = await service.importFromText({
         text: data.text,
         format: data.format,
         delimiter: data.delimiter,
-        ...config?.additionalParams,
-        ...data
-      }
+        options: {
+          skipInvalid: true,
+          validateBeforeImport: true
+        }
+      })
 
-      // Динамический вызов метода сервиса
-      const method = config?.method || 'importFromText'
-      const response = await service[method](importPayload)
-      
       clearInterval(progressInterval)
       setProgress(100)
+
+      setImportResult(result.data)
+      toast.success(`Импорт завершен! Добавлено: ${result.data.imported}, Ошибок: ${result.data.errors}`)
       
-      // Универсальная обработка результата
-      const result = response?.data?.data || response?.data || response
-      setImportResult(result)
-      
-      // Динамическое определение успешности
-      const isSuccess = result?.success !== false && (
-        result?.imported > 0 || 
-        result?.created > 0 || 
-        result?.processed > 0 ||
-        (result?.errors?.length === 0 && result?.total > 0)
-      )
-      
-      if (isSuccess) {
-        toast.success(config?.successMessage || 'Импорт завершен успешно')
-        onSuccess?.(result)
-      } else {
-        toast.warning(config?.warningMessage || 'Импорт завершен с ошибками')
+      if (onSuccess) {
+        onSuccess(result.data)
       }
-      
+
     } catch (error) {
-      setProgress(100)
-      const errorMessage = error.response?.data?.error || 
-                          error.response?.data?.message ||
-                          error.message ||
-                          `Ошибка при импорте ${type}`
-      
+      console.error('Import error:', error)
+      const errorMessage = error.response?.data?.error || error.message || 'Ошибка импорта'
       toast.error(errorMessage)
-      setImportResult({
-        success: false,
-        imported: 0,
-        errors: [errorMessage],
-        total: 0
-      })
+      
+      if (onError) {
+        onError(error)
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  const clearData = () => {
+  const handleClearData = () => {
     setValue('text', '')
-    setImportResult(null)
     setPreviewData(null)
+    setValidationErrors([])
+    setImportResult(null)
+    setProgress(0)
   }
 
-  const loadExample = () => {
+  const loadSampleData = () => {
     const format = getCurrentFormat()
     if (format?.example) {
-      setValue('text', format.example)
+      const sampleLines = [
+        format.example,
+        format.example.replace(/user123|user@mail\.com/g, 'user456').replace(/pass123/g, 'pass456'),
+        format.example.replace(/user123|user@mail\.com/g, 'user789').replace(/pass123/g, 'pass789')
+      ]
+      setValue('text', sampleLines.join('\n'))
+      toast.info('Загружены примеры данных')
     }
   }
 
-  if (!config) {
-    return (
-      <CAlert color="warning">
-        <CIcon icon={cilInfo} className="me-2" />
-        Конфигурация импорта не найдена
-      </CAlert>
-    )
-  }
-
   return (
-    <div className="import-panel">
-      <CForm onSubmit={handleSubmit(onSubmit)}>
-        {/* Описание */}
-        {config.description && (
-          <CAlert color="info" className="mb-4">
-            <CIcon icon={cilInfo} className="me-2" />
-            {config.description}
-          </CAlert>
-        )}
+    <div className="import-panel p-4">
+      {/* Результат импорта */}
+      {importResult && (
+        <CAlert color="success" className="mb-4">
+          <div className="d-flex align-items-center justify-content-between">
+            <div>
+              <h6 className="mb-2">
+                <CIcon icon={cilCheckCircle} className="me-2" />
+                Импорт завершен успешно!
+              </h6>
+              <div className="d-flex gap-3">
+                <CBadge color="success">Добавлено: {importResult.imported}</CBadge>
+                <CBadge color="info">Обновлено: {importResult.updated || 0}</CBadge>
+                <CBadge color="warning">Пропущено: {importResult.skipped || 0}</CBadge>
+                {importResult.errors > 0 && (
+                  <CBadge color="danger">Ошибок: {importResult.errors}</CBadge>
+                )}
+              </div>
+            </div>
+            <CButton 
+              color="light" 
+              size="sm" 
+              onClick={handleClearData}
+            >
+              Новый импорт
+            </CButton>
+          </div>
+        </CAlert>
+      )}
 
+      <CForm onSubmit={handleSubmit(onSubmit)}>
         <CRow>
           {/* Настройки формата */}
           <CCol lg={6}>
-            <div className="mb-4">
-              <CFormLabel htmlFor="format" className="fw-semibold">
-                Формат данных *
-              </CFormLabel>
-              <CFormSelect
-                id="format"
-                invalid={!!errors.format}
-                {...register('format', {
-                  required: 'Выберите формат данных'
-                })}
-              >
-                <option value="">Выберите формат...</option>
-                {config.formats?.map(format => (
-                  <option key={format.value} value={format.value}>
-                    {format.label}
-                  </option>
-                ))}
-              </CFormSelect>
-              {errors.format && (
-                <div className="invalid-feedback d-block">{errors.format.message}</div>
-              )}
-              
-              {/* Описание формата */}
-              {getCurrentFormat()?.description && (
-                <div className="form-text mt-2">
-                  {getCurrentFormat().description}
-                </div>
-              )}
-            </div>
-
-            {/* Разделитель */}
-            {config.delimiters && (
-              <div className="mb-4">
-                <CFormLabel htmlFor="delimiter" className="fw-semibold">
-                  Разделитель строк
-                </CFormLabel>
-                <CFormSelect
-                  id="delimiter"
-                  {...register('delimiter')}
-                >
-                  {config.delimiters.map(delimiter => (
-                    <option key={delimiter.value} value={delimiter.value}>
-                      {delimiter.label}
-                    </option>
-                  ))}
-                </CFormSelect>
-              </div>
-            )}
-
-            {/* Дополнительные поля из конфигурации */}
-            {config.additionalFields?.map(field => (
-              <div key={field.key} className="mb-3">
-                <CFormLabel htmlFor={field.key} className="fw-semibold">
-                  {field.label} {field.required && '*'}
-                </CFormLabel>
-                
-                {field.type === 'select' ? (
+            <CCard className="mb-4">
+              <CCardHeader>
+                <h6 className="mb-0 d-flex align-items-center">
+                  <CIcon icon={cilCode} className="me-2" />
+                  Настройки формата
+                </h6>
+              </CCardHeader>
+              <CCardBody>
+                {/* Формат данных */}
+                <div className="mb-3">
+                  <CFormLabel htmlFor="format" className="fw-semibold">
+                    Формат данных <span className="text-danger">*</span>
+                  </CFormLabel>
                   <CFormSelect
-                    id={field.key}
-                    {...register(field.key, field.validation)}
+                    id="format"
+                    invalid={!!errors.format}
+                    {...register('format', {
+                      required: 'Выберите формат данных'
+                    })}
                   >
-                    {field.options?.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
+                    <option value="">Выберите формат...</option>
+                    {config.formats?.map(format => (
+                      <option key={format.value} value={format.value}>
+                        {format.label}
                       </option>
                     ))}
                   </CFormSelect>
-                ) : (
-                  <CFormInput
-                    type={field.type || 'text'}
-                    id={field.key}
-                    placeholder={field.placeholder}
-                    {...register(field.key, field.validation)}
-                  />
+                  {errors.format && (
+                    <div className="invalid-feedback d-block">{errors.format.message}</div>
+                  )}
+                  
+                  {/* Пример формата */}
+                  {getCurrentFormat()?.example && (
+                    <div className="form-text mt-2">
+                      <strong>Пример:</strong> <code>{getCurrentFormat().example}</code>
+                    </div>
+                  )}
+                </div>
+
+                {/* Разделитель строк */}
+                {config.delimiters && (
+                  <div className="mb-3">
+                    <CFormLabel htmlFor="delimiter" className="fw-semibold">
+                      Разделитель строк
+                    </CFormLabel>
+                    <CFormSelect
+                      id="delimiter"
+                      {...register('delimiter')}
+                    >
+                      {config.delimiters.map(delimiter => (
+                        <option key={delimiter.value} value={delimiter.value}>
+                          {delimiter.label}
+                        </option>
+                      ))}
+                    </CFormSelect>
+                  </div>
                 )}
-                
-                {field.description && (
-                  <div className="form-text">{field.description}</div>
-                )}
-              </div>
-            ))}
+
+                {/* Кнопки управления */}
+                <div className="d-flex gap-2 flex-wrap">
+                  <CButton
+                    color="info"
+                    variant="outline"
+                    size="sm"
+                    onClick={loadSampleData}
+                    disabled={!getCurrentFormat()?.example}
+                  >
+                    <CIcon icon={cilTask} className="me-1" />
+                    Примеры
+                  </CButton>
+                  <CButton
+                    color="secondary"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <CIcon icon={cilFile} className="me-1" />
+                    Файл
+                  </CButton>
+                  <CButton
+                    color="warning"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearData}
+                    disabled={!watchedText}
+                  >
+                    <CIcon icon={cilTrash} className="me-1" />
+                    Очистить
+                  </CButton>
+                </div>
+              </CCardBody>
+            </CCard>
           </CCol>
 
           {/* Загрузка данных */}
           <CCol lg={6}>
-            {/* Drag & Drop зона */}
-            <div
-              className={`import-panel__drag-zone ${dragActive ? 'import-panel__drag-zone--active' : ''}`}
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <CIcon icon={cilFile} size="2xl" className="import-panel__drag-icon" />
-              <p className="import-panel__drag-title">
-                <strong>Перетащите файл сюда</strong> или нажмите для выбора
-              </p>
-              <p className="import-panel__drag-subtitle">
-                {config.acceptedFileTypes && `Поддерживаемые форматы: ${config.acceptedFileTypes}`}
-                {config.maxFileSize && ` • Макс. размер: ${Math.round(config.maxFileSize / 1024 / 1024)}MB`}
-              </p>
-            </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="import-panel__file-input"
-              accept={config.acceptedFileTypes}
-              onChange={handleFileInputChange}
-            />
-
-            {/* Кнопки управления */}
-            <div className="import-panel__controls">
-              <CButton
-                type="button"
-                color="outline-primary"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <CIcon icon={cilFile} className="me-1" />
-                Выбрать файл
-              </CButton>
-              
-              {getCurrentFormat()?.example && (
-                <CButton
-                  type="button"
-                  color="outline-secondary"
-                  size="sm"
-                  onClick={loadExample}
+            <CCard className="mb-4">
+              <CCardHeader>
+                <h6 className="mb-0 d-flex align-items-center">
+                  <CIcon icon={cilDataTransferUp} className="me-2" />
+                  Загрузка данных
+                </h6>
+              </CCardHeader>
+              <CCardBody>
+                {/* Drag & Drop зона */}
+                <div
+                  className={`drag-drop-zone mb-3 ${dragActive ? 'drag-active' : ''}`}
+                  onDragEnter={handleDragEnter}
+                  onDragLeave={handleDragLeave}
+                  onDragOver={handleDragEvents}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  Загрузить пример
-                </CButton>
-              )}
-              
-              {watchedText && (
-                <CButton
-                  type="button"
-                  color="outline-danger"
-                  size="sm"
-                  onClick={clearData}
-                >
-                  <CIcon icon={cilTrash} className="me-1" />
-                  Очистить
-                </CButton>
-              )}
-            </div>
+                  <CIcon icon={cilCloudUpload} size="xl" className="text-muted mb-2" />
+                  <div className="fw-semibold">Перетащите файл сюда</div>
+                  <div className="text-muted small">или нажмите для выбора</div>
+                </div>
+
+                {/* Скрытый input для файлов */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".txt,.csv,.json"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleFileUpload(file)
+                  }}
+                />
+
+                {/* Текстовое поле */}
+                <div className="mb-3">
+                  <CFormLabel htmlFor="text" className="fw-semibold">
+                    Данные для импорта <span className="text-danger">*</span>
+                  </CFormLabel>
+                  <CFormTextarea
+                    id="text"
+                    rows={8}
+                    placeholder="Вставьте данные здесь..."
+                    className="font-monospace"
+                    invalid={!!errors.text}
+                    {...register('text', {
+                      required: 'Введите данные для импорта'
+                    })}
+                  />
+                  {errors.text && (
+                    <div className="invalid-feedback d-block">{errors.text.message}</div>
+                  )}
+                </div>
+              </CCardBody>
+            </CCard>
           </CCol>
         </CRow>
 
-        {/* Текстовое поле для ввода данных */}
-        <div className="mb-4">
-          <CFormLabel htmlFor="text" className="fw-semibold">
-            Данные для импорта
-          </CFormLabel>
-          <CFormTextarea
-            id="text"
-            rows={8}
-            className="import-panel__textarea"
-            placeholder={getCurrentFormat()?.example || 'Введите или вставьте данные для импорта...'}
-            invalid={!!errors.text}
-            {...register('text', {
-              required: 'Введите данные для импорта'
-            })}
-          />
-          {errors.text && (
-            <div className="invalid-feedback d-block">{errors.text.message}</div>
-          )}
-        </div>
-
         {/* Предпросмотр данных */}
         {previewData && (
-          <CCard className="import-panel__preview">
-            <CCardBody>
-              <h6 className="import-panel__preview-title">
-                <CIcon icon={cilInfo} className="me-2" />
-                Предпросмотр данных
-              </h6>
-              
-              <div className="import-panel__preview-stats">
-                <span className="badge bg-primary me-2">
-                  Всего строк: {previewData.totalLines}
-                </span>
-                <span className="badge bg-success me-2">
-                  Валидные: ~{previewData.estimatedValid}
-                </span>
-                {previewData.estimatedInvalid > 0 && (
-                  <span className="badge bg-warning">
-                    С ошибками: ~{previewData.estimatedInvalid}
-                  </span>
-                )}
+          <CCard className="mb-4">
+            <CCardHeader>
+              <div className="d-flex justify-content-between align-items-center">
+                <h6 className="mb-0 d-flex align-items-center">
+                  <CIcon icon={cilInfo} className="me-2" />
+                  Предпросмотр данных
+                </h6>
+                <div className="d-flex gap-2">
+                  <CBadge color="primary">Всего: {previewData.totalLines}</CBadge>
+                  <CBadge color="success">Валидные: ~{previewData.estimatedValid}</CBadge>
+                  {previewData.estimatedInvalid > 0 && (
+                    <CBadge color="danger">Ошибки: ~{previewData.estimatedInvalid}</CBadge>
+                  )}
+                </div>
               </div>
-
+            </CCardHeader>
+            <CCardBody>
               {previewData.samples.length > 0 && (
-                <CTable size="sm" className="import-panel__preview-table">
+                <CTable size="sm" responsive>
                   <CTableHead>
                     <CTableRow>
-                      <CTableHeaderCell>Строка</CTableHeaderCell>
-                      <CTableHeaderCell>Данные</CTableHeaderCell>
-                      <CTableHeaderCell>Статус</CTableHeaderCell>
+                      <CTableHeaderCell style={{ width: '80px' }}>Строка</CTableHeaderCell>
+                      <CTableHeaderCell>Исходные данные</CTableHeaderCell>
+                      <CTableHeaderCell>Результат парсинга</CTableHeaderCell>
+                      <CTableHeaderCell style={{ width: '100px' }}>Статус</CTableHeaderCell>
                     </CTableRow>
                   </CTableHead>
                   <CTableBody>
@@ -577,17 +574,28 @@ const ImportPanel = ({ config, type, onSuccess }) => {
                       <CTableRow key={index}>
                         <CTableDataCell>{sample.line}</CTableDataCell>
                         <CTableDataCell>
-                          <code className="import-panel__code">{sample.raw}</code>
+                          <code className="small">{sample.raw}</code>
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          {sample.parsed ? (
+                            <code className="small text-success">
+                              {JSON.stringify(sample.parsed, null, 0)}
+                            </code>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
                         </CTableDataCell>
                         <CTableDataCell>
                           {sample.valid ? (
-                            <CIcon icon={cilCheckCircle} className="text-success" />
+                            <CBadge color="success">
+                              <CIcon icon={cilCheckCircle} className="me-1" />
+                              OK
+                            </CBadge>
                           ) : (
-                            <CIcon 
-                              icon={cilXCircle} 
-                              className="text-danger" 
-                              title={sample.parsed?.reason}
-                            />
+                            <CBadge color="danger">
+                              <CIcon icon={cilXCircle} className="me-1" />
+                              Ошибка
+                            </CBadge>
                           )}
                         </CTableDataCell>
                       </CTableRow>
@@ -599,10 +607,33 @@ const ImportPanel = ({ config, type, onSuccess }) => {
           </CCard>
         )}
 
-        {/* Прогресс импорта */}
+        {/* Ошибки валидации */}
+        {validationErrors.length > 0 && (
+          <CAlert color="warning" className="mb-4">
+            <h6 className="mb-2">
+              <CIcon icon={cilWarning} className="me-2" />
+              Найдены ошибки в данных
+            </h6>
+            <div className="small">
+              {validationErrors.slice(0, 5).map((error, index) => (
+                <div key={index} className="mb-1">
+                  <strong>Строка {error.line}:</strong> {error.error}
+                  {error.text && <><br /><code>{error.text}</code></>}
+                </div>
+              ))}
+              {validationErrors.length > 5 && (
+                <div className="text-muted">
+                  ... и еще {validationErrors.length - 5} ошибок
+                </div>
+              )}
+            </div>
+          </CAlert>
+        )}
+
+        {/* Прогресс */}
         {isLoading && (
-          <div className="import-panel__progress">
-            <div className="import-panel__progress-header">
+          <div className="mb-4">
+            <div className="d-flex justify-content-between mb-2">
               <span>Импорт данных...</span>
               <span>{progress}%</span>
             </div>
@@ -612,74 +643,52 @@ const ImportPanel = ({ config, type, onSuccess }) => {
           </div>
         )}
 
-        {/* Результат импорта */}
-        {importResult && (
-          <CCard className="import-panel__result">
-            <CCardBody>
-              <h6 className="import-panel__result-title">
-                <CIcon 
-                  icon={importResult.success !== false ? cilCheckCircle : cilXCircle} 
-                  className={`me-2 ${importResult.success !== false ? 'text-success' : 'text-danger'}`}
-                />
-                Результат импорта
-              </h6>
-
-              <CRow>
-                {Object.entries(config.resultFields || {}).map(([key, label]) => (
-                  importResult[key] !== undefined && (
-                    <CCol key={key} sm={6} md={3} className="mb-2">
-                      <div className="import-panel__result-stat">
-                        <div className="import-panel__result-value">{importResult[key]}</div>
-                        <div className="import-panel__result-label">{label}</div>
-                      </div>
-                    </CCol>
-                  )
-                ))}
-              </CRow>
-
-              {/* Ошибки */}
-              {importResult.errors && importResult.errors.length > 0 && (
-                <div className="import-panel__errors">
-                  <h6 className="text-danger">Ошибки:</h6>
-                  <ul className="import-panel__errors-list">
-                    {importResult.errors.slice(0, 10).map((error, index) => (
-                      <li key={index} className="text-danger">{error}</li>
-                    ))}
-                    {importResult.errors.length > 10 && (
-                      <li className="text-muted">
-                        И еще {importResult.errors.length - 10} ошибок...
-                      </li>
-                    )}
-                  </ul>
-                </div>
-              )}
-            </CCardBody>
-          </CCard>
-        )}
-
         {/* Кнопка импорта */}
-        <div className="import-panel__submit">
+        <div className="d-flex justify-content-end">
           <CButton
             type="submit"
             color="primary"
-            disabled={isLoading || !watchedText?.trim()}
+            disabled={isLoading || !previewData || previewData.estimatedValid === 0}
             className="px-4"
           >
             {isLoading ? (
               <>
                 <CSpinner size="sm" className="me-2" />
-                Импортируем...
+                Импорт...
               </>
             ) : (
               <>
                 <CIcon icon={cilCloudUpload} className="me-2" />
-                {config.submitLabel || 'Импортировать'}
-                {previewData && ` (${previewData.totalLines})`}
+                Импортировать {previewData ? `(~${previewData.estimatedValid})` : ''}
               </>
             )}
           </CButton>
         </div>
       </CForm>
+
+      <style jsx>{`
+        .drag-drop-zone {
+          border: 2px dashed var(--cui-border-color);
+          border-radius: 0.75rem;
+          padding: 2rem;
+          text-align: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          background: var(--cui-body-bg);
+        }
+
+        .drag-drop-zone:hover,
+        .drag-drop-zone.drag-active {
+          border-color: var(--cui-primary);
+          background: var(--cui-primary-bg-subtle);
+        }
+
+        .font-monospace {
+          font-family: var(--cui-font-monospace);
+          font-size: 0.875rem;
+          line-height: 1.4;
+        }
+      `}</style>
     </div>
   )
 }
