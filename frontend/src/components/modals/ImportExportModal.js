@@ -1,5 +1,4 @@
 // frontend/src/components/modals/ImportExportModal.js
-
 import React, { useState, useEffect } from 'react'
 import {
   CModal,
@@ -28,20 +27,51 @@ import ImportPanel from './panels/ImportPanel'
 import ExportPanel from './panels/ExportPanel'
 import PropTypes from 'prop-types'
 
-const ImportExportModal = ({ 
-  visible, 
-  onClose, 
+// Error Boundary Component
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <CAlert color="danger" className="m-3">
+          Произошла ошибка: {this.state.error?.message || 'Неизвестная ошибка'}
+          <CButton
+            color="link"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Попробовать снова
+          </CButton>
+        </CAlert>
+      )
+    }
+    return this.props.children
+  }
+}
+
+const ImportExportModal = ({
+  visible,
+  onClose,
   onSuccess,
   type = 'accounts',
   mode = 'both',
   selectedIds = [],
   currentFilters = {},
   title,
-  size = 'xl'
+  size = 'xl',
 }) => {
   const [activeTab, setActiveTab] = useState('import')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [successMessage, setSuccessMessage] = useState(null)
 
   // Устанавливаем активный таб по умолчанию
   useEffect(() => {
@@ -54,179 +84,211 @@ const ImportExportModal = ({
     }
   }, [mode])
 
-  // Сброс состояния при открытии/закрытии модалки
+  // Сброс состояния при открытии/закрытии модалки и смене вкладки
   useEffect(() => {
     if (visible) {
       setError(null)
+      setSuccessMessage(null)
       setIsLoading(false)
     }
-  }, [visible])
+  }, [visible, activeTab])
 
   const handleClose = () => {
     setError(null)
+    setSuccessMessage(null)
     setIsLoading(false)
     onClose()
   }
 
   const handleSuccess = (result) => {
     setIsLoading(false)
+    setError(null)
+
+    // Показываем сообщение об успехе
+    if (result.type === 'import') {
+      setSuccessMessage(
+        `Импорт завершен: обработано ${result.processed || 0} записей, создано ${
+          result.created || 0
+        }, обновлено ${result.updated || 0}`,
+      )
+    } else if (result.type === 'export') {
+      setSuccessMessage(
+        `Экспорт завершен: файл ${result.filename} (${
+          result.recordCount || 0
+        } записей)`,
+      )
+    }
+
     if (onSuccess) {
       onSuccess(result)
     }
+
+    // Автоматически закрываем через 2 секунды
     setTimeout(() => {
       handleClose()
-    }, 1500)
+    }, 2000)
   }
 
   const handleError = (error) => {
-    setError(error.message || 'Произошла ошибка')
+    setError(error.message || error || 'Произошла ошибка')
     setIsLoading(false)
+  }
+
+  const handleLoadingChange = (loading) => {
+    setIsLoading(loading)
   }
 
   const getModalTitle = () => {
     if (title) return title
-    
+
     const typeNames = {
-      accounts: 'Аккаунты',
-      proxies: 'Прокси', 
-      profiles: 'Профили',
-      phones: 'Телефоны',
-      projects: 'Проекты'
+      accounts: 'аккаунтов',
+      proxies: 'прокси',
+      profiles: 'профилей',
+      phones: 'телефонов',
+      projects: 'проектов',
     }
-    
-    const entityName = typeNames[type] || 'Данные'
-    
-    if (mode === 'import') return `Импорт ${entityName.toLowerCase()}`
-    if (mode === 'export') return `Экспорт ${entityName.toLowerCase()}`
-    
-    return `${entityName}: Импорт / Экспорт`
+
+    const entityName = typeNames[type] || 'данных'
+
+    if (mode === 'import') return `Импорт ${entityName}`
+    if (mode === 'export') return `Экспорт ${entityName}`
+    return `Импорт/Экспорт ${entityName}`
   }
 
-  const getSelectionInfo = () => {
-    if (selectedIds.length > 0) {
-      return `Выбрано элементов: ${selectedIds.length}`
-    }
-    
-    const filterCount = Object.values(currentFilters).filter(Boolean).length
-    if (filterCount > 0) {
-      return `Применено фильтров: ${filterCount}`
-    }
-    
-    return 'Все элементы'
-  }
-
-  // Определяем доступные табы
   const showImportTab = mode === 'both' || mode === 'import'
   const showExportTab = mode === 'both' || mode === 'export'
 
   return (
-    <CModal 
-      visible={visible} 
-      onClose={handleClose} 
+    <CModal
+      visible={visible}
+      onClose={handleClose}
       size={size}
       backdrop="static"
+      scrollable
       className="import-export-modal"
     >
-      <CModalHeader className="border-bottom">
-        <div className="d-flex align-items-center justify-content-between w-100">
-          <CModalTitle className="d-flex align-items-center">
-            <CIcon 
-              icon={activeTab === 'import' ? cilCloudUpload : cilCloudDownload} 
-              className="me-2" 
-            />
-            {getModalTitle()}
-            {selectedIds.length > 0 && (
-              <CBadge color="primary" className="ms-2">
-                {selectedIds.length}
-              </CBadge>
-            )}
-          </CModalTitle>
-        </div>
+      <CModalHeader>
+        <CModalTitle className="d-flex align-items-center">
+          <CIcon
+            icon={activeTab === 'import' ? cilCloudUpload : cilCloudDownload}
+            className="me-2"
+            size="lg"
+          />
+          {getModalTitle()}
+          {selectedIds.length > 0 && (
+            <CBadge color="primary" className="ms-2">
+              {selectedIds.length} выбрано
+            </CBadge>
+          )}
+        </CModalTitle>
       </CModalHeader>
 
       <CModalBody className="p-0">
+        {/* Success Message */}
+        {successMessage && (
+          <CAlert color="success" className="m-3 mb-0">
+            <CIcon icon={cilCheck} className="me-2" />
+            {successMessage}
+          </CAlert>
+        )}
+
+        {/* Error Message */}
         {error && (
           <CAlert color="danger" className="m-3 mb-0">
             {error}
           </CAlert>
         )}
 
-        {/* Табы только если режим 'both' */}
+        {/* Tabs for both modes */}
         {mode === 'both' && (
-          <CNav variant="tabs" className="border-bottom">
-            {showImportTab && (
-              <CNavItem>
-                <CNavLink
-                  active={activeTab === 'import'}
-                  onClick={() => setActiveTab('import')}
-                  className="d-flex align-items-center"
-                >
-                  <CIcon icon={cilCloudUpload} className="me-2" />
-                  Импорт
-                </CNavLink>
-              </CNavItem>
-            )}
-            {showExportTab && (
-              <CNavItem>
-                <CNavLink
-                  active={activeTab === 'export'}
-                  onClick={() => setActiveTab('export')}
-                  className="d-flex align-items-center"
-                >
-                  <CIcon icon={cilCloudDownload} className="me-2" />
-                  Экспорт
-                </CNavLink>
-              </CNavItem>
-            )}
-          </CNav>
+          <div className="border-bottom">
+            <CNav variant="tabs" className="px-3">
+              {showImportTab && (
+                <CNavItem>
+                  <CNavLink
+                    active={activeTab === 'import'}
+                    onClick={() => setActiveTab('import')}
+                    disabled={isLoading}
+                    className="d-flex align-items-center"
+                  >
+                    <CIcon icon={cilCloudUpload} className="me-2" />
+                    Импорт
+                  </CNavLink>
+                </CNavItem>
+              )}
+              {showExportTab && (
+                <CNavItem>
+                  <CNavLink
+                    active={activeTab === 'export'}
+                    onClick={() => setActiveTab('export')}
+                    disabled={isLoading}
+                    className="d-flex align-items-center"
+                  >
+                    <CIcon icon={cilCloudDownload} className="me-2" />
+                    Экспорт
+                  </CNavLink>
+                </CNavItem>
+              )}
+            </CNav>
+          </div>
         )}
 
-        <CTabContent>
-          {/* Import Tab */}
-          {showImportTab && (
-            <CTabPane visible={activeTab === 'import'}>
-              <div className="p-3">
+        {/* Tab Content */}
+        <CTabContent className="p-3">
+          {/* Import Panel */}
+          {showImportTab && activeTab === 'import' && (
+            <CTabPane>
+              <ErrorBoundary>
                 <ImportPanel
                   type={type}
-                  onSuccess={handleSuccess}
+                  onSuccess={(result) => handleSuccess({ ...result, type: 'import' })}
                   onError={handleError}
-                  onLoadingChange={setIsLoading}
+                  onLoadingChange={handleLoadingChange}
                 />
-              </div>
+              </ErrorBoundary>
             </CTabPane>
           )}
 
-          {/* Export Tab */}
-          {showExportTab && (
-            <CTabPane visible={activeTab === 'export'}>
-              <div className="p-3">
+          {/* Export Panel */}
+          {showExportTab && activeTab === 'export' && (
+            <CTabPane>
+              <ErrorBoundary>
                 <ExportPanel
                   type={type}
                   selectedIds={selectedIds}
                   currentFilters={currentFilters}
-                  onSuccess={handleSuccess}
+                  onSuccess={(result) => handleSuccess({ ...result, type: 'export' })}
                   onError={handleError}
-                  onLoadingChange={setIsLoading}
+                  onLoadingChange={handleLoadingChange}
                 />
-              </div>
+              </ErrorBoundary>
             </CTabPane>
           )}
         </CTabContent>
       </CModalBody>
 
-      <CModalFooter className="border-top">
+      <CModalFooter className="border-top-0">
         <div className="d-flex justify-content-between align-items-center w-100">
           <div className="text-muted small">
-            {getSelectionInfo()}
+            {activeTab === 'import' && 'Поддерживаются форматы: TXT, CSV, JSON'}
+            {activeTab === 'export' && 'Выберите формат и поля для экспорта'}
           </div>
-          <CButton 
-            color="light" 
+
+          <CButton
+            color="secondary"
+            variant="outline"
             onClick={handleClose}
             disabled={isLoading}
-            className="px-4"
           >
-            <CIcon icon={cilX} className="me-2" />
-            {isLoading ? 'Отменить' : 'Закрыть'}
+            {isLoading ? (
+              <>
+                <CSpinner size="sm" className="me-2" />
+                Отменить
+              </>
+            ) : (
+              'Закрыть'
+            )}
           </CButton>
         </div>
       </CModalFooter>
@@ -240,10 +302,12 @@ ImportExportModal.propTypes = {
   onSuccess: PropTypes.func,
   type: PropTypes.oneOf(['accounts', 'proxies', 'profiles', 'phones', 'projects']),
   mode: PropTypes.oneOf(['import', 'export', 'both']),
-  selectedIds: PropTypes.arrayOf(PropTypes.oneOfType([PropTypes.string, PropTypes.number])),
+  selectedIds: PropTypes.arrayOf(
+    PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  ),
   currentFilters: PropTypes.object,
   title: PropTypes.string,
-  size: PropTypes.oneOf(['sm', 'lg', 'xl'])
+  size: PropTypes.oneOf(['sm', 'lg', 'xl']),
 }
 
 ImportExportModal.defaultProps = {
@@ -253,7 +317,7 @@ ImportExportModal.defaultProps = {
   selectedIds: [],
   currentFilters: {},
   title: null,
-  size: 'xl'
+  size: 'xl',
 }
 
 export default ImportExportModal
