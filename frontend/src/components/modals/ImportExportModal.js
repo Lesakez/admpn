@@ -235,14 +235,16 @@ const ImportExportModal = ({
         )}
 
         {/* Tab Content */}
-        <CTabContent className="p-3">
-          {/* Import Panel */}
-          {showImportTab && activeTab === 'import' && (
-            <CTabPane>
+        <CTabContent>
+          {showImportTab && (
+            <CTabPane
+              visible={activeTab === 'import'}
+              className={mode === 'import' ? 'active show' : ''}
+            >
               <ErrorBoundary>
                 <ImportPanel
                   type={type}
-                  onSuccess={(result) => handleSuccess({ ...result, type: 'import' })}
+                  onSuccess={handleSuccess}
                   onError={handleError}
                   onLoadingChange={handleLoadingChange}
                 />
@@ -250,15 +252,17 @@ const ImportExportModal = ({
             </CTabPane>
           )}
 
-          {/* Export Panel */}
-          {showExportTab && activeTab === 'export' && (
-            <CTabPane>
+          {showExportTab && (
+            <CTabPane
+              visible={activeTab === 'export'}
+              className={mode === 'export' ? 'active show' : ''}
+            >
               <ErrorBoundary>
                 <ExportPanel
                   type={type}
                   selectedIds={selectedIds}
                   currentFilters={currentFilters}
-                  onSuccess={(result) => handleSuccess({ ...result, type: 'export' })}
+                  onSuccess={handleSuccess}
                   onError={handleError}
                   onLoadingChange={handleLoadingChange}
                 />
@@ -268,16 +272,10 @@ const ImportExportModal = ({
         </CTabContent>
       </CModalBody>
 
-      <CModalFooter className="border-top-0">
-        <div className="d-flex justify-content-between align-items-center w-100">
-          <div className="text-muted small">
-            {activeTab === 'import' && 'Поддерживаются форматы: TXT, CSV, JSON'}
-            {activeTab === 'export' && 'Выберите формат и поля для экспорта'}
-          </div>
-
+      <CModalFooter>
+        <div className="d-flex justify-content-end gap-2">
           <CButton
             color="secondary"
-            variant="outline"
             onClick={handleClose}
             disabled={isLoading}
           >

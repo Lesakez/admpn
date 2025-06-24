@@ -1,263 +1,178 @@
-// frontend/src/components/modals/ImportExportModal.scss
+/* frontend/src/components/modals/ImportExportModal.scss */
 
 .import-export-modal {
   .modal-dialog {
-    max-width: 90vw;
+    max-width: 1200px;
     margin: 1rem auto;
   }
 
   .modal-content {
     border: none;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    border-radius: 1rem;
-    overflow: hidden;
+    border-radius: var(--cui-border-radius-lg);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  }
+
+  [data-coreui-theme="dark"] .modal-content {
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
   }
 
   .modal-header {
-    background: linear-gradient(135deg, var(--cui-primary-bg-subtle) 0%, var(--cui-info-bg-subtle) 100%);
-    border-bottom: 1px solid var(--cui-border-color-translucent);
+    background: var(--cui-gray-50);
+    border-bottom: 1px solid var(--cui-border-color);
     padding: 1.5rem;
 
-    .avatar {
-      width: 3.5rem;
-      height: 3.5rem;
-      transition: transform 0.2s ease;
-
-      &:hover {
-        transform: scale(1.05);
-      }
-    }
-
     .modal-title {
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       font-weight: 600;
-      color: var(--cui-primary);
-      margin: 0;
+      color: var(--cui-body-color);
     }
+  }
 
-    .badge {
-      font-size: 0.75rem;
-      padding: 0.375rem 0.75rem;
-      border-radius: 0.5rem;
-      font-weight: 500;
-    }
+  [data-coreui-theme="dark"] .modal-header {
+    background: var(--cui-gray-800);
   }
 
   .modal-body {
-    padding: 0;
-    min-height: 500px;
-    position: relative;
+    max-height: 80vh;
+    overflow-y: auto;
   }
 
   .modal-footer {
+    background: var(--cui-gray-50);
     padding: 1rem 1.5rem;
-    
-    .text-muted {
-      font-size: 0.8rem;
-      max-width: 60%;
-    }
   }
 
-  // Навигация по табам
+  [data-coreui-theme="dark"] .modal-footer {
+    background: var(--cui-gray-800);
+  }
+
+  /* Tab Navigation */
   .nav-tabs {
-    border-bottom: 1px solid var(--cui-border-color-translucent);
-    background: var(--cui-tertiary-bg);
+    background: var(--cui-body-bg);
+    margin: 0;
 
     .nav-link {
       border: none;
-      color: var(--cui-secondary-color);
-      font-weight: 500;
       padding: 1rem 1.5rem;
-      transition: all 0.2s ease;
-      border-radius: 0;
-      background: transparent;
+      color: var(--cui-text-muted);
+      font-weight: 500;
+      transition: all 0.3s ease;
+      position: relative;
 
-      &:hover:not(.active) {
-        background: var(--cui-secondary-bg);
-        color: var(--cui-body-color);
+      &:hover {
+        color: var(--cui-primary);
+        background: rgba(var(--cui-primary-rgb), 0.05);
       }
 
       &.active {
-        background: white;
         color: var(--cui-primary);
-        border-bottom: 3px solid var(--cui-primary);
-        position: relative;
-
-        &::after {
-          content: '';
-          position: absolute;
-          bottom: -1px;
-          left: 0;
-          right: 0;
-          height: 1px;
-          background: white;
-        }
+        background: var(--cui-body-bg);
+        border-bottom: 2px solid var(--cui-primary);
       }
 
-      .c-icon {
-        margin-right: 0.5rem;
-        font-size: 1.1rem;
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
     }
   }
 
-  // Индикатор загрузки
+  /* Tab Content */
+  .tab-content {
+    background: var(--cui-body-bg);
+    min-height: 500px;
+  }
+
+  /* Success/Error Alerts */
+  .alert {
+    border: none;
+    border-radius: var(--cui-border-radius);
+    font-weight: 500;
+    
+    &.alert-success {
+      background: rgba(var(--cui-success-rgb), 0.1);
+      color: var(--cui-success);
+      border-left: 4px solid var(--cui-success);
+    }
+
+    &.alert-danger {
+      background: rgba(var(--cui-danger-rgb), 0.1);
+      color: var(--cui-danger);
+      border-left: 4px solid var(--cui-danger);
+    }
+  }
+
+  /* Responsive Design */
+  @media (max-width: 992px) {
+    .modal-dialog {
+      max-width: 95%;
+      margin: 0.5rem auto;
+    }
+
+    .modal-header,
+    .modal-footer {
+      padding: 1rem;
+    }
+
+    .nav-link {
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+    }
+  }
+
+  @media (max-width: 576px) {
+    .modal-dialog {
+      margin: 0.25rem;
+      max-width: none;
+    }
+
+    .modal-body {
+      max-height: 70vh;
+      padding: 0.75rem;
+    }
+
+    .nav-link {
+      padding: 0.5rem 0.75rem;
+    }
+  }
+
+  /* Loading overlay */
   .loading-overlay {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(var(--cui-body-bg-rgb), 0.9);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
-    backdrop-filter: blur(2px);
+    z-index: 1050;
+    border-radius: var(--cui-border-radius-lg);
 
     .loading-content {
       text-align: center;
-      padding: 2rem;
-      border-radius: 1rem;
-      background: white;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+      color: var(--cui-body-color);
 
       .spinner-border {
-        width: 3rem;
-        height: 3rem;
         margin-bottom: 1rem;
       }
-
-      .loading-text {
-        font-size: 1rem;
-        font-weight: 500;
-        color: var(--cui-body-color);
-      }
     }
   }
 
-  // Алерты
-  .alert {
-    border-radius: 0.75rem;
-    border: none;
-    
-    h6 {
-      font-weight: 600;
-      margin-bottom: 0.5rem;
-    }
+  /* Animation for modal appearance */
+  &.modal.show .modal-dialog {
+    animation: modalSlideIn 0.3s ease-out;
   }
 
-  // Адаптивность
-  @media (max-width: 768px) {
-    .modal-dialog {
-      max-width: 95vw;
-      margin: 0.5rem auto;
+  @keyframes modalSlideIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-10px);
     }
-
-    .modal-header {
-      padding: 1rem;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 1rem;
-
-      .avatar {
-        width: 3rem;
-        height: 3rem;
-      }
-
-      .modal-title {
-        font-size: 1.25rem;
-      }
-    }
-
-    .nav-tabs .nav-link {
-      padding: 0.75rem 1rem;
-      font-size: 0.9rem;
-    }
-
-    .modal-footer {
-      padding: 1rem;
-      flex-direction: column;
-      gap: 1rem;
-
-      .text-muted {
-        max-width: 100%;
-        text-align: center;
-      }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
     }
   }
-
-  // Темная тема
-  [data-coreui-theme="dark"] & {
-    .modal-content {
-      background: var(--cui-dark);
-      color: var(--cui-light);
-    }
-
-    .modal-header {
-      background: linear-gradient(135deg, var(--cui-primary-bg-subtle) 0%, var(--cui-info-bg-subtle) 100%);
-      border-bottom: 1px solid var(--cui-border-color);
-    }
-
-    .nav-tabs {
-      background: var(--cui-dark-bg-subtle);
-      border-bottom: 1px solid var(--cui-border-color);
-
-      .nav-link {
-        color: var(--cui-secondary-color);
-
-        &:hover:not(.active) {
-          background: var(--cui-secondary-bg);
-          color: var(--cui-light);
-        }
-
-        &.active {
-          background: var(--cui-dark);
-          color: var(--cui-primary);
-
-          &::after {
-            background: var(--cui-dark);
-          }
-        }
-      }
-    }
-
-    .loading-overlay {
-      background: rgba(0, 0, 0, 0.7);
-
-      .loading-content {
-        background: var(--cui-dark);
-        color: var(--cui-light);
-      }
-    }
-  }
-}
-
-// Анимации
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.import-export-modal .tab-pane {
-  animation: slideInUp 0.3s ease-out;
-}
-
-.import-export-modal .loading-overlay {
-  animation: fadeIn 0.2s ease-out;
 }
