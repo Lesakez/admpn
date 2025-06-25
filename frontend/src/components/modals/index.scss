@@ -1,0 +1,197 @@
+// frontend/src/components/modals/index.scss
+// Главный файл стилей для всех модальных окон
+
+// Импорт стилей модального окна импорта/экспорта
+@import './ImportExportModal.scss';
+
+// Импорт стилей панелей
+@import './panels/ImportPanel.scss';
+@import './panels/ExportPanel.scss';
+
+// Общие стили для всех модалок проекта
+.modal {
+  // Плавное появление
+  &.fade {
+    .modal-dialog {
+      transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+    }
+  }
+
+  // Улучшенный backdrop
+  &-backdrop {
+    backdrop-filter: blur(5px);
+    
+    &.show {
+      animation: fadeIn 0.3s ease;
+    }
+  }
+
+  // Стили для всех модалок
+  .modal-content {
+    border: none;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+  }
+
+  // Стили заголовков
+  .modal-header {
+    position: relative;
+    
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--cui-border-color), transparent);
+    }
+  }
+
+  // Анимация для кнопки закрытия
+  .btn-close {
+    transition: transform 0.2s ease, opacity 0.2s ease;
+    
+    &:hover {
+      transform: rotate(90deg);
+    }
+  }
+}
+
+// Утилиты для модалок
+.modal-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  
+  .spinner-border {
+    width: 3rem;
+    height: 3rem;
+    border-width: 0.3rem;
+  }
+  
+  .loading-text {
+    margin-top: 1rem;
+    font-size: 1.125rem;
+    color: var(--cui-gray-600);
+    font-weight: 500;
+  }
+}
+
+// Стили для ошибок в модалках
+.modal-error {
+  padding: 2rem;
+  text-align: center;
+  
+  .error-icon {
+    font-size: 4rem;
+    color: var(--cui-danger);
+    margin-bottom: 1rem;
+  }
+  
+  .error-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--cui-danger);
+    margin-bottom: 0.5rem;
+  }
+  
+  .error-message {
+    color: var(--cui-gray-600);
+    margin-bottom: 1.5rem;
+  }
+  
+  .btn {
+    min-width: 120px;
+  }
+}
+
+// Анимации
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+// Размеры модалок
+.modal-sm {
+  .modal-dialog {
+    max-width: 400px;
+  }
+}
+
+.modal-lg {
+  .modal-dialog {
+    max-width: 800px;
+  }
+}
+
+.modal-xl {
+  .modal-dialog {
+    max-width: 1200px;
+  }
+}
+
+.modal-fullscreen {
+  .modal-dialog {
+    max-width: 100%;
+    margin: 0;
+    
+    .modal-content {
+      height: 100vh;
+      border-radius: 0;
+    }
+  }
+}
+
+// Темная тема
+[data-coreui-theme="dark"] {
+  .modal {
+    .modal-content {
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.8);
+    }
+    
+    .modal-header {
+      &::after {
+        background: linear-gradient(90deg, transparent, var(--cui-gray-700), transparent);
+      }
+    }
+  }
+  
+  .modal-loading {
+    .loading-text {
+      color: var(--cui-gray-400);
+    }
+  }
+  
+  .modal-error {
+    .error-message {
+      color: var(--cui-gray-400);
+    }
+  }
+}

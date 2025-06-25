@@ -25,6 +25,7 @@ import {
   CTableDataCell,
   CBadge,
   CButtonGroup,
+  CFormCheck,
 } from '@coreui/react'
 import CIcon from '@coreui/icons-react'
 import {
@@ -39,6 +40,7 @@ import {
   cilTask,
   cilCode,
   cilDataTransferUp,
+  cilEyedropper,
 } from '@coreui/icons'
 import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
@@ -89,34 +91,34 @@ const ImportPanel = ({
   } = useForm({
     defaultValues: {
       format: '',
-      delimiter: '',
+      delimiter: '\n',
       text: '',
-      skipInvalid: true,
+      skipInvalid: false,
       validateBeforeImport: true,
       updateExisting: false,
     }
   })
 
-  const textValue = watch('text')
   const formatValue = watch('format')
   const delimiterValue = watch('delimiter')
+  const textValue = watch('text')
 
-  // Загрузка конфигурации с сервера
+  // Загрузка конфигурации импорта
   useEffect(() => {
     loadImportConfig()
   }, [type])
 
-  // Парсинг данных при изменении
+  // Обновление превью при изменении данных
   useEffect(() => {
     if (textValue && formatValue) {
-      parseAndValidateText()
+      updatePreview()
     } else {
       setPreviewData(null)
       setValidationErrors([])
     }
   }, [textValue, formatValue, delimiterValue])
 
-  // Уведомление родительского компонента о загрузке
+  // Уведомление о загрузке
   useEffect(() => {
     if (onLoadingChange) {
       onLoadingChange(isLoading)
@@ -131,120 +133,198 @@ const ImportPanel = ({
 
       if (service?.getImportConfig) {
         const response = await service.getImportConfig()
+        
         if (response.data?.success) {
-          setImportConfig(response.data.data)
-          // Устанавливаем значения по умолчанию
-          if (response.data.data.formats?.length > 0) {
-            setValue('format', response.data.data.formats[0].value)
+          const config = response.data.data
+          setImportConfig(config)
+          
+          // Устанавливаем значения по умолчанию из конфигурации
+          if (config.defaultFormat) {
+            setValue('format', config.defaultFormat)
           }
-          if (response.data.data.delimiters?.length > 0) {
-            setValue('delimiter', response.data.data.delimiters[0].value)
+          if (config.defaultDelimiter) {
+            setValue('delimiter', config.defaultDelimiter)
           }
+        } else {
+          throw new Error('Invalid config response')
         }
+      } else {
+        // Fallback конфигурация
+        console.warn(`getImportConfig not implemented for ${type}`)
+        setImportConfig(getDefaultImportConfig(type))
       }
     } catch (error) {
       console.error('Error loading import config:', error)
-      toast.error('Ошибка загрузки конфигурации')
+      toast.error('Ошибка при загрузке конфигурации импорта')
+      
+      // Устанавливаем базовую конфигурацию для работы
+      setImportConfig(getDefaultImportConfig(type))
     } finally {
       setConfigLoading(false)
     }
   }
 
-  const getCurrentFormat = () => {
-    return importConfig?.formats?.find(f => f.value === formatValue)
+  const getDefaultImportConfig = (entityType) => {
+    const baseConfig = {
+      maxFileSize: 10 * 1024 * 1024, // 10MB
+      maxRecords: 10000,
+      acceptedFileTypes: '.txt,.csv',
+      defaultFormat: 'login:password',
+      defaultDelimiter: '\n',
+    }
+
+    switch (entityType) {
+      case 'accounts':
+        return {
+          ...baseConfig,
+          formats: [
+            {
+              value: 'login:password',
+              label: 'Логин:Пароль',
+              example: 'user123:password123',
+              description: 'Базовый формат для быстрого импорта'
+            },
+            {
+              value: 'email:password',
+              label: 'Email:Пароль',
+              example: 'user@example.com:password123',
+              description: 'Импорт через email'
+            }
+          ],
+          delimiters: [
+            { value: '\n', label: 'Новая строка' },
+            { value: ';', label: 'Точка с запятой' },
+            { value: ',', label: 'Запятая' },
+          ]
+        }
+      case 'proxies':
+        return {
+          ...baseConfig,
+          formats: [
+            {
+              value: 'ip:port:login:password',
+              label: 'IP:Port:Login:Password',
+              example: '192.168.1.1:8080:user:pass',
+              description: 'Полный формат прокси'
+            },
+            {
+              value: 'ip:port',
+              label: 'IP:Port',
+              example: '192.168.1.1:8080',
+              description: 'Без авторизации'
+            }
+          ],
+          delimiters: [
+            { value: '\n', label: 'Новая строка' },
+          ]
+        }
+      default:
+        return {
+          ...baseConfig,
+          formats: [
+            {
+              value: 'default',
+              label: 'Стандартный формат',
+              example: 'data1:data2',
+              description: 'Базовый формат импорта'
+            }
+          ],
+          delimiters: [
+            { value: '\n', label: 'Новая строка' },
+          ]
+        }
+    }
   }
 
-  const parseAndValidateText = () => {
-    const lines = textValue.trim().split('\n').filter(line => line.trim())
-    if (lines.length === 0) {
+  const getCurrentFormat = () => {
+    if (!importConfig?.formats || !formatValue) return null
+    return importConfig.formats.find(f => f.value === formatValue)
+  }
+
+  const updatePreview = useCallback(() => {
+    if (!textValue || !formatValue) {
       setPreviewData(null)
       return
     }
 
+    const lines = textValue.split(delimiterValue).filter(line => line.trim())
     const format = getCurrentFormat()
+    
     if (!format) return
 
+    const validLines = []
+    const invalidLines = []
     const samples = []
-    const errors = []
-    let validCount = 0
-    let invalidCount = 0
 
-    // Анализируем максимум 100 строк для предпросмотра
-    const linesToAnalyze = Math.min(lines.length, 100)
-    
-    for (let i = 0; i < linesToAnalyze; i++) {
-      const line = lines[i].trim()
-      if (!line) continue
+    lines.forEach((line, index) => {
+      const lineNum = index + 1
+      const trimmedLine = line.trim()
+      
+      if (!trimmedLine) return
 
       try {
-        const parsed = parseLine(line, format, delimiterValue)
-        if (parsed && Object.keys(parsed).length > 0) {
-          samples.push({
-            line: i + 1,
-            data: parsed,
-            valid: true
+        // Простая валидация на основе формата
+        const parts = trimmedLine.split(':')
+        const expectedParts = format.value.split(':').length
+        
+        if (parts.length !== expectedParts) {
+          invalidLines.push({
+            line: lineNum,
+            text: trimmedLine,
+            error: `Ожидается ${expectedParts} частей, получено ${parts.length}`
           })
-          validCount++
         } else {
-          throw new Error('Пустой результат парсинга')
+          validLines.push(trimmedLine)
+          
+          // Добавляем в примеры первые 5 валидных строк
+          if (samples.length < 5) {
+            const data = {}
+            format.value.split(':').forEach((field, i) => {
+              data[field] = parts[i]
+            })
+            samples.push({ line: lineNum, data })
+          }
         }
       } catch (error) {
-        errors.push({
-          line: i + 1,
-          text: line,
+        invalidLines.push({
+          line: lineNum,
+          text: trimmedLine,
           error: error.message
         })
-        invalidCount++
       }
-
-      // Ограничиваем количество примеров
-      if (samples.length >= 10) break
-    }
-
-    // Оценка для больших файлов
-    const totalLines = lines.length
-    const sampleRate = linesToAnalyze / totalLines
-    const estimatedValid = Math.round(validCount / sampleRate)
-    const estimatedInvalid = Math.round(invalidCount / sampleRate)
-
-    setPreviewData({
-      totalLines,
-      estimatedValid,
-      estimatedInvalid,
-      samples: samples.slice(0, 5), // Показываем максимум 5 примеров
-      hasData: samples.length > 0
     })
 
-    setValidationErrors(errors.slice(0, 10)) // Показываем максимум 10 ошибок
-  }
+    setPreviewData({
+      totalLines: lines.length,
+      estimatedValid: validLines.length,
+      estimatedInvalid: invalidLines.length,
+      hasData: validLines.length > 0,
+      samples
+    })
 
-  const parseLine = (line, format, delimiter) => {
-    if (!format.pattern) {
-      // Простой парсинг по разделителю
-      const parts = line.split(delimiter || format.delimiter || ':')
-      const result = {}
+    setValidationErrors(invalidLines.slice(0, 10)) // Показываем только первые 10 ошибок
+  }, [textValue, formatValue, delimiterValue, importConfig])
+
+  const parseImportData = (text) => {
+    const format = getCurrentFormat()
+    if (!format) return []
+
+    const lines = text.split(delimiterValue).filter(line => line.trim())
+    const result = []
+
+    lines.forEach((line, index) => {
+      const trimmedLine = line.trim()
+      if (!trimmedLine) return
+
+      const parts = trimmedLine.split(':')
+      const fields = format.value.split(':')
       
-      format.fields?.forEach((field, index) => {
-        if (parts[index]) {
-          result[field] = parts[index].trim()
-        }
-      })
-      
-      return result
-    }
-
-    // Парсинг по паттерну регулярного выражения
-    const regex = new RegExp(format.pattern)
-    const match = line.match(regex)
-    
-    if (!match) {
-      throw new Error('Строка не соответствует формату')
-    }
-
-    const result = {}
-    format.fields?.forEach((field, index) => {
-      if (match[index + 1]) {
-        result[field] = match[index + 1].trim()
+      if (parts.length === fields.length) {
+        const record = {}
+        fields.forEach((field, i) => {
+          record[field] = parts[i]
+        })
+        result.push(record)
       }
     })
 
@@ -278,6 +358,12 @@ const ImportPanel = ({
 
   const handleFileUpload = (file) => {
     if (!file) return
+
+    // Проверка размера файла
+    if (importConfig?.maxFileSize && file.size > importConfig.maxFileSize) {
+      toast.error(`Файл слишком большой. Максимальный размер: ${Math.round(importConfig.maxFileSize / 1024 / 1024)}MB`)
+      return
+    }
 
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -462,73 +548,56 @@ const ImportPanel = ({
                       invalid={!!errors.format}
                       {...register('format', { required: 'Выберите формат' })}
                     >
-                      <option value="">Выберите формат</option>
-                      {importConfig?.formats?.map(format => (
-                        <option key={format.value} value={format.value}>
-                          {format.label}
+                      <option value="">-- Выберите формат --</option>
+                      {importConfig?.formats?.map(fmt => (
+                        <option key={fmt.value} value={fmt.value}>
+                          {fmt.label}
                         </option>
                       ))}
                     </CFormSelect>
                     {errors.format && (
                       <div className="invalid-feedback">{errors.format.message}</div>
                     )}
+                    
+                    {formatValue && getCurrentFormat() && (
+                      <CAlert color="info" className="mt-2 py-2">
+                        <small>
+                          <strong>Пример:</strong> {getCurrentFormat().example}
+                        </small>
+                      </CAlert>
+                    )}
                   </div>
 
                   {/* Разделитель */}
-                  {getCurrentFormat()?.requiresDelimiter && (
-                    <div className="mb-3">
-                      <CFormLabel htmlFor="delimiter" className="fw-semibold">
-                        Разделитель
-                      </CFormLabel>
-                      <CFormSelect
-                        id="delimiter"
-                        {...register('delimiter')}
-                      >
-                        {importConfig?.delimiters?.map(delim => (
-                          <option key={delim.value} value={delim.value}>
-                            {delim.label}
-                          </option>
-                        ))}
-                      </CFormSelect>
-                    </div>
-                  )}
-
-                  {/* Пример формата */}
-                  {getCurrentFormat()?.example && (
-                    <CAlert color="info" className="mb-3">
-                      <h6 className="alert-heading">
-                        <CIcon icon={cilInfo} className="me-2" />
-                        Пример формата:
-                      </h6>
-                      <code className="d-block">{getCurrentFormat().example}</code>
-                      {getCurrentFormat().description && (
-                        <small className="d-block mt-2">
-                          {getCurrentFormat().description}
-                        </small>
-                      )}
-                    </CAlert>
-                  )}
+                  <div className="mb-3">
+                    <CFormLabel htmlFor="delimiter" className="fw-semibold">
+                      Разделитель строк
+                    </CFormLabel>
+                    <CFormSelect
+                      id="delimiter"
+                      {...register('delimiter')}
+                    >
+                      {importConfig?.delimiters?.map(delim => (
+                        <option key={delim.value} value={delim.value}>
+                          {delim.label}
+                        </option>
+                      ))}
+                    </CFormSelect>
+                  </div>
 
                   {/* Опции импорта */}
-                  <h6 className="mb-3">Опции импорта</h6>
-                  
-                  <div className="mb-2">
+                  <div className="import-panel__options">
                     <CFormCheck
                       id="skipInvalid"
                       label="Пропускать невалидные строки"
                       {...register('skipInvalid')}
                     />
-                  </div>
-                  
-                  <div className="mb-2">
                     <CFormCheck
                       id="validateBeforeImport"
                       label="Валидировать перед импортом"
+                      defaultChecked
                       {...register('validateBeforeImport')}
                     />
-                  </div>
-                  
-                  <div className="mb-2">
                     <CFormCheck
                       id="updateExisting"
                       label="Обновлять существующие записи"
@@ -539,13 +608,13 @@ const ImportPanel = ({
               </CCard>
             </CCol>
 
-            {/* Ввод данных */}
+            {/* Загрузка данных */}
             <CCol lg={6}>
               <CCard className="mb-4">
                 <CCardHeader>
                   <h6 className="mb-0 d-flex align-items-center">
                     <CIcon icon={cilCloudUpload} className="me-2" />
-                    Данные для импорта
+                    Загрузка данных
                   </h6>
                 </CCardHeader>
                 <CCardBody>
@@ -553,17 +622,17 @@ const ImportPanel = ({
                   <div
                     className={`import-panel__drag-zone ${dragActive ? 'import-panel__drag-zone--active' : ''}`}
                     onDragEnter={handleDragEnter}
-                    onDragOver={handleDragEvents}
                     onDragLeave={handleDragLeave}
+                    onDragOver={handleDragEvents}
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <CIcon icon={cilFile} size="3xl" className="import-panel__drag-icon" />
                     <h5 className="import-panel__drag-title">
-                      Перетащите файл сюда
+                      Перетащите файл сюда или кликните для выбора
                     </h5>
-                    <p className="import-panel__drag-subtitle">
-                      или нажмите для выбора файла
+                    <p className="import-panel__drag-subtitle mb-0">
+                      Поддерживаются файлы: {importConfig?.acceptedFileTypes || '.txt, .csv'}
                     </p>
                   </div>
 
@@ -571,7 +640,7 @@ const ImportPanel = ({
                     ref={fileInputRef}
                     type="file"
                     className="import-panel__file-input"
-                    accept=".txt,.csv"
+                    accept={importConfig?.acceptedFileTypes || '.txt,.csv'}
                     onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                   />
 
