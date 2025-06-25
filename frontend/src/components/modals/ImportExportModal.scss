@@ -1,69 +1,97 @@
 // frontend/src/components/modals/ImportExportModal.scss
 
+// Глобальные переменные
+:root {
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --border-radius-sm: 0.25rem;
+  --border-radius-md: 0.5rem;
+  --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --transition-fast: 0.2s ease;
+  --transition-smooth: 0.3s ease;
+}
+
+// Миксины
+@mixin hover-effect {
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-hover);
+  }
+}
+
+@mixin focus-outline {
+  &:focus {
+    outline: 2px solid var(--cui-primary);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 3px rgba(var(--cui-primary-rgb), 0.25);
+  }
+}
+
+@mixin responsive($breakpoint) {
+  @media (max-width: #{$breakpoint}px) {
+    @content;
+  }
+}
+
 .import-export-modal {
   .modal-dialog {
-    max-width: 1400px;
-    margin: 2rem auto;
-    height: calc(100vh - 4rem);
+    max-width: 1200px;
+    margin: 1.5rem auto;
+    height: calc(100vh - 3rem);
     display: flex;
     flex-direction: column;
   }
 
   .modal-content {
     border: none;
-    border-radius: 1rem;
-    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-light);
     overflow: hidden;
     height: 100%;
     display: flex;
     flex-direction: column;
+    background: var(--cui-body-bg);
   }
 
-  // Header - более минималистичный
+  // Modal Header
   .modal-header {
-    background: linear-gradient(135deg, var(--cui-primary), var(--cui-primary-emphasis));
+    background: var(--cui-primary);
     border-bottom: none;
-    padding: 1.75rem 2rem;
-    position: relative;
+    padding: var(--spacing-md) var(--spacing-lg);
     flex-shrink: 0;
 
-    // Декоративный элемент
-    &::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 200px;
-      height: 100%;
-      background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
-      pointer-events: none;
-    }
-
     .modal-title {
-      font-size: 1.5rem;
-      font-weight: 300;
+      font-size: 1.25rem;
+      font-weight: 500;
       color: white;
       display: flex;
       align-items: center;
-      gap: 1rem;
-      position: relative;
-      z-index: 1;
-      letter-spacing: -0.02em;
+      gap: var(--spacing-sm);
+      letter-spacing: -0.01em;
 
       svg {
-        width: 32px;
-        height: 32px;
+        width: 24px;
+        height: 24px;
         opacity: 0.9;
+      }
+
+      .badge {
+        font-size: 0.75rem;
+        padding: var(--spacing-xs) var(--spacing-sm);
       }
     }
 
     .btn-close {
-      filter: brightness(0) invert(1);
+      background: none;
+      color: white;
       opacity: 0.7;
-      transition: all 0.2s;
-      position: relative;
-      z-index: 1;
-      padding: 0.5rem;
+      padding: var(--spacing-sm);
+      transition: opacity var(--transition-fast), transform var(--transition-fast);
+      @include focus-outline;
 
       &:hover {
         opacity: 1;
@@ -72,14 +100,13 @@
     }
   }
 
-  // Tabs Navigation - более современный вид
+  // Tabs Navigation
   .nav-tabs {
     background: var(--cui-gray-50);
-    padding: 0;
-    margin: 0;
-    border-bottom: 1px solid var(--cui-border-color);
+    border-bottom: 1px solid var(--cui-gray-200);
     display: flex;
     flex-shrink: 0;
+    padding: 0 var(--spacing-md);
 
     .nav-item {
       flex: 1;
@@ -88,29 +115,28 @@
 
     .nav-link {
       border: none;
-      border-radius: 0;
-      padding: 1.25rem 1.5rem;
+      padding: var(--spacing-md);
       color: var(--cui-gray-600);
       font-weight: 500;
       background: transparent;
-      transition: all 0.2s ease;
-      position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.75rem;
-      border-bottom: 3px solid transparent;
+      gap: var(--spacing-sm);
+      border-bottom: 2px solid transparent;
+      transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+      @include focus-outline;
 
       svg {
-        width: 22px;
-        height: 22px;
-        transition: transform 0.2s;
+        width: 18px;
+        height: 18px;
+        transition: transform var(--transition-fast);
       }
 
       &:hover:not(.active):not(:disabled) {
         color: var(--cui-gray-800);
         background: var(--cui-gray-100);
-        
+
         svg {
           transform: translateY(-1px);
         }
@@ -118,7 +144,7 @@
 
       &.active {
         color: var(--cui-primary);
-        background: white;
+        background: var(--cui-body-bg);
         border-bottom-color: var(--cui-primary);
 
         svg {
@@ -127,104 +153,93 @@
       }
 
       &:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-      }
-    }
-  }
-
-  // Tab Content - убираем скролл, используем flexbox
-  .tab-content {
-    background: white;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .tab-pane {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    animation: fadeInUp 0.3s ease;
-
-    // Внутренний контейнер для панелей
-    > div {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      padding: 2rem;
-      overflow-y: auto;
-      overflow-x: hidden;
-
-      // Красивый скроллбар только для внутреннего контента
-      &::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      &::-webkit-scrollbar-track {
-        background: transparent;
-      }
-
-      &::-webkit-scrollbar-thumb {
-        background: var(--cui-gray-300);
-        border-radius: 3px;
-
-        &:hover {
-          background: var(--cui-gray-400);
-        }
-      }
-    }
-  }
-
-  // Footer - более компактный
-  .modal-footer {
-    background: var(--cui-gray-50);
-    border-top: 1px solid var(--cui-border-color);
-    padding: 1.25rem 2rem;
-    flex-shrink: 0;
-    
-    .btn {
-      min-width: 140px;
-      font-weight: 500;
-      padding: 0.625rem 1.75rem;
-      border-radius: 0.5rem;
-      transition: all 0.2s;
-
-      svg {
-        transition: transform 0.2s;
-      }
-
-      &:hover:not(:disabled) {
-        transform: translateY(-1px);
-        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
-      }
-
-      &:active:not(:disabled) {
-        transform: translateY(0);
-      }
-
-      &:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
+    }
+  }
 
-      // Primary button
+  // Modal Body
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+
+    &::-webkit-scrollbar {
+      width: 5px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--cui-gray-300);
+      border-radius: 2.5px;
+      &:hover {
+        background: var(--cui-gray-400);
+      }
+    }
+
+    // Tab Content
+    .tab-content {
+      flex: 1;
+      background: var(--cui-body-bg);
+      padding: var(--spacing-md);
+    }
+
+    // Tab Pane
+    .tab-pane {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+
+      // Убираем внутренний скролл, так как он теперь в .modal-body
+      > div {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        overflow: visible;
+      }
+    }
+  }
+
+  // Modal Footer
+  .modal-footer {
+    background: var(--cui-gray-50);
+    border-top: 1px solid var(--cui-gray-200);
+    padding: var(--spacing-md);
+    flex-shrink: 0;
+
+    .d-flex {
+      width: 100%;
+      justify-content: flex-end;
+      gap: var(--spacing-sm);
+    }
+
+    .btn {
+      min-width: 100px;
+      font-weight: 500;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border-radius: var(--border-radius-md);
+      font-size: 0.875rem;
+      @include hover-effect;
+      @include focus-outline;
+
       &.btn-primary {
-        background: linear-gradient(135deg, var(--cui-primary), var(--cui-primary-emphasis));
+        background: var(--cui-primary);
         border: none;
         color: white;
 
         &:hover:not(:disabled) {
-          filter: brightness(1.1);
+          background: var(--cui-primary-emphasis);
         }
       }
 
-      // Secondary button
       &.btn-secondary {
-        background: white;
-        border: 1px solid var(--cui-border-color);
+        background: var(--cui-body-bg);
+        border: 1px solid var(--cui-gray-200);
         color: var(--cui-gray-700);
 
         &:hover:not(:disabled) {
@@ -232,82 +247,101 @@
           border-color: var(--cui-gray-400);
         }
       }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      svg {
+        width: 14px;
+        height: 14px;
+      }
     }
   }
 
-  // Success/Error Alerts - более современный вид
+  // Alerts
   .alert {
     border: none;
-    border-radius: 0.75rem;
-    font-weight: 500;
-    margin: 0 2rem 1.5rem;
-    padding: 1.25rem 1.5rem;
+    border-radius: var(--border-radius-md);
+    padding: var(--spacing-md);
+    margin: var(--spacing-md);
     display: flex;
     align-items: center;
-    gap: 1rem;
-    
+    gap: var(--spacing-sm);
+    font-weight: 500;
+    font-size: 0.875rem;
+
     &.alert-success {
-      background: linear-gradient(135deg, rgba(var(--cui-success-rgb), 0.1) 0%, rgba(var(--cui-success-rgb), 0.05) 100%);
+      background: rgba(var(--cui-success-rgb), 0.1);
       color: var(--cui-success-emphasis);
-      box-shadow: 0 4px 12px rgba(var(--cui-success-rgb), 0.15);
 
       &::before {
         content: '✓';
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
+        width: 24px;
+        height: 24px;
         background: var(--cui-success);
         color: white;
         border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
         flex-shrink: 0;
-        font-weight: bold;
       }
     }
 
     &.alert-danger {
-      background: linear-gradient(135deg, rgba(var(--cui-danger-rgb), 0.1) 0%, rgba(var(--cui-danger-rgb), 0.05) 100%);
+      background: rgba(var(--cui-danger-rgb), 0.1);
       color: var(--cui-danger-emphasis);
-      box-shadow: 0 4px 12px rgba(var(--cui-danger-rgb), 0.15);
 
       &::before {
         content: '!';
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 32px;
-        height: 32px;
+        width: 24px;
+        height: 24px;
         background: var(--cui-danger);
         color: white;
         border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
         flex-shrink: 0;
-        font-weight: bold;
+      }
+    }
+
+    .btn-link {
+      padding: 0;
+      font-size: 0.8125rem;
+      color: var(--cui-primary);
+      text-decoration: underline;
+      @include focus-outline;
+
+      &:hover {
+        color: var(--cui-primary-emphasis);
       }
     }
   }
 
   // Loading State
-  .text-center {
-    &.py-5 {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-    }
+  .text-center.py-5 {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
 
     .spinner-border {
-      width: 4rem;
-      height: 4rem;
-      border-width: 0.35rem;
+      width: 3rem;
+      height: 3rem;
+      border-width: 0.3rem;
       border-color: var(--cui-primary);
       border-right-color: transparent;
     }
 
     p {
-      margin-top: 1.5rem;
-      font-size: 1.125rem;
+      margin-top: var(--spacing-md);
+      font-size: 1rem;
       color: var(--cui-gray-600);
       font-weight: 500;
     }
@@ -316,23 +350,18 @@
   // Dark Theme Support
   [data-coreui-theme="dark"] & {
     .modal-content {
-      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.9);
       background: var(--cui-gray-900);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     }
 
     .modal-header {
-      background: linear-gradient(135deg, var(--cui-gray-800), var(--cui-gray-900));
-
-      &::before {
-        background: radial-gradient(circle at top right, rgba(255, 255, 255, 0.05) 0%, transparent 60%);
-      }
+      background: var(--cui-gray-800);
 
       .modal-title {
         color: var(--cui-gray-100);
       }
 
       .btn-close {
-        filter: none;
         color: var(--cui-gray-400);
 
         &:hover {
@@ -361,8 +390,12 @@
       }
     }
 
-    .tab-content {
+    .modal-body {
       background: var(--cui-gray-900);
+
+      .tab-content {
+        background: var(--cui-gray-900);
+      }
     }
 
     .modal-footer {
@@ -380,13 +413,26 @@
         }
       }
     }
+
+    .alert {
+      &.alert-success {
+        background: rgba(var(--cui-success-rgb), 0.2);
+      }
+      &.alert-danger {
+        background: rgba(var(--cui-danger-rgb), 0.2);
+      }
+
+      .btn-link {
+        color: var(--cui-primary-emphasis);
+      }
+    }
   }
 
   // Animations
   @keyframes fadeInUp {
     from {
       opacity: 0;
-      transform: translateY(20px);
+      transform: translateY(10px);
     }
     to {
       opacity: 1;
@@ -395,7 +441,7 @@
   }
 
   // Responsive Design
-  @media (max-width: 1400px) {
+  @include responsive(1200) {
     .modal-dialog {
       max-width: 95%;
       margin: 1rem;
@@ -403,7 +449,7 @@
     }
   }
 
-  @media (max-width: 992px) {
+  @include responsive(768) {
     .modal-dialog {
       max-width: 100%;
       margin: 0;
@@ -415,22 +461,10 @@
     }
 
     .modal-header {
-      padding: 1.25rem 1.5rem;
+      padding: var(--spacing-md);
 
       .modal-title {
-        font-size: 1.25rem;
-
-        svg {
-          width: 28px;
-          height: 28px;
-        }
-      }
-    }
-
-    .nav-tabs {
-      .nav-link {
-        padding: 1rem;
-        font-size: 0.875rem;
+        font-size: 1.125rem;
 
         svg {
           width: 20px;
@@ -439,42 +473,42 @@
       }
     }
 
-    .tab-pane > div {
-      padding: 1.5rem;
-    }
-
-    .modal-footer {
-      padding: 1rem 1.5rem;
-      
-      .btn {
-        min-width: 120px;
-        padding: 0.5rem 1.25rem;
-        font-size: 0.875rem;
-      }
-    }
-  }
-
-  @media (max-width: 576px) {
-    .modal-header {
-      padding: 1rem;
-
-      .modal-title {
-        font-size: 1.125rem;
-        gap: 0.5rem;
+    .nav-tabs {
+      .nav-link {
+        padding: var(--spacing-sm);
+        font-size: 0.8125rem;
 
         svg {
-          width: 24px;
-          height: 24px;
+          width: 16px;
+          height: 16px;
         }
       }
     }
 
-    .nav-tabs {
-      .nav-link {
-        padding: 0.875rem 0.5rem;
+    .modal-body {
+      .tab-content {
+        padding: var(--spacing-sm);
+      }
+    }
+
+    .modal-footer {
+      padding: var(--spacing-sm);
+
+      .btn {
+        min-width: 90px;
+        padding: var(--spacing-xs) var(--spacing-sm);
         font-size: 0.8125rem;
-        flex-direction: column;
-        gap: 0.25rem;
+      }
+    }
+  }
+
+  @include responsive(576) {
+    .modal-header {
+      padding: var(--spacing-sm);
+
+      .modal-title {
+        font-size: 1rem;
+        gap: var(--spacing-xs);
 
         svg {
           width: 18px;
@@ -483,29 +517,44 @@
       }
     }
 
-    .tab-pane > div {
-      padding: 1rem;
+    .nav-tabs {
+      .nav-link {
+        padding: var(--spacing-xs) var(--spacing-sm);
+        font-size: 0.75rem;
+        flex-direction: column;
+        gap: var(--spacing-xs);
+
+        svg {
+          width: 14px;
+          height: 14px;
+        }
+      }
+    }
+
+    .modal-body {
+      .tab-content {
+        padding: var(--spacing-xs);
+      }
     }
 
     .alert {
-      margin: 0 1rem 1rem;
-      padding: 1rem;
-      font-size: 0.875rem;
+      margin: var(--spacing-sm);
+      padding: var(--spacing-sm);
+      font-size: 0.8125rem;
 
       &::before {
-        width: 24px;
-        height: 24px;
-        font-size: 0.875rem;
+        width: 20px;
+        height: 20px;
+        font-size: 0.75rem;
       }
     }
 
     .modal-footer {
-      padding: 1rem;
-      
+      padding: var(--spacing-sm);
+
       .d-flex {
-        flex-direction: column-reverse;
-        gap: 0.75rem;
-        width: 100%;
+        flex-direction: column;
+        gap: var(--spacing-sm);
 
         .btn {
           width: 100%;
@@ -513,34 +562,22 @@
       }
     }
   }
-}
 
-// Special modal effects
-.modal {
-  &.fade {
-    .import-export-modal {
-      .modal-dialog {
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        transform: scale(0.9) translateY(50px);
-        opacity: 0;
-      }
-    }
+  // Modal Effects
+  &.fade .modal-dialog {
+    transition: transform var(--transition-smooth), opacity var(--transition-smooth);
+    transform: scale(0.95) translateY(20px);
+    opacity: 0;
   }
 
-  &.show {
-    .import-export-modal {
-      .modal-dialog {
-        transform: scale(1) translateY(0);
-        opacity: 1;
-      }
-    }
+  &.show .modal-dialog {
+    transform: scale(1) translateY(0);
+    opacity: 1;
   }
-}
 
-// Backdrop with blur
-.modal-backdrop {
-  &.show {
-    backdrop-filter: blur(8px);
-    background-color: rgba(0, 0, 0, 0.7);
+  // Backdrop
+  .modal-backdrop.show {
+    backdrop-filter: blur(5px);
+    background-color: rgba(0, 0, 0, 0.6);
   }
 }
