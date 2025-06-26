@@ -1,1030 +1,270 @@
-.export-panel {
+// frontend/src/components/modals/panels/ExportPanel.scss
+@use "@coreui/coreui/scss/variables" as *;
+
+.export-panel-modern {
+  padding: 1.5rem;
   height: 100%;
-  display: flex;
-  flex-direction: column;
-  font-size: 0.875rem;
+  overflow: hidden; // Никаких скроллов!
 
-  // Прогресс шагов
-  .progress-steps {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 2rem;
-    padding: 1rem;
-    background: $gray-100;
-    border-radius: $border-radius;
-    margin-bottom: 1.5rem;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-900;
-    }
-
-    .step {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      text-align: center;
-      opacity: 0.6;
-      transition: all 0.3s ease;
-      cursor: pointer;
-
-      &.active {
-        opacity: 1;
-        color: $primary;
-      }
-
-      &.completed {
-        opacity: 1;
-        color: $success;
-      }
-
-      .step-number {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        background: $body-bg;
-        border: 2px solid $border-color;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 600;
-        margin-bottom: 0.5rem;
-        transition: all 0.3s ease;
-        color: $body-color;
-
-        svg {
-          width: 1rem;
-          height: 1rem;
-        }
-
-        &[data-coreui-theme="dark"] {
-          background: $gray-800;
-          border-color: $gray-600;
-          color: $body-color;
-        }
-      }
-
-      &.active .step-number {
-        background: $primary;
-        color: $white;
-        border-color: $primary;
-      }
-
-      &.completed .step-number {
-        background: $success;
-        color: $white;
-        border-color: $success;
-      }
-
-      .step-name {
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: $body-color;
-
-        &[data-coreui-theme="dark"] {
-          color: $body-color;
-        }
-      }
-    }
-  }
-
-  // Контейнер шагов
-  .step-content {
-    padding: 1rem 0;
-    animation: fadeIn 0.3s ease;
-    flex: 1;
-    overflow-y: auto;
-
-    &::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: $tertiary-bg;
-      border-radius: 3px;
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-900;
-      }
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: $border-color;
-      border-radius: 3px;
-
-      &:hover {
-        background: $secondary-color;
-      }
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-600;
-      }
-    }
-  }
-
-  // Типы экспорта
-  .export-types {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-
-    .export-type {
-      display: flex;
-      align-items: flex-start;
-      gap: 1rem;
-      padding: 1rem;
-      border: 2px solid $border-color;
-      border-radius: $border-radius;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      background: $card-bg;
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-800;
-        border-color: $gray-600;
-      }
-
-      &:hover {
-        border-color: $primary;
-        transform: translateY(-1px);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-
-        &[data-coreui-theme="dark"] {
-          box-shadow: 0 2321px 8px rgba(0, 0, 0, 0.4);
-        }
-      }
-
-      &.selected {
-        border-color: $primary;
-        background: rgba($primary-rgb, 0.05);
-      }
-
-      input[type="radio"] {
-        margin-top: 0.125rem;
-
-        &:checked {
-          background-color: $primary;
-          border-color: $primary;
-        }
-      }
-
-      .content {
-        flex: 1;
-
-        .title {
-          font-weight: 600;
-          margin-bottom: 0.25rem;
-          color: $body-color;
-          font-size: 1rem;
-
-          &[data-coreui-theme="dark"] {
-            color: $body-color;
-          }
-        }
-
-        .description {
-          color: $text-muted;
-          font-size: 0.875rem;
-          margin: 0;
-          line-height: 1.4;
-
-          &[data-coreui-theme="dark"] {
-            color: $gray-400;
-          }
-        }
-      }
-    }
-  }
-
-  // Список статусов
-  .status-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    max-height: 300px;
-    overflow-y: auto;
-    padding: 0.5rem;
-    background: $gray-100;
-    border-radius: $border-radius;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-900;
-    }
-
-    .status-item {
-      display: flex;
-      align-items: center;
-      cursor: pointer;
-      padding: 0.5rem;
-      border-radius: 4px;
-      transition: background 0.2s ease;
-
-      &:hover {
-        background: $tertiary-bg;
-
-        &[data-coreui-theme="dark"] {
-          background: $gray-800;
-        }
-      }
-
-      input[type="checkbox"] {
-        &:checked {
-          background-color: $primary;
-          border-color: $primary;
-        }
-      }
-
-      .badge {
-        color: $white;
-      }
-    }
-  }
-
-  // Поиск по фильтрам
-  .filter-search {
-    input {
-      border: 1px solid $border-color;
-      border-radius: $border-radius;
-      transition: border-color 0.2s ease;
-      background: $input-bg;
-      color: $input-color;
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-800;
-        color: $body-color;
-        border-color: $gray-600;
-      }
-
-      &:focus {
-        border-color: $primary;
-        box-shadow: 0 0 0 0.2rem rgba($primary-rgb, 0.25);
-      }
-    }
-  }
-
-  // Предпросмотр формата CSV
-  .format-preview-csv {
-    padding: 0.75rem;
-    background: $gray-100;
-    border-radius: $border-radius;
-    border: 1px solid $border-color;
-    font-family: $font-monospace;
-    font-size: 0.875rem;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-900;
-      border-color: $gray-600;
-    }
-
-    .csv-columns {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.25rem;
-
-      .csv-column {
-        padding: 0.25rem 0.5rem;
-        background: $primary;
-        color: $white;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 500;
-
-        small {
-          margin-left: 0.25rem;
-          font-weight: 400;
-        }
-      }
-
-      .delimiter {
-        font-weight: bold;
-        color: $danger;
-
-        &[data-coreui-theme="dark"] {
-          color: $danger-emphasis;
-        }
-      }
-    }
-  }
-
-  // Предпросмотр формата TXT
-  .format-preview-txt {
-    padding: 0.75rem;
-    background: $gray-100;
-    border-radius: $border-radius;
-    border: 1px solid $border-color;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-900;
-      border-color: $gray-600;
-    }
-
-    .auto-template,
-    .template-current {
-      .template-auto,
-      .template-display {
-        font-family: $font-monospace;
-        font-size: 0.875rem;
-        padding: 0.5rem;
-        background: $body-bg;
-        border: 1px solid $border-color;
-        border-radius: 4px;
-        margin-top: 0.5rem;
-        color: $body-color;
-
-        &[data-coreui-theme="dark"] {
-          background: $gray-800;
-          color: $body-color;
-          border-color: $gray-600;
-        }
-      }
-    }
-  }
-
-  // Предпросмотр формата JSON и XML
-  .format-preview-json,
-  .format-preview-xml {
-    padding: 0.75rem;
-    background: $gray-100;
-    border-radius: $border-radius;
-    border: 1px solid $border-color;
-    font-family: $font-monospace;
-    font-size: 0.875rem;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-900;
-      border-color: $gray-600;
-    }
-
-    .format-columns {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-
-      .format-column {
-        padding: 0.25rem 0.5rem;
-        background: $primary;
-        color: $white;
-        border-radius: 4px;
-        font-size: 0.75rem;
-        font-weight: 500;
-
-        small {
-          margin-left: 0.25rem;
-          font-weight: 400;
-        }
-      }
-    }
-  }
-
-  // Поля для экспорта
-  .available-fields {
-    border-bottom: 1px solid $border-color;
-    padding-bottom: 1rem;
-
-    .fields-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      max-height: 200px;
-      overflow-y: auto;
-      padding: 0.5rem;
-      background: $gray-100;
-      border-radius: $border-radius;
-      border: 1px solid $border-color;
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-900;
-        border-color: $gray-600;
-      }
-
-      .field-chip {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.5rem 0.75rem;
-        background: $card-bg;
-        border: 1px solid $border-color;
-        border-radius: 16px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        user-select: none;
-
-        &[data-coreui-theme="dark"] {
-          background: $gray-800;
-          border-color: $gray-600;
-        }
-
-        &:hover {
-          border-color: $primary;
-          background: rgba($primary-rgb, 0.05);
-          transform: translateY(-1px);
-        }
-
-        &:active {
-          transform: scale(0.98);
-        }
-
-        .field-name {
-          font-size: 0.875rem;
-          font-weight: 500;
-          color: $body-color;
-
-          &[data-coreui-theme="dark"] {
-            color: $body-color;
-          }
-        }
-
-        .badge {
-          color: $white;
-        }
-      }
-    }
-  }
-
-  // Выбранные поля
-  .selected-fields {
-    .selected-fields-area {
-      min-height: 200px;
-      border: 2px dashed $border-color;
-      border-radius: $border-radius;
-      padding: 1rem;
-      transition: all 0.3s ease;
-
-      &[data-coreui-theme="dark"] {
-        border-color: $gray-600;
-      }
-
-      &:hover, &.drag-over {
-        border-color: $primary;
-        background: rgba($primary-rgb, 0.05);
-      }
-
-      .empty-drop-zone {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        height: 150px;
-        text-align: center;
-        color: $text-muted;
-
-        &[data-coreui-theme="dark"] {
-          color: $gray-400;
-        }
-
-        svg {
-          width: 2rem;
-          height: 2rem;
-        }
-      }
-
-      .selected-fields-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-
-        .selected-field-item {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          padding: 0.75rem;
-          background: $card-bg;
-          border: 1px solid $border-color;
-          border-radius: $border-radius;
-          cursor: move;
-          transition: all 0.2s ease;
-
-          &[data-coreui-theme="dark"] {
-            background: $gray-800;
-            border-color: $gray-600;
-          }
-
-          &:hover {
-            border-color: $primary;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-
-            &[data-coreui-theme="dark"] {
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-            }
-          }
-
-          &.dragging {
-            opacity: 0.5;
-            transform: rotate(2deg);
-          }
-
-          .field-order {
-            width: 24px;
-            height: 24px;
-            background: $primary;
-            color: $white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75rem;
-            font-weight: 600;
-            flex-shrink: 0;
-          }
-
-          .field-content {
-            flex: 1;
-
-            .field-label {
-              font-weight: 600;
-              color: $body-color;
-
-              &[data-coreui-theme="dark"] {
-                color: $body-color;
-              }
-            }
-
-            .text-muted {
-              font-size: 0.75rem;
-
-              &[data-coreui-theme="dark"] {
-                color: $gray-400;
-              }
-            }
-          }
-
-          .field-actions {
-            display: flex;
-            gap: 0.25rem;
-
-            .btn {
-              color: $body-color;
-
-              &[data-coreui-theme="dark"] {
-                color: $body-color;
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // Прогресс экспорта
-  .export-progress {
-    position: fixed;
-    bottom: 1.5rem;
-    right: 1.5rem;
-    width: 320px;
-    padding: 1.5rem;
-    background: $card-bg;
-    border-radius: 0.5rem;
-    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.175);
-    border: 1px solid $border-color;
-    z-index: 1050;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-800;
-      border-color: $gray-600;
-    }
-
-    .progress-title {
-      font-weight: 600;
-      color: $emphasis-color;
-      margin-bottom: 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-
-      svg {
-        width: 1rem;
-        height: 1rem;
-        color: $primary;
-      }
-
-      &[data-coreui-theme="dark"] {
-        color: $body-color;
-      }
-    }
-
-    .progress {
-      height: 8px;
-      background: $border-color;
-      border-radius: 4px;
-      overflow: hidden;
-      margin-bottom: 0.5rem;
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-600;
-      }
-
-      .progress-bar {
-        background: linear-gradient(90deg, $primary 0%, $primary-emphasis 100%);
-        transition: width 0.3s ease;
-      }
-    }
-
-    .progress-text {
-      font-size: 0.875rem;
-      color: $secondary-color;
-
-      &[data-coreui-theme="dark"] {
-        color: $gray-400;
-      }
-    }
-  }
-
-  // Информация о предпросмотре
-  .info-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-
-    .info-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.75rem;
-      background: $gray-100;
-      border-radius: $border-radius;
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-900;
-        border-color: $gray-600;
-      }
-
-      .label {
-        font-weight: 500;
-        color: $text-muted;
-
-        &[data-coreui-theme="dark"] {
-          color: $gray-400;
-        }
-      }
-
-      .value {
-        font-weight: 600;
-        color: $body-color;
-
-        &[data-coreui-theme="dark"] {
-          color: $body-color;
-        }
-      }
-    }
-  }
-
-  // Ввод шаблона
-  .template-input {
-    font-family: $font-monospace;
-    background: $input-bg;
-    border: 2px dashed $border-color;
-    border-radius: $border-radius;
-    transition: all 0.3s ease;
-    font-size: 0.875rem;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-800;
-      border-color: $gray-600;
-      color: $body-color;
-    }
-
-    &:focus {
-      border-color: $primary;
-      border-style: solid;
-      box-shadow: 0 0 0 0.2rem rgba($primary-rgb, 0.25);
-    }
-  }
-
-  // Предпросмотр
-  .preview-box {
-    background: $gray-100;
-    border: 1px solid $border-color;
-    border-radius: $border-radius;
-    padding: 1rem;
-    font-family: $font-monospace;
-    font-size: 0.875rem;
-    max-height: 300px;
-    overflow-y: auto;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-900;
-      border-color: $gray-600;
-      color: $body-color;
-    }
-
-    pre {
-      margin: 0;
-      white-space: pre-wrap;
-      color: $body-color;
-
-      &[data-coreui-theme="dark"] {
-        color: $body-color;
-      }
-    }
-  }
-
-  // Таблица предпросмотра
-  .table-dark-compatible {
-    color: $body-color;
-
-    &[data-coreui-theme="dark"] {
-      color: $body-color;
-    }
-
-    th {
-      background: $gray-100;
-      color: $body-color;
-      border-bottom: 2px solid $border-color;
-      position: sticky;
-      top: 0;
-      z-index: 1;
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-900;
-        color: $body-color;
-        border-color: $gray-600;
-      }
-    }
-
-    td {
-      font-size: 0.875rem;
-      font-family: $font-monospace;
-      max-width: 150px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      border-bottom: 1px solid $border-color;
-
-      &[data-coreui-theme="dark"] {
-        color: $body-color;
-        border-color: $gray-600;
-      }
-    }
-
-    tbody tr {
-      transition: background-color 0.2s ease;
-
-      &:hover {
-        background: $tertiary-bg;
-
-        &[data-coreui-theme="dark"] {
-          background: $gray-800;
-        }
-      }
-    }
-  }
-
-  // Карточки
   .card {
-    border: 1px solid $border-color;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: box-shadow 0.2s ease;
-    background: $card-bg;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-800;
-      border-color: $gray-600;
-    }
+    border: 1px solid var(--cui-border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition: all 0.2s ease;
 
     &:hover {
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-
-      &[data-coreui-theme="dark"] {
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-      }
-    }
-
-    .card-header {
-      background: $gray-100;
-      color: $body-color;
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-900;
-        color: $body-color;
-      }
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
     }
 
     .card-body {
       padding: 1.5rem;
+    }
 
-      h6 {
-        color: $body-color;
-        margin-bottom: 1rem;
-        font-weight: 600;
+    h6 {
+      color: var(--cui-emphasis-color);
+      margin-bottom: 1rem;
+      font-weight: 600;
+    }
+  }
 
-        &[data-coreui-theme="dark"] {
-          color: $body-color;
-        }
+  // Сетка полей для выбора
+  .field-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    max-height: 300px; // Ограничиваем высоту
+    overflow-y: auto;
+    padding-right: 0.5rem;
+
+    // Красивый скролл только здесь, где нужно
+    &::-webkit-scrollbar {
+      width: 4px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: rgba(var(--cui-primary-rgb), 0.3);
+      border-radius: 2px;
+      
+      &:hover {
+        background: rgba(var(--cui-primary-rgb), 0.5);
       }
+    }
+  }
+
+  .field-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border: 2px solid var(--cui-border-color);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--cui-body-bg);
+
+    &:hover {
+      border-color: var(--cui-primary);
+      background: rgba(var(--cui-primary-rgb), 0.05);
+      transform: translateY(-1px);
+    }
+
+    &.selected {
+      border-color: var(--cui-success);
+      background: rgba(var(--cui-success-rgb), 0.1);
+
+      .field-checkbox {
+        background: var(--cui-success);
+        color: white;
+      }
+    }
+
+    &.required {
+      border-color: var(--cui-warning);
+      background: rgba(var(--cui-warning-rgb), 0.05);
+
+      &.selected {
+        border-color: var(--cui-success);
+        background: rgba(var(--cui-success-rgb), 0.1);
+      }
+    }
+
+    .field-checkbox {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--cui-border-color);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--cui-body-bg);
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .field-info {
+      flex: 1;
+      min-width: 0;
+
+      .field-label {
+        font-weight: 500;
+        color: var(--cui-body-color);
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+      }
+    }
+  }
+
+  // Группа кнопок форматов
+  .btn-group {
+    .btn {
+      flex: 1;
+      font-size: 0.875rem;
+      font-weight: 500;
+      padding: 0.75rem 1rem;
+      border-radius: 6px !important;
+      transition: all 0.2s ease;
+
+      &:first-child {
+        border-top-right-radius: 0 !important;
+        border-bottom-right-radius: 0 !important;
+      }
+
+      &:last-child {
+        border-top-left-radius: 0 !important;
+        border-bottom-left-radius: 0 !important;
+      }
+
+      &:not(:first-child):not(:last-child) {
+        border-radius: 0 !important;
+      }
+
+      &.btn-primary {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(var(--cui-primary-rgb), 0.3);
+      }
+    }
+  }
+
+  // Состояние загрузки
+  .export-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 400px;
+    padding: 2rem;
+
+    .progress {
+      max-width: 300px;
+      height: 8px;
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--cui-secondary-bg);
+
+      .progress-bar {
+        background: linear-gradient(90deg, var(--cui-primary) 0%, var(--cui-primary-emphasis) 100%);
+        transition: width 0.3s ease;
+      }
+    }
+  }
+
+  // Информационный блок
+  .alert {
+    border: none;
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    
+    &.alert-info {
+      background: linear-gradient(135deg, rgba(var(--cui-info-rgb), 0.1) 0%, rgba(var(--cui-info-rgb), 0.05) 100%);
+      border-left: 4px solid var(--cui-info);
     }
   }
 
   // Элементы формы
+  .form-label {
+    font-weight: 600;
+    color: var(--cui-body-color);
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
+  }
+
   .form-control,
   .form-select {
-    background: $input-bg;
-    border: 1px solid $border-color;
-    color: $input-color;
-    border-radius: $border-radius;
-
-    &[data-coreui-theme="dark"] {
-      background: $gray-800;
-      border-color: $gray-600;
-      color: $body-color;
-    }
+    border-radius: 6px;
+    border: 1px solid var(--cui-border-color);
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
 
     &:focus {
-      background: $input-bg;
-      border-color: $primary;
-      color: $input-color;
-      box-shadow: 0 0 0 0.2rem rgba($primary-rgb, 0.25);
-
-      &[data-coreui-theme="dark"] {
-        background: $gray-800;
-        color: $body-color;
-      }
+      border-color: var(--cui-primary);
+      box-shadow: 0 0 0 3px rgba(var(--cui-primary-rgb), 0.1);
     }
   }
 
-  // Действия футера
-  .export-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 1.5rem 0;
-    margin-top: auto;
-    border-top: 1px solid $border-color;
-    gap: 1rem;
+  .form-check {
+    margin-bottom: 0.5rem;
 
-    &[data-coreui-theme="dark"] {
-      border-color: $gray-600;
-    }
-
-    .text-muted {
-      font-size: 0.875rem;
-
-      &[data-coreui-theme="dark"] {
-        color: $gray-400;
+    .form-check-input {
+      &:checked {
+        background-color: var(--cui-primary);
+        border-color: var(--cui-primary);
       }
     }
 
-    .btn {
-      min-width: 100px;
+    .form-check-label {
       font-weight: 500;
-      padding: 0.5rem 1.5rem;
-      border-radius: 0.375rem;
+      cursor: pointer;
       font-size: 0.875rem;
-      transition: all 0.2s ease;
-
-      svg {
-        width: 0.875rem;
-        height: 0.875rem;
-      }
-
-      &.btn-primary {
-        background: $primary;
-        border-color: $primary;
-        color: $white;
-
-        &:hover:not(:disabled) {
-          background: $primary-emphasis;
-          transform: translateY(-2px);
-        }
-      }
-
-      &.btn-success {
-        background: $success;
-        border-color: $success;
-        color: $white;
-
-        &:hover:not(:disabled) {
-          background: $success-emphasis;
-          transform: translateY(-2px);
-        }
-      }
-
-      &.btn-light {
-        background: $light;
-        border-color: $border-color;
-        color: $body-color;
-
-        &[data-coreui-theme="dark"] {
-          background: $gray-800;
-          border-color: $gray-600;
-          color: $body-color;
-        }
-
-        &:hover:not(:disabled) {
-          background: $light-emphasis;
-          transform: translateY(-2px);
-
-          &[data-coreui-theme="dark"] {
-            background: $gray-700;
-          }
-        }
-      }
-
-      &:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-        transform: none !important;
-      }
     }
   }
 
-  // Анимации
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
+  .input-group {
+    .input-group-text {
+      background: var(--cui-secondary-bg);
+      border-color: var(--cui-border-color);
+      font-size: 0.875rem;
+      font-weight: 500;
     }
   }
 
   // Адаптивность
-  @media (max-width: 768px) {
-    .progress-steps {
-      gap: 1rem;
-
-      .step-number {
-        width: 28px;
-        height: 28px;
-        font-size: 0.75rem;
-      }
-
-      .step-name {
-        font-size: 0.75rem;
-      }
+  @media (max-width: 991px) {
+    .field-grid {
+      max-height: 200px;
     }
 
-    .fields-grid {
-      max-height: 150px;
-    }
-
-    .selected-fields-area {
-      min-height: 150px;
-    }
-
-    .field-chip {
-      font-size: 0.75rem;
-      padding: 0.25rem 0.5rem;
-    }
-
-    .export-actions {
+    .btn-group {
       flex-direction: column;
+      width: 100%;
 
       .btn {
-        width: 100%;
+        border-radius: 6px !important;
+        margin-bottom: 0.5rem;
+
+        &:last-child {
+          margin-bottom: 0;
+        }
       }
     }
   }
 
-  // Стили для темной темы
-  &[data-coreui-theme="dark"] {
-    .fields-grid::-webkit-scrollbar,
-    .status-list::-webkit-scrollbar,
-    .table-responsive::-webkit-scrollbar,
-    .preview-box::-webkit-scrollbar {
-      width: 6px;
+  @media (max-width: 575px) {
+    padding: 1rem;
+
+    .card .card-body {
+      padding: 1rem;
     }
 
-    .fields-grid::-webkit-scrollbar-track,
-    .status-list::-webkit-scrollbar-track,
-    .table-responsive::-webkit-scrollbar-track,
-    .preview-box::-webkit-scrollbar-track {
-      background: $gray-900;
+    .field-item {
+      padding: 0.5rem;
     }
 
-    .fields-grid::-webkit-scrollbar-thumb,
-    .status-list::-webkit-scrollbar-thumb,
-    .table-responsive::-webkit-scrollbar-thumb,
-    .preview-box::-webkit-scrollbar-thumb {
-      background: $gray-600;
-      border-radius: 3px;
-    }
-  }
-
-  // Стили для состояния загрузки
-  .modal-loading {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 300px;
-
-    .spinner-border {
-      width: 3rem;
-      height: 3rem;
-      border-width: 0.3rem;
-    }
-
-    .loading-text {
-      margin-top: 1rem;
-      font-size: 1.125rem;
-      color: $secondary-color;
-
-      &[data-coreui-theme="dark"] {
-        color: $gray-400;
-      }
+    .export-loading {
+      height: 300px;
+      padding: 1rem;
     }
   }
 }

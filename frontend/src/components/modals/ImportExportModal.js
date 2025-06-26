@@ -4,9 +4,6 @@ import {
   CModalHeader,
   CModalTitle,
   CModalBody,
-  CModalFooter,
-  CButton,
-  CSpinner,
   CAlert,
   CNav,
   CNavItem,
@@ -19,7 +16,6 @@ import CIcon from '@coreui/icons-react'
 import {
   cilCloudUpload,
   cilCloudDownload,
-  cilX,
   cilCheck,
 } from '@coreui/icons'
 import ImportPanel from './panels/ImportPanel'
@@ -42,17 +38,14 @@ class ErrorBoundary extends React.Component {
     if (this.state.hasError) {
       return (
         <CAlert color="danger" className="modal-error m-3">
-          <div className="error-icon"></div>
           <div className="error-title">Произошла ошибка</div>
           <div className="error-message">{this.state.error?.message || 'Неизвестная ошибка'}</div>
-          <div className="error-actions">
-            <CButton
-              color="link"
-              onClick={() => this.setState({ hasError: false, error: null })}
-            >
-              Попробовать снова
-            </CButton>
-          </div>
+          <button
+            className="btn btn-link"
+            onClick={() => this.setState({ hasError: false, error: null })}
+          >
+            Попробовать снова
+          </button>
         </CAlert>
       )
     }
@@ -71,7 +64,7 @@ const ImportExportModal = ({
   title,
   size = 'xl',
 }) => {
-  const [activeTab, setActiveTab] = useState('import')
+  const [activeTab, setActiveTab] = useState('export') // Начинаем с экспорта
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState(null)
   const [successMessage, setSuccessMessage] = useState(null)
@@ -83,7 +76,7 @@ const ImportExportModal = ({
     } else if (mode === 'export') {
       setActiveTab('export')
     } else {
-      setActiveTab('import') // default для 'both'
+      setActiveTab('export') // default для 'both' - начинаем с экспорта
     }
   }, [mode])
 
@@ -126,10 +119,10 @@ const ImportExportModal = ({
       onSuccess(result)
     }
 
-    // Автоматически закрываем через 2 секунды
+    // Автоматически закрываем через 3 секунды
     setTimeout(() => {
       handleClose()
-    }, 2000)
+    }, 3000)
   }
 
   const handleError = (error) => {
@@ -168,81 +161,68 @@ const ImportExportModal = ({
       onClose={handleClose}
       size={size}
       backdrop="static"
-      scrollable
-      className={`import-export-modal ${isLoading ? 'loading' : ''}`}
+      className="export-modal"
     >
-      <CModalHeader>
+      <CModalHeader closeButton>
         <CModalTitle className="modal-title">
           <CIcon
             icon={activeTab === 'import' ? cilCloudUpload : cilCloudDownload}
-            className="me-2"
-            size="lg"
           />
           {getModalTitle()}
-          {selectedIds.length > 0 && (
-            <CBadge color="primary" className="ms-2">
-              {selectedIds.length} выбрано
+          {successMessage && (
+            <CBadge color="success" className="ms-2">
+              <CIcon icon={cilCheck} size="sm" className="me-1" />
+              Готово
             </CBadge>
           )}
         </CModalTitle>
       </CModalHeader>
 
       <CModalBody>
-        {/* Success Message */}
-        {successMessage && (
-          <CAlert color="success" className="modal-success m-3">
-            <div className="success-icon">
-              <CIcon icon={cilCheck} />
-            </div>
-            <div className="success-title">Успех</div>
-            <div className="success-message">{successMessage}</div>
-          </CAlert>
-        )}
-
-        {/* Error Message */}
+        {/* Сообщения об ошибках и успехе */}
         {error && (
-          <CAlert color="danger" className="modal-error m-3">
-            <div className="error-icon"></div>
-            <div className="error-title">Ошибка</div>
-            <div className="error-message">{error}</div>
+          <CAlert color="danger" dismissible onClose={() => setError(null)}>
+            {error}
           </CAlert>
         )}
 
-        {/* Tabs for both modes */}
-        {mode === 'both' && (
-          <div className="border-bottom">
-            <CNav variant="tabs" className="nav-tabs px-3">
-              {showImportTab && (
-                <CNavItem>
-                  <CNavLink
-                    active={activeTab === 'import'}
-                    onClick={() => setActiveTab('import')}
-                    disabled={isLoading}
-                    className="nav-link"
-                  >
-                    <CIcon icon={cilCloudUpload} className="me-2" />
-                    Импорт
-                  </CNavLink>
-                </CNavItem>
-              )}
-              {showExportTab && (
-                <CNavItem>
-                  <CNavLink
-                    active={activeTab === 'export'}
-                    onClick={() => setActiveTab('export')}
-                    disabled={isLoading}
-                    className="nav-link"
-                  >
-                    <CIcon icon={cilCloudDownload} className="me-2" />
-                    Экспорт
-                  </CNavLink>
-                </CNavItem>
-              )}
-            </CNav>
-          </div>
+        {successMessage && (
+          <CAlert color="success" dismissible onClose={() => setSuccessMessage(null)}>
+            {successMessage}
+          </CAlert>
         )}
 
-        {/* Tab Content */}
+        {/* Табы - только если нужны оба режима */}
+        {mode === 'both' && (
+          <CNav variant="tabs" className="mb-0">
+            {showExportTab && (
+              <CNavItem>
+                <CNavLink
+                  active={activeTab === 'export'}
+                  onClick={() => setActiveTab('export')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <CIcon icon={cilCloudDownload} className="me-2" />
+                  Экспорт
+                </CNavLink>
+              </CNavItem>
+            )}
+            {showImportTab && (
+              <CNavItem>
+                <CNavLink
+                  active={activeTab === 'import'}
+                  onClick={() => setActiveTab('import')}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <CIcon icon={cilCloudUpload} className="me-2" />
+                  Импорт
+                </CNavLink>
+              </CNavItem>
+            )}
+          </CNav>
+        )}
+
+        {/* Контент табов */}
         <CTabContent>
           {showImportTab && (
             <CTabPane
@@ -280,25 +260,7 @@ const ImportExportModal = ({
         </CTabContent>
       </CModalBody>
 
-      <CModalFooter className="modal-footer">
-        <div className="d-flex justify-content-end gap-2">
-          <CButton
-            color="secondary"
-            onClick={handleClose}
-            disabled={isLoading}
-            className="btn-secondary"
-          >
-            {isLoading ? (
-              <>
-                <CSpinner size="sm" className="spinner-border me-2" />
-                Отменить
-              </>
-            ) : (
-              'Закрыть'
-            )}
-          </CButton>
-        </div>
-      </CModalFooter>
+      {/* Убираем CModalFooter полностью - только крестик для закрытия */}
     </CModal>
   )
 }

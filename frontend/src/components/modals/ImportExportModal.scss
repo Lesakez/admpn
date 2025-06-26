@@ -1,16 +1,30 @@
+// frontend/src/components/modals/ImportExportModal.scss
+@use "@coreui/coreui/scss/variables" as *;
 
-@import '@coreui/coreui/scss/functions';
-@import '@coreui/coreui/scss/variables';
-@import '@coreui/coreui/scss/mixins';
-@import './panels/ImportPanel.scss';
-@import './panels/ExportPanel.scss';
+// Миксин для красивого скролла
+@mixin custom-scrollbar($color: var(--cui-primary)) {
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(#{$color}-rgb, 0.3);
+    border-radius: 3px;
+    transition: background 0.2s ease;
+    
+    &:hover {
+      background: rgba(#{$color}-rgb, 0.5);
+    }
+  }
+}
 
-// Общие стили для модального окна
 .export-modal {
   .modal-dialog {
     max-width: 1200px;
-    margin: var(--cui-modal-margin) auto;
-    transition: var(--cui-modal-transition);
 
     @media (max-width: 768px) {
       max-width: 100%;
@@ -18,247 +32,142 @@
     }
   }
 
-  // Улучшенный backdrop с размытием
   .modal-backdrop {
-    background-color: rgba(var(--cui-dark-rgb), var(--cui-modal-backdrop-opacity));
-    backdrop-filter: blur(var(--cui-modal-backdrop-blur));
-    -webkit-backdrop-filter: blur(var(--cui-modal-backdrop-blur));
-    transition: opacity var(--cui-modal-transition);
-
-    &.show {
-      animation: modalBackdropFadeIn 0.3s ease;
-    }
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
   }
 
-  // Контент модального окна
   .modal-content {
     border: none;
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
-    background-color: var(--cui-modal-bg);
-    border-radius: var(--cui-modal-border-radius);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border-radius: 16px;
     overflow: hidden;
-    position: relative;
-
-    // Градиентная граница
-    &::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      padding: 1px;
-      background: linear-gradient(
-        135deg,
-        rgba(var(--cui-primary-rgb), 0.2) 0%,
-        transparent 50%,
-        rgba(var(--cui-primary-rgb), 0.2) 100%
-      );
-      border-radius: inherit;
-      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-      mask-composite: xor;
-      -webkit-mask-composite: xor;
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-
-    &:hover::before {
-      opacity: 1;
-    }
-
-    .modal.show & {
-      transform: none;
-      animation: modalContentSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .modal:not(.show) & {
-      transform: var(--cui-modal-scale-transform);
-    }
   }
 
-  // Заголовок модального окна
   .modal-header {
-    padding: var(--cui-modal-padding);
-    border-bottom: $modal-header-border-width solid $modal-header-border-color;
-    background: var(--cui-modal-header-bg);
-    position: relative;
-
-    // Декоративная линия
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: $modal-header-padding-x;
-      right: $modal-header-padding-x;
-      height: 1px;
-      background: linear-gradient(
-        90deg,
-        transparent 0%,
-        var(--cui-primary) 50%,
-        transparent 100%
-      );
-      opacity: 0.5;
-    }
+    background: linear-gradient(135deg, var(--cui-primary) 0%, var(--cui-primary-emphasis) 100%);
+    color: white;
+    padding: 1.5rem;
+    border: none;
 
     .modal-title {
-      font-weight: $font-weight-semibold;
-      color: var(--cui-emphasis-color);
-      font-size: $h5-font-size;
+      font-weight: 700;
       display: flex;
       align-items: center;
-      gap: $spacer * 0.5;
+      gap: 0.75rem;
       margin: 0;
-      line-height: $headings-line-height;
 
       svg {
-        color: var(--cui-primary);
-        filter: drop-shadow(0 1px 2px rgba(var(--cui-primary-rgb), 0.2));
-        transition: transform 0.2s ease;
-        width: 1.5rem;
-        height: 1.5rem;
-      }
-
-      &:hover svg {
-        transform: scale(1.05);
-      }
-
-      .badge {
-        font-size: 0.75rem;
-        padding: 0.25rem 0.5rem;
-        font-weight: 500;
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
       }
     }
 
     .btn-close {
-      background: transparent;
-      border: 1px solid var(--cui-border-color);
+      filter: invert(1) grayscale(100%) brightness(200%);
+      opacity: 0.8;
       border-radius: 50%;
-      width: 2rem;
-      height: 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.3s ease;
-      opacity: $btn-close-opacity;
-
-      &:focus {
-        outline: 0;
-        box-shadow: 0 0 0 $focus-ring-width rgba(var(--cui-primary), 0.25);
-      }
+      transition: all 0.2s ease;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      width: 2.5rem;
+      height: 2.5rem;
 
       &:hover {
         opacity: 1;
-        transform: scale(1.1) rotate(90deg);
-        background: var(--cui-danger);
-        border-color: var(--cui-danger);
-        color: var(--cui-contrast-color);
-      }
-
-      &:active {
-        transform: scale(0.95);
+        transform: rotate(90deg) scale(1.1);
+        background: rgba(255, 255, 255, 0.2);
       }
     }
   }
 
-  // Тело модального окна
   .modal-body {
-    padding: $modal-inner-padding;
-    background: var(--cui-body-bg);
-    position: relative;
-
-    &::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    &::-webkit-scrollbar-track {
-      background: var(--cui-tertiary-bg);
-      border-radius: 3px;
-    }
-
-    &::-webkit-scrollbar-thumb {
-      background: var(--cui-border-color);
-      border-radius: 3px;
-
-      &:hover {
-        background: var(--cui-secondary-color);
-      }
-    }
-
-    &.scrollable {
-      &::before,
-      &::after {
-        content: '';
-        position: absolute;
-        left: 0;
-        right: 0;
-        height: 1px;
-        background: linear-gradient(
-          90deg,
-          transparent 0%,
-          var(--cui-primary) 50%,
-          transparent 100%
-        );
-        opacity: 0;
-        transition: opacity 0.3s ease;
-      }
-
-      &::before {
-        top: 0;
-      }
-
-      &::after {
-        bottom: 0;
-      }
-
-      &.scroll-top::before,
-      &.scroll-bottom::after {
-        opacity: 0.5;
-      }
-    }
-  }
-
-  // Футер модального окна
-  .modal-footer {
-    padding: $modal-inner-padding;
-    border-top: $modal-footer-border-width solid $modal-footer-border-color;
-    background: var(--cui-modal-footer-bg);
+    padding: 0;
+    height: 70vh; // Фиксированная высота без скроллов
+    overflow: hidden;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: $btn-toolbar-gap;
+    flex-direction: column;
 
-    .text-muted {
-      font-size: 0.875rem;
-      color: var(--cui-secondary-color);
+    // Табы
+    .nav-tabs {
+      background: var(--cui-tertiary-bg);
+      border-bottom: 1px solid var(--cui-border-color);
+      padding: 0 1.5rem;
+      flex-shrink: 0;
+      margin: 0;
+
+      .nav-link {
+        border: none;
+        background: transparent;
+        color: var(--cui-secondary-color);
+        font-weight: 600;
+        padding: 1rem 1.5rem;
+        transition: all 0.2s ease;
+        border-radius: 0;
+
+        &:hover {
+          color: var(--cui-primary);
+          background: rgba(var(--cui-primary-rgb), 0.05);
+        }
+
+        &.active {
+          color: var(--cui-primary);
+          background: var(--cui-body-bg);
+          border-bottom: 3px solid var(--cui-primary);
+          margin-bottom: -1px;
+        }
+      }
     }
 
-    .btn {
-      min-width: 100px;
-      font-weight: $font-weight-medium;
-      transition: all 0.3s ease;
-      position: relative;
+    // Контент табов
+    .tab-content {
+      flex: 1;
       overflow: hidden;
 
-      &::before {
-        content: '';
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 0;
-        height: 0;
-        background: rgba(255, 255, 255, 0.3);
-        border-radius: 50%;
-        transform: translate(-50%, -50%);
-        transition: width 0.3s ease, height 0.3s ease;
-      }
+      .tab-pane {
+        height: 100%;
+        overflow: hidden;
 
-      &:active::before {
-        width: 200%;
-        height: 200%;
+        &.active {
+          display: flex !important;
+          flex-direction: column;
+        }
       }
+    }
+  }
+
+  // Убираем футер полностью - кнопка закрытия только крестик
+  .modal-footer {
+    display: none;
+  }
+}100%;
+        overflow: hidden;
+
+        &.active {
+          display: flex !important;
+          flex-direction: column;
+        }
+      }
+    }
+
+    // Применяем красивый скролл ко всем нужным элементам
+    .export-panel,
+    .import-panel {
+      @include custom-scrollbar();
+    }
+  }
+
+  .modal-footer {
+    background: var(--cui-tertiary-bg);
+    border-top: 1px solid var(--cui-border-color);
+    padding: 1.5rem;
+
+    .btn {
+      min-width: 120px;
+      font-weight: 600;
+      transition: all 0.2s ease;
 
       &:hover:not(:disabled) {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        transform: translateY(-2px);
       }
 
       &:disabled {
@@ -266,148 +175,21 @@
         cursor: not-allowed;
         transform: none !important;
       }
-
-      svg {
-        width: 0.875rem;
-        height: 0.875rem;
-      }
     }
-  }
-
-  // Стили для панелей импорта/экспорта
-  .export-panel,
-  .import-panel {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-  }
-}
-
-// Анимации
-@keyframes modalBackdropFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: var(--cui-modal-backdrop-opacity);
-  }
-}
-
-@keyframes modalContentSlideIn {
-  from {
-    opacity: 0;
-    transform: scale(0.95) translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
   }
 }
 
 // Адаптивность
-@media (max-width: 991.98px) {
+@media (max-width: 768px) {
   .export-modal {
-    .modal-dialog {
-      max-width: 100%;
-      margin: $modal-dialog-margin-y-sm-up;
-    }
-
-    .modal-content {
-      border-radius: 0;
-      height: 100vh;
+    .modal-body {
+      height: 80vh;
     }
 
     .modal-footer {
-      flex-direction: column;
-
       .btn {
         width: 100%;
-        margin: 0;
       }
-    }
-  }
-}
-
-// Темная тема
-@media (prefers-color-scheme: dark) {
-  .export-modal {
-    .modal-content {
-      background: var(--cui-dark);
-      border-color: var(--cui-border-color-translucent);
-    }
-
-    .modal-header {
-      background: var(--cui-darker);
-      border-bottom-color: var(--cui-border-color-translucent);
-    }
-
-    .modal-body {
-      background: var(--cui-dark);
-    }
-
-    .modal-footer {
-      background: var(--cui-darker);
-      border-top-color: var(--cui-border-color-translucent);
-    }
-
-    .btn-close {
-      background: var(--cui-darker);
-      border-color: var(--cui-border-color-translucent);
-      color: var(--cui-body-color);
-
-      &:hover {
-        background: var(--cui-danger);
-        border-color: var(--cui-danger);
-        color: var(--cui-contrast-color);
-      }
-    }
-  }
-}
-
-// Уменьшенная анимация для доступности
-@media (prefers-reduced-motion: reduce) {
-  .export-modal {
-    .modal-dialog {
-      transition: none;
-    }
-
-    .modal-backdrop {
-      transition: none;
-    }
-
-    .modal-content {
-      animation: none !important;
-
-      &::before {
-        transition: none;
-      }
-    }
-
-    .btn {
-      transition: none !important;
-
-      &::before {
-        transition: none;
-      }
-    }
-  }
-}
-
-// Высокий контраст
-@media (prefers-contrast: high) {
-  .export-modal {
-    .modal-content {
-      border-width: 2px;
-      border-color: var(--cui-emphasis-color);
-    }
-
-    .modal-header,
-    .modal-footer {
-      border-color: var(--cui-emphasis-color);
-    }
-
-    .btn-close {
-      border-width: 2px;
     }
   }
 }
