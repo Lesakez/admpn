@@ -8,6 +8,7 @@
  * - Современный дизайн с анимациями CoreUI
  * - Адаптивность с Bootstrap Grid System
  * - Поддержка темной темы CoreUI
+ * - Улучшенная доступность и UX
  */
 
 // Импорт переменных CoreUI
@@ -15,401 +16,591 @@
 @import '~@coreui/coreui/scss/variables';
 @import '~@coreui/coreui/scss/mixins';
 
+// ===== ПЕРЕМЕННЫЕ ДЛЯ МОДАЛЬНЫХ ОКОН =====
+:root {
+  // Z-индексы
+  --cui-modal-backdrop-z: #{$zindex-modal-backdrop};
+  --cui-modal-z: #{$zindex-modal};
+  
+  // Размеры и отступы
+  --cui-modal-padding: #{$modal-header-padding-y} #{$modal-header-padding-x};
+  --cui-modal-margin: #{$modal-dialog-margin};
+  --cui-modal-border-radius: #{$modal-border-radius};
+  
+  // Тени и эффекты
+  --cui-modal-box-shadow: #{$modal-content-box-shadow-xs};
+  --cui-modal-backdrop-opacity: #{$modal-backdrop-opacity};
+  --cui-modal-backdrop-blur: 8px;
+  
+  // Анимации
+  --cui-modal-transition: #{$modal-transition};
+  --cui-modal-scale-transform: #{$modal-scale-transform};
+  
+  // Цвета
+  --cui-modal-bg: #{$modal-content-bg};
+  --cui-modal-border-color: #{$modal-content-border-color};
+  --cui-modal-header-bg: var(--cui-tertiary-bg);
+  --cui-modal-footer-bg: var(--cui-tertiary-bg);
+}
+
+// ===== МИКСИНЫ ДЛЯ МОДАЛОК =====
+@mixin modal-backdrop-blur {
+  backdrop-filter: blur(var(--cui-modal-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--cui-modal-backdrop-blur));
+}
+
+@mixin modal-focus-ring($color: var(--cui-primary)) {
+  &:focus {
+    outline: 0;
+    box-shadow: 0 0 0 $focus-ring-width rgba(#{$color}, 0.25);
+  }
+}
+
+@mixin modal-gradient-header($from: var(--cui-primary), $to: var(--cui-primary-emphasis)) {
+  background: linear-gradient(135deg, #{$from} 0%, #{$to} 100%);
+}
+
+@mixin modal-glass-effect($opacity: 0.95) {
+  backdrop-filter: blur(20px) saturate(1.2);
+  background: rgba(var(--cui-body-bg-rgb), #{$opacity});
+  border: 1px solid rgba(var(--cui-border-color-rgb), 0.2);
+}
+
 // ===== БАЗОВЫЕ СТИЛИ МОДАЛОК =====
 .modal {
-  // Улучшенный backdrop с CoreUI переменными
-  .modal-backdrop {
-    background-color: var(--cui-modal-backdrop-bg);
-    opacity: var(--cui-modal-backdrop-opacity);
-    backdrop-filter: blur(2px);
+  // Контейнер модалки
+  .modal-dialog {
+    transition: var(--cui-modal-transition);
+    margin: var(--cui-modal-margin) auto;
   }
 
-  // Контейнер модалки
+  // Улучшенный backdrop с размытием
+  .modal-backdrop {
+    background-color: rgba(var(--cui-dark-rgb), var(--cui-modal-backdrop-opacity));
+    @include modal-backdrop-blur;
+    transition: opacity var(--cui-modal-transition);
+    
+    &.show {
+      animation: modalBackdropFadeIn 0.3s ease;
+    }
+  }
+
+  // Контент модалки
   .modal-content {
-    border: var(--cui-modal-border-width) solid var(--cui-modal-border-color);
+    border: $modal-content-border-width solid var(--cui-modal-border-color);
     border-radius: var(--cui-modal-border-radius);
     box-shadow: var(--cui-modal-box-shadow);
     background-color: var(--cui-modal-bg);
-    transition: transform 0.3s ease-out;
+    overflow: hidden;
+    position: relative;
+    
+    // Современная граница с градиентом
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      background: linear-gradient(135deg, 
+        rgba(var(--cui-primary-rgb), 0.2) 0%,
+        transparent 50%,
+        rgba(var(--cui-primary-rgb), 0.2) 100%);
+      border-radius: inherit;
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask-composite: xor;
+      -webkit-mask-composite: xor;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    &:hover::before {
+      opacity: 1;
+    }
 
     // Анимация появления
     .modal.show & {
       transform: none;
+      animation: modalContentSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
 
-    // Анимация исчезновения  
+    // Анимация исчезновения
     .modal:not(.show) & {
-      transform: scale(0.95);
+      transform: var(--cui-modal-scale-transform);
     }
   }
 
   // Заголовок модалки
   .modal-header {
-    padding: var(--cui-modal-header-padding);
-    border-bottom: var(--cui-modal-header-border-width) solid var(--cui-modal-header-border-color);
-    background: linear-gradient(135deg, 
-      var(--cui-body-bg) 0%, 
-      var(--cui-tertiary-bg) 100%);
+    padding: var(--cui-modal-padding);
+    border-bottom: $modal-header-border-width solid $modal-header-border-color;
+    background: var(--cui-modal-header-bg);
+    position: relative;
+
+    // Декоративная линия
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: $modal-header-padding-x;
+      right: $modal-header-padding-x;
+      height: 1px;
+      background: linear-gradient(90deg, 
+        transparent 0%, 
+        var(--cui-primary) 50%, 
+        transparent 100%);
+      opacity: 0.5;
+    }
 
     .modal-title {
-      font-weight: var(--cui-font-weight-semibold);
+      font-weight: $font-weight-semibold;
       color: var(--cui-emphasis-color);
-      font-size: var(--cui-h5-font-size);
+      font-size: $h5-font-size;
       display: flex;
       align-items: center;
-      gap: var(--cui-spacer-2);
+      gap: $spacer * 0.5;
+      margin: 0;
+      line-height: $headings-line-height;
+
+      // Иконки в заголовке
+      svg, i {
+        color: var(--cui-primary);
+        filter: drop-shadow(0 1px 2px rgba(var(--cui-primary-rgb), 0.2));
+        transition: transform 0.2s ease;
+      }
+
+      &:hover svg,
+      &:hover i {
+        transform: scale(1.05);
+      }
     }
 
     .btn-close {
-      opacity: var(--cui-btn-close-opacity);
-      transition: opacity var(--cui-transition-base), transform var(--cui-transition-base);
+      background: transparent;
+      border: 1px solid var(--cui-border-color);
+      border-radius: 50%;
+      width: 2rem;
+      height: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+      opacity: $btn-close-opacity;
+      @include modal-focus-ring;
 
       &:hover {
         opacity: 1;
-        transform: scale(1.1);
+        transform: scale(1.1) rotate(90deg);
+        background: var(--cui-danger);
+        border-color: var(--cui-danger);
+        color: var(--cui-contrast-color);
       }
 
-      &:focus {
-        box-shadow: var(--cui-btn-close-focus-shadow);
+      &:active {
+        transform: scale(0.95);
       }
     }
   }
 
   // Тело модалки
   .modal-body {
-    padding: var(--cui-modal-inner-border-radius);
-    color: var(--cui-body-color);
-    max-height: 70vh;
-    overflow-y: auto;
+    padding: $modal-inner-padding;
+    background: var(--cui-body-bg);
+    position: relative;
 
-    // Скролл с CoreUI стилями
-    @include scrollbar-style;
+    // Кастомный скроллбар
+    &::-webkit-scrollbar {
+      width: 6px;
+    }
+    
+    &::-webkit-scrollbar-track {
+      background: var(--cui-tertiary-bg);
+      border-radius: 3px;
+    }
+    
+    &::-webkit-scrollbar-thumb {
+      background: var(--cui-border-color);
+      border-radius: 3px;
+      
+      &:hover {
+        background: var(--cui-secondary-color);
+      }
+    }
+
+    // Индикатор прокрутки
+    &.scrollable {
+      &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, 
+          transparent 0%, 
+          var(--cui-primary) 50%, 
+          transparent 100%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      &::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, 
+          transparent 0%, 
+          var(--cui-primary) 50%, 
+          transparent 100%);
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      &.scroll-top::before {
+        opacity: 0.5;
+      }
+
+      &.scroll-bottom::after {
+        opacity: 0.5;
+      }
+    }
   }
 
   // Футер модалки
   .modal-footer {
-    padding: var(--cui-modal-footer-padding);
-    border-top: var(--cui-modal-footer-border-width) solid var(--cui-modal-footer-border-color);
-    background-color: var(--cui-tertiary-bg);
-    gap: var(--cui-spacer-3);
+    padding: $modal-inner-padding;
+    border-top: $modal-footer-border-width solid $modal-footer-border-color;
+    background: var(--cui-modal-footer-bg);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: $btn-toolbar-gap;
 
     .btn {
       min-width: 100px;
-      font-weight: var(--cui-btn-font-weight);
-      transition: var(--cui-btn-transition);
+      font-weight: $font-weight-medium;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+
+      // Волновой эффект при клике
+      &::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        transition: width 0.3s ease, height 0.3s ease;
+      }
+
+      &:active::before {
+        width: 200%;
+        height: 200%;
+      }
 
       &:hover:not(:disabled) {
         transform: translateY(-1px);
-        box-shadow: var(--cui-box-shadow);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none !important;
       }
     }
   }
 }
 
-// ===== СПЕЦИФИЧЕСКИЕ СТИЛИ ДЛЯ ТИПОВ МОДАЛОК =====
+// ===== РАЗМЕРЫ МОДАЛОК =====
 
-// Модалка подтверждения удаления
-.confirm-modal--danger,
-.confirm-modal--delete {
-  .modal-header {
-    background: linear-gradient(135deg, 
-      rgba(var(--cui-danger-rgb), 0.1) 0%, 
-      rgba(var(--cui-danger-rgb), 0.05) 100%);
-    border-bottom-color: rgba(var(--cui-danger-rgb), 0.2);
-  }
-
-  .modal-title {
-    color: var(--cui-danger);
+// Маленькая модалка
+.modal-sm {
+  .modal-dialog {
+    max-width: $modal-sm;
   }
 }
 
-// Модалка предупреждения
-.confirm-modal--warning {
-  .modal-header {
-    background: linear-gradient(135deg, 
-      rgba(var(--cui-warning-rgb), 0.1) 0%, 
-      rgba(var(--cui-warning-rgb), 0.05) 100%);
-    border-bottom-color: rgba(var(--cui-warning-rgb), 0.2);
-  }
-
-  .modal-title {
-    color: var(--cui-warning);
+// Большая модалка
+.modal-lg {
+  .modal-dialog {
+    max-width: $modal-lg;
   }
 }
 
-// Модалка успеха
-.confirm-modal--success {
-  .modal-header {
-    background: linear-gradient(135deg, 
-      rgba(var(--cui-success-rgb), 0.1) 0%, 
-      rgba(var(--cui-success-rgb), 0.05) 100%);
-    border-bottom-color: rgba(var(--cui-success-rgb), 0.2);
-  }
-
-  .modal-title {
-    color: var(--cui-success);
+// Очень большая модалка
+.modal-xl {
+  .modal-dialog {
+    max-width: $modal-xl;
   }
 }
 
-// Модалка информации
-.confirm-modal--info {
-  .modal-header {
-    background: linear-gradient(135deg, 
-      rgba(var(--cui-info-rgb), 0.1) 0%, 
-      rgba(var(--cui-info-rgb), 0.05) 100%);
-    border-bottom-color: rgba(var(--cui-info-rgb), 0.2);
-  }
-
-  .modal-title {
-    color: var(--cui-info);
-  }
-}
-
-// ===== ФОРМЫ В МОДАЛКАХ =====
-.modal-body {
-  // Карточки в формах с CoreUI стилями
-  .card {
-    border: var(--cui-card-border-width) solid var(--cui-card-border-color);
-    transition: var(--cui-transition-base);
-    background-color: var(--cui-card-bg);
-    border-radius: var(--cui-card-border-radius);
-
-    &:hover {
-      transform: translateY(-1px);
-      box-shadow: var(--cui-box-shadow);
-      border-color: var(--cui-primary);
-    }
-
-    .card-header {
-      background-color: var(--cui-card-cap-bg);
-      border-bottom: var(--cui-card-border-width) solid var(--cui-card-border-color);
-      padding: var(--cui-card-cap-padding-y) var(--cui-card-cap-padding-x);
-
-      h6 {
-        margin: 0;
-        font-weight: var(--cui-font-weight-semibold);
-        color: var(--cui-emphasis-color);
-      }
-    }
-
-    .card-body {
-      padding: var(--cui-card-spacer-y) var(--cui-card-spacer-x);
-    }
-  }
-
-  // Поля форм с CoreUI
-  .form-label {
-    font-weight: var(--cui-form-label-font-weight);
-    color: var(--cui-form-label-color);
-    margin-bottom: var(--cui-form-label-margin-bottom);
-
-    .text-danger {
-      font-weight: var(--cui-font-weight-bold);
-    }
-  }
-
-  .form-control,
-  .form-select {
-    border: var(--cui-input-border-width) solid var(--cui-input-border-color);
-    transition: var(--cui-input-transition);
-    background-color: var(--cui-input-bg);
-    color: var(--cui-input-color);
-
-    &:focus {
-      border-color: var(--cui-input-focus-border-color);
-      box-shadow: var(--cui-input-focus-box-shadow);
-    }
-
-    &.is-invalid {
-      border-color: var(--cui-form-invalid-border-color);
-      box-shadow: 0 0 0 var(--cui-input-focus-width) rgba(var(--cui-danger-rgb), 0.25);
-    }
-  }
-
-  .input-group-text {
-    background-color: var(--cui-input-group-addon-bg);
-    border-color: var(--cui-input-border-color);
-    color: var(--cui-input-group-addon-color);
-  }
-
-  // Статусы и бейджи CoreUI
-  .badge {
-    font-weight: var(--cui-badge-font-weight);
-    padding: var(--cui-badge-padding-y) var(--cui-badge-padding-x);
-  }
-
-  // Текст ошибок
-  .text-danger {
-    font-size: var(--cui-font-size-sm);
-    font-weight: var(--cui-font-weight-medium);
-  }
-
-  .form-text {
-    color: var(--cui-form-text-color);
-    font-size: var(--cui-form-text-font-size);
-  }
-}
-
-// ===== СПЕЦИАЛЬНЫЕ МОДАЛКИ =====
-
-// Модалка телефонов
-.phone-form-modal {
-  .avatar {
-    width: calc(var(--cui-spacer-4) * 2);
-    height: calc(var(--cui-spacer-4) * 2);
-  }
-  
-  .modal-content {
-    max-height: 90vh;
-  }
-}
-
-// Модалка массовых действий
-.bulk-action-modal {
-  .list-group-item {
-    border-color: var(--cui-list-group-border-color);
-    transition: background-color var(--cui-transition-base);
-    background-color: var(--cui-list-group-bg);
-
-    &:hover {
-      background-color: var(--cui-list-group-hover-bg);
-    }
-  }
-}
-
-// ===== АДАПТИВНОСТЬ С BOOTSTRAP/COREUI =====
-@include media-breakpoint-down(md) {
-  .modal {
-    .modal-dialog {
-      margin: var(--cui-spacer-2);
-    }
+// Полноэкранная модалка
+.modal-fullscreen {
+  .modal-dialog {
+    width: 100vw;
+    max-width: none;
+    height: 100vh;
+    margin: 0;
 
     .modal-content {
-      border-radius: var(--cui-border-radius);
+      height: 100vh;
+      border: 0;
+      border-radius: 0;
+    }
+  }
+}
+
+// ===== СПЕЦИАЛЬНЫЕ СТИЛИ =====
+
+// Модалка с эффектом стекла
+.modal-glass {
+  .modal-backdrop {
+    @include modal-backdrop-blur;
+    background: rgba(var(--cui-dark-rgb), 0.3);
+  }
+
+  .modal-content {
+    @include modal-glass-effect;
+  }
+}
+
+// Модалка с градиентным заголовком
+.modal-gradient-header {
+  .modal-header {
+    @include modal-gradient-header;
+    color: var(--cui-contrast-color);
+
+    .modal-title {
+      color: var(--cui-contrast-color);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+
+      svg, i {
+        color: var(--cui-contrast-color);
+        filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+      }
     }
 
-    .modal-header,
-    .modal-body,
-    .modal-footer {
-      padding-left: var(--cui-spacer-4);
-      padding-right: var(--cui-spacer-4);
-    }
+    .btn-close {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.3);
+      color: var(--cui-contrast-color);
 
-    .modal-body {
-      max-height: 60vh;
-    }
-
-    .modal-footer {
-      .btn {
-        min-width: auto;
-        flex: 1;
+      &:hover {
+        background: rgba(255, 255, 255, 0.3);
+        border-color: rgba(255, 255, 255, 0.5);
       }
     }
   }
 }
 
-// ===== ТЕМНАЯ ТЕМА COREUI =====
-[data-coreui-theme="dark"] {
+// Центрированная модалка
+.modal-dialog-centered {
+  display: flex;
+  align-items: center;
+  min-height: calc(100% - #{$modal-dialog-margin} * 2);
+
+  &::before {
+    display: block;
+    height: calc(100vh - #{$modal-dialog-margin} * 2);
+    height: calc(100vh - #{$modal-dialog-margin} * 2);
+    content: "";
+  }
+}
+
+// ===== ТЕМНАЯ ТЕМА =====
+@include color-mode(dark) {
   .modal {
     .modal-content {
       background-color: var(--cui-dark);
-      color: var(--cui-dark-text);
+      border-color: var(--cui-border-color-translucent);
     }
 
     .modal-header {
-      background: linear-gradient(135deg, var(--cui-dark) 0%, var(--cui-gray-900) 100%);
-      border-bottom-color: var(--cui-dark-border-color);
+      background: var(--cui-darker);
+      border-bottom-color: var(--cui-border-color-translucent);
+
+      .btn-close {
+        background: var(--cui-darker);
+        border-color: var(--cui-border-color-translucent);
+        color: var(--cui-body-color);
+
+        &:hover {
+          background: var(--cui-danger);
+          border-color: var(--cui-danger);
+          color: var(--cui-contrast-color);
+        }
+      }
+    }
+
+    .modal-body {
+      background: var(--cui-dark);
     }
 
     .modal-footer {
-      background-color: var(--cui-dark-bg-subtle);
-      border-top-color: var(--cui-dark-border-color);
+      background: var(--cui-darker);
+      border-top-color: var(--cui-border-color-translucent);
+    }
+  }
+}
+
+// ===== АНИМАЦИИ =====
+@keyframes modalBackdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: var(--cui-modal-backdrop-opacity);
+  }
+}
+
+@keyframes modalContentSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+// ===== АДАПТИВНОСТЬ =====
+@include media-breakpoint-down(sm) {
+  .modal {
+    .modal-dialog {
+      margin: $modal-dialog-margin-y-sm-up;
     }
 
-    .card {
-      background-color: var(--cui-dark-bg-subtle);
-      border-color: var(--cui-dark-border-color);
+    .modal-header,
+    .modal-footer {
+      padding: $modal-inner-padding * 0.75;
+    }
 
-      .card-header {
-        background-color: var(--cui-gray-800);
-        border-bottom-color: var(--cui-dark-border-color);
+    .modal-body {
+      padding: $modal-inner-padding * 0.75;
+    }
+
+    .modal-footer {
+      flex-direction: column;
+      
+      .btn {
+        width: 100%;
+        margin: 0;
+      }
+    }
+  }
+
+  // Полноэкранная модалка на мобильных
+  .modal-fullscreen-sm-down {
+    .modal-dialog {
+      width: 100vw;
+      max-width: none;
+      height: 100vh;
+      margin: 0;
+
+      .modal-content {
+        height: 100vh;
+        border: 0;
+        border-radius: 0;
       }
     }
   }
 }
 
-// ===== АНИМАЦИИ COREUI =====
-.modal {
-  &.fade .modal-dialog {
-    transition: transform var(--cui-modal-transition);
-    transform: translate(0, -50px);
+// ===== ДОСТУПНОСТЬ =====
+
+// Уменьшенная анимация для пользователей с ограниченными возможностями
+@media (prefers-reduced-motion: reduce) {
+  .modal {
+    .modal-dialog {
+      transition: none;
+    }
+
+    .modal-backdrop {
+      transition: none;
+    }
+
+    .modal-content {
+      animation: none !important;
+      
+      &::before {
+        transition: none;
+      }
+    }
+
+    .btn {
+      transition: none !important;
+      
+      &::before {
+        transition: none;
+      }
+    }
   }
 
-  &.show .modal-dialog {
-    transform: none;
-  }
-}
-
-// ===== ACCESSIBILITY С COREUI =====
-.modal {
-  // Фокус для клавиатурной навигации
-  .btn:focus-visible,
-  .form-control:focus-visible,
-  .form-select:focus-visible {
-    outline: var(--cui-focus-ring-width) solid var(--cui-focus-ring-color);
-    outline-offset: var(--cui-focus-ring-offset);
-  }
-
-  // Высокий контраст для важных элементов
-  .btn-danger:focus-visible {
-    outline-color: var(--cui-danger);
-  }
-
-  .btn-close:focus-visible {
-    outline: var(--cui-focus-ring-width) solid var(--cui-focus-ring-color);
-    outline-offset: var(--cui-focus-ring-offset);
-  }
-}
-
-// ===== КАСТОМНЫЕ МИКСИНЫ ДЛЯ СКРОЛЛА =====
-@mixin scrollbar-style {
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    background: var(--cui-border-color);
-    border-radius: var(--cui-border-radius-sm);
-
-    &:hover {
-      background: var(--cui-secondary);
+  @keyframes modalBackdropFadeIn,
+  @keyframes modalContentSlideIn {
+    to {
+      transform: none;
     }
   }
 }
 
-// ===== ЗАГРУЗОЧНЫЕ СОСТОЯНИЯ =====
-.modal-loading {
-  pointer-events: none;
-  
-  .modal-content {
-    position: relative;
+// Высокий контраст
+@media (prefers-contrast: high) {
+  .modal {
+    .modal-content {
+      border-width: 2px;
+      border-color: var(--cui-emphasis-color);
+    }
+
+    .modal-header,
+    .modal-footer {
+      border-color: var(--cui-emphasis-color);
+    }
+
+    .btn-close {
+      border-width: 2px;
+    }
+  }
+}
+
+// ===== УТИЛИТЫ =====
+
+// Скрытие скроллбара
+.modal-hide-scrollbar {
+  .modal-body {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     
-    &::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(var(--cui-body-bg-rgb), 0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
+    &::-webkit-scrollbar {
+      display: none;
     }
+  }
+}
+
+// Прозрачный backdrop
+.modal-transparent-backdrop {
+  .modal-backdrop {
+    background: transparent;
+    backdrop-filter: none;
+  }
+}
+
+// Модалка без анимации
+.modal-no-animation {
+  .modal-dialog {
+    transition: none;
+  }
+
+  .modal-content {
+    animation: none !important;
   }
 }

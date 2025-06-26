@@ -1,4 +1,3 @@
-// frontend/src/components/modals/ImportExportModal.js
 import React, { useState, useEffect } from 'react'
 import {
   CModal,
@@ -42,14 +41,18 @@ class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <CAlert color="danger" className="m-3">
-          Произошла ошибка: {this.state.error?.message || 'Неизвестная ошибка'}
-          <CButton
-            color="link"
-            onClick={() => this.setState({ hasError: false, error: null })}
-          >
-            Попробовать снова
-          </CButton>
+        <CAlert color="danger" className="modal-error m-3">
+          <div className="error-icon"></div>
+          <div className="error-title">Произошла ошибка</div>
+          <div className="error-message">{this.state.error?.message || 'Неизвестная ошибка'}</div>
+          <div className="error-actions">
+            <CButton
+              color="link"
+              onClick={() => this.setState({ hasError: false, error: null })}
+            >
+              Попробовать снова
+            </CButton>
+          </div>
         </CAlert>
       )
     }
@@ -166,10 +169,10 @@ const ImportExportModal = ({
       size={size}
       backdrop="static"
       scrollable
-      className="import-export-modal"
+      className={`import-export-modal ${isLoading ? 'loading' : ''}`}
     >
       <CModalHeader>
-        <CModalTitle className="d-flex align-items-center">
+        <CModalTitle className="modal-title">
           <CIcon
             icon={activeTab === 'import' ? cilCloudUpload : cilCloudDownload}
             className="me-2"
@@ -184,33 +187,38 @@ const ImportExportModal = ({
         </CModalTitle>
       </CModalHeader>
 
-      <CModalBody className="p-0">
+      <CModalBody>
         {/* Success Message */}
         {successMessage && (
-          <CAlert color="success" className="m-3 mb-0">
-            <CIcon icon={cilCheck} className="me-2" />
-            {successMessage}
+          <CAlert color="success" className="modal-success m-3">
+            <div className="success-icon">
+              <CIcon icon={cilCheck} />
+            </div>
+            <div className="success-title">Успех</div>
+            <div className="success-message">{successMessage}</div>
           </CAlert>
         )}
 
         {/* Error Message */}
         {error && (
-          <CAlert color="danger" className="m-3 mb-0">
-            {error}
+          <CAlert color="danger" className="modal-error m-3">
+            <div className="error-icon"></div>
+            <div className="error-title">Ошибка</div>
+            <div className="error-message">{error}</div>
           </CAlert>
         )}
 
         {/* Tabs for both modes */}
         {mode === 'both' && (
           <div className="border-bottom">
-            <CNav variant="tabs" className="px-3">
+            <CNav variant="tabs" className="nav-tabs px-3">
               {showImportTab && (
                 <CNavItem>
                   <CNavLink
                     active={activeTab === 'import'}
                     onClick={() => setActiveTab('import')}
                     disabled={isLoading}
-                    className="d-flex align-items-center"
+                    className="nav-link"
                   >
                     <CIcon icon={cilCloudUpload} className="me-2" />
                     Импорт
@@ -223,7 +231,7 @@ const ImportExportModal = ({
                     active={activeTab === 'export'}
                     onClick={() => setActiveTab('export')}
                     disabled={isLoading}
-                    className="d-flex align-items-center"
+                    className="nav-link"
                   >
                     <CIcon icon={cilCloudDownload} className="me-2" />
                     Экспорт
@@ -238,8 +246,8 @@ const ImportExportModal = ({
         <CTabContent>
           {showImportTab && (
             <CTabPane
+              className={`tab-pane ${activeTab === 'import' ? 'active' : ''}`}
               visible={activeTab === 'import'}
-              className={mode === 'import' ? 'active show' : ''}
             >
               <ErrorBoundary>
                 <ImportPanel
@@ -254,8 +262,8 @@ const ImportExportModal = ({
 
           {showExportTab && (
             <CTabPane
+              className={`tab-pane ${activeTab === 'export' ? 'active' : ''}`}
               visible={activeTab === 'export'}
-              className={mode === 'export' ? 'active show' : ''}
             >
               <ErrorBoundary>
                 <ExportPanel
@@ -272,16 +280,17 @@ const ImportExportModal = ({
         </CTabContent>
       </CModalBody>
 
-      <CModalFooter>
+      <CModalFooter className="modal-footer">
         <div className="d-flex justify-content-end gap-2">
           <CButton
             color="secondary"
             onClick={handleClose}
             disabled={isLoading}
+            className="btn-secondary"
           >
             {isLoading ? (
               <>
-                <CSpinner size="sm" className="me-2" />
+                <CSpinner size="sm" className="spinner-border me-2" />
                 Отменить
               </>
             ) : (

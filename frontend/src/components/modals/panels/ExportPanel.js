@@ -1,4 +1,4 @@
-// frontend/src/components/modals/panels/ExportPanel.js
+
 import React, { useState, useEffect, useRef } from 'react'
 import {
   CRow,
@@ -85,7 +85,7 @@ const ExportPanel = ({
   const [isExporting, setIsExporting] = useState(false)
   const [exportProgress, setExportProgress] = useState(0)
   
-  // Данные с сервера - БЕЗ ХАРДКОДА
+  // Данные с сервера
   const [exportConfig, setExportConfig] = useState(null)
   const [availableFields, setAvailableFields] = useState([])
   const [statusOptions, setStatusOptions] = useState([])
@@ -110,7 +110,7 @@ const ExportPanel = ({
   const draggedField = useRef(null)
   const draggedIndex = useRef(null)
   
-  // Настройки экспорта - начальные значения
+  // Настройки экспорта
   const [settings, setSettings] = useState({
     exportType: selectedIds.length > 0 ? 'selected' : 'filtered',
     format: 'csv',
@@ -130,8 +130,6 @@ const ExportPanel = ({
     includeSensitive: false,
   })
 
-  // === ЗАГРУЗКА ДАННЫХ С СЕРВЕРА ===
-
   // Загрузка конфигурации экспорта
   const loadExportConfig = async () => {
     try {
@@ -145,7 +143,6 @@ const ExportPanel = ({
           const config = response.data.data
           setExportConfig(config)
           
-          // Устанавливаем значения по умолчанию из серверной конфигурации
           setSettings(prev => ({
             ...prev,
             format: config.formats?.[0]?.value || 'csv'
@@ -159,7 +156,6 @@ const ExportPanel = ({
     } catch (error) {
       console.error('Error loading export config:', error)
       
-      // Устанавливаем минимальную конфигурацию для работы
       setExportConfig({
         exportTypes: [
           { value: 'all', title: 'Все записи', description: 'Экспорт всех записей' },
@@ -169,7 +165,8 @@ const ExportPanel = ({
         formats: [
           { value: 'csv', label: 'CSV', description: 'Таблица для Excel' },
           { value: 'json', label: 'JSON', description: 'Данные в JSON формате' },
-          { value: 'txt', label: 'TXT', description: 'Текстовый файл с шаблоном' }
+          { value: 'txt', label: 'TXT', description: 'Текстовый файл с шаблоном' },
+          { value: 'xml', label: 'XML', description: 'Данные в XML формате' }
         ]
       })
     } finally {
@@ -190,7 +187,6 @@ const ExportPanel = ({
           const fields = response.data.data
           setAvailableFields(fields)
 
-          // Устанавливаем поля по умолчанию из серверной конфигурации
           if (selectedFieldsList.length === 0) {
             const defaultFields = fields
               .filter(field => field.defaultSelected)
@@ -213,7 +209,6 @@ const ExportPanel = ({
     } catch (error) {
       console.error('Error loading fields:', error)
       
-      // Устанавливаем минимальный набор полей для работы
       const fallbackFields = [
         { key: 'id', label: 'ID', type: 'number', defaultSelected: true },
         { key: 'status', label: 'Статус', type: 'string', defaultSelected: true },
@@ -222,7 +217,6 @@ const ExportPanel = ({
       ]
       setAvailableFields(fallbackFields)
       
-      // Устанавливаем поля по умолчанию
       if (selectedFieldsList.length === 0) {
         const selected = fallbackFields
           .filter(f => f.defaultSelected)
@@ -243,7 +237,6 @@ const ExportPanel = ({
     try {
       setStatusLoading(true)
       
-      // Сначала пробуем получить из API config/statuses
       try {
         const response = await axios.get('/api/config/statuses')
         const data = response.data
@@ -267,7 +260,6 @@ const ExportPanel = ({
         console.warn('Could not load status config:', configError)
       }
       
-      // Fallback: получаем статусы из данных
       const service = await getServiceByType(type)
       
       try {
@@ -291,7 +283,6 @@ const ExportPanel = ({
       } catch (fetchError) {
         console.warn('Could not fetch status data:', fetchError)
         
-        // Если не удалось загрузить статусы, используем базовые
         const basicStatuses = [
           { value: 'active', label: 'Активный', color: 'success' },
           { value: 'inactive', label: 'Неактивный', color: 'secondary' },
@@ -301,7 +292,6 @@ const ExportPanel = ({
     } catch (error) {
       console.error('Error loading status options:', error)
       
-      // Минимальный набор статусов для работы
       setStatusOptions([
         { value: 'active', label: 'Активный', color: 'success' },
         { value: 'inactive', label: 'Неактивный', color: 'secondary' },
@@ -325,7 +315,6 @@ const ExportPanel = ({
         includeSensitive: settings.includeSensitive,
       }
 
-      // Добавляем фильтры
       if (settings.statusFilters.length > 0) {
         exportParams.status = settings.statusFilters
       }
@@ -344,7 +333,6 @@ const ExportPanel = ({
 
       const service = await getServiceByType(type)
       
-      // Проверяем есть ли универсальный метод export
       if (service.export) {
         const response = await service.export(exportParams)
         
@@ -354,7 +342,6 @@ const ExportPanel = ({
           setPreviewError(response.data?.message || 'Ошибка при загрузке предпросмотра')
         }
       } else {
-        // Создаем фейковые данные для предпросмотра
         const fakePreview = {
           totalRecords: 100,
           previewRecords: 5,
@@ -379,8 +366,7 @@ const ExportPanel = ({
     }
   }
 
-  // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
-
+  // Вспомогательные функции
   const validateSettings = () => {
     if (!settings.format || selectedFieldsList.length === 0) return false
     if (settings.exportType === 'by_user_id' && settings.userIds.length === 0) return false
@@ -396,7 +382,6 @@ const ExportPanel = ({
           return '****'
         }
         
-        // Базовая логика для примеров
         switch (sampleField.type) {
           case 'email':
             return 'user@example.com'
@@ -429,8 +414,7 @@ const ExportPanel = ({
     return statusOption?.color || 'secondary'
   }
 
-  // === УПРАВЛЕНИЕ ПОЛЯМИ ===
-
+  // Управление полями
   const addField = (field) => {
     const existingCount = selectedFieldsList.filter(item => item.field === field.key).length
     setSelectedFieldsList(prev => [...prev, {
@@ -457,7 +441,14 @@ const ExportPanel = ({
   }
 
   const removeFieldAt = (index) => {
+    const removedField = selectedFieldsList[index]
     setSelectedFieldsList(prev => prev.filter((_, i) => i !== index))
+    
+    const fieldsOfType = selectedFieldsList.filter(item => item.field === removedField.field)
+    fieldsOfType.forEach((item, idx) => {
+      item.isDuplicate = idx > 0
+      item.duplicateIndex = idx + 1
+    })
   }
 
   const duplicateField = (index) => {
@@ -470,7 +461,6 @@ const ExportPanel = ({
       duplicateIndex: existingCount + 1,
     }
     
-    // Вставляем после текущего элемента
     setSelectedFieldsList(prev => [
       ...prev.slice(0, index + 1),
       newItem,
@@ -478,47 +468,64 @@ const ExportPanel = ({
     ])
   }
 
-  // Drag & Drop handlers
-  const handleDragStart = (e, field, index) => {
+  const handleDragStart = (e, field) => {
     draggedField.current = field
+    e.dataTransfer.effectAllowed = 'copy'
+  }
+
+  const handleDragStartSelected = (e, index) => {
     draggedIndex.current = index
     e.dataTransfer.effectAllowed = 'move'
-    e.target.style.opacity = '0.5'
+    e.target.classList.add('dragging')
   }
 
   const handleDragEnd = (e) => {
-    e.target.style.opacity = ''
+    e.target.classList.remove('dragging')
     draggedField.current = null
     draggedIndex.current = null
   }
 
   const handleDragOver = (e) => {
     e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
+    e.dataTransfer.dropEffect = draggedField.current ? 'copy' : 'move'
+    e.currentTarget.classList.add('drag-over')
   }
 
-  const handleDrop = (e, dropIndex) => {
+  const handleDragLeave = (e) => {
+    e.currentTarget.classList.remove('drag-over')
+  }
+
+  const handleDrop = (e) => {
     e.preventDefault()
+    e.currentTarget.classList.remove('drag-over')
     
-    if (draggedIndex.current === null || draggedIndex.current === dropIndex) {
-      return
+    if (draggedField.current) {
+      addField(draggedField.current)
+      draggedField.current = null
     }
-
-    const draggedItem = selectedFieldsList[draggedIndex.current]
-    const newList = [...selectedFieldsList]
-    
-    // Удаляем перетаскиваемый элемент
-    newList.splice(draggedIndex.current, 1)
-    
-    // Вставляем на новое место
-    const insertIndex = draggedIndex.current < dropIndex ? dropIndex - 1 : dropIndex
-    newList.splice(insertIndex, 0, draggedItem)
-    
-    setSelectedFieldsList(newList)
   }
 
-  // === NAVIGATION ===
+  const handleDropReorder = (e, targetIndex) => {
+    e.preventDefault()
+    e.currentTarget.classList.remove('drag-over')
+    
+    if (draggedIndex.current !== null && draggedIndex.current !== targetIndex) {
+      const item = selectedFieldsList[draggedIndex.current]
+      const newList = [...selectedFieldsList]
+      newList.splice(draggedIndex.current, 1)
+      newList.splice(targetIndex, 0, item)
+      setSelectedFieldsList(newList)
+      
+      const fieldsOfType = newList.filter(f => f.field === item.field)
+      fieldsOfType.forEach((f, idx) => {
+        f.isDuplicate = idx > 0
+        f.duplicateIndex = idx + 1
+      })
+    }
+    draggedIndex.current = null
+  }
 
+  // Навигация
   const nextStep = () => {
     const stepOrder = ['type', 'format', 'preview']
     const currentIndex = stepOrder.indexOf(currentStep)
@@ -527,7 +534,6 @@ const ExportPanel = ({
       const nextStepId = stepOrder[currentIndex + 1]
       setCurrentStep(nextStepId)
       
-      // Загружаем предпросмотр при переходе на последний шаг
       if (nextStepId === 'preview') {
         loadPreview()
       }
@@ -555,8 +561,7 @@ const ExportPanel = ({
     }
   }
 
-  // === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
-
+  // Вспомогательные функции
   const clearAllFilters = () => {
     setSettings(prev => ({
       ...prev,
@@ -584,8 +589,7 @@ const ExportPanel = ({
     }
   }
 
-  // === ВЫПОЛНЕНИЕ ЭКСПОРТА ===
-
+  // Выполнение экспорта
   const executeExport = async () => {
     if (!validateSettings()) {
       toast.error('Проверьте настройки экспорта')
@@ -598,7 +602,6 @@ const ExportPanel = ({
       setIsExporting(true)
       setExportProgress(0)
       
-      // Симуляция прогресса
       progressInterval = setInterval(() => {
         setExportProgress(prev => Math.min(prev + 10, 90))
       }, 200)
@@ -611,9 +614,9 @@ const ExportPanel = ({
         delimiter: settings.csvDelimiter,
         template: settings.template,
         includeSensitive: settings.includeSensitive,
+        compressOutput: settings.compressOutput,
       }
 
-      // Добавляем фильтры в зависимости от типа экспорта
       if (settings.exportType === 'filtered') {
         exportParams.filters = {
           ...currentFilters,
@@ -630,15 +633,11 @@ const ExportPanel = ({
 
       const service = await getServiceByType(type)
       
-      // Определяем метод экспорта
       let response
       
-      // Приоритет 1: Универсальный метод export
       if (service.export) {
         response = await service.export(exportParams)
-      } 
-      // Приоритет 2: POST запрос на /export эндпоинт
-      else {
+      } else {
         response = await axios.post(`/api/${type}/export`, exportParams, {
           responseType: 'blob',
           headers: {
@@ -650,7 +649,6 @@ const ExportPanel = ({
       clearInterval(progressInterval)
       setExportProgress(100)
 
-      // Обработка результата
       handleExportResponse(response, exportParams)
 
     } catch (error) {
@@ -670,18 +668,14 @@ const ExportPanel = ({
     }
   }
 
-  // Обработка ответа экспорта
   const handleExportResponse = (response, exportParams) => {
     try {
       let blob
       let filename = `${exportParams.filename}.${exportParams.format}`
 
-      // Обработка разных типов ответов
       if (response.data instanceof Blob) {
-        // Ответ уже является Blob
         blob = response.data
         
-        // Пытаемся получить имя файла из заголовков
         const contentDisposition = response.headers?.['content-disposition']
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
@@ -690,7 +684,6 @@ const ExportPanel = ({
           }
         }
       } else if (response.data?.success && response.data?.content) {
-        // Ответ содержит контент в JSON
         const contentType = getContentType(exportParams.format)
         blob = new Blob([response.data.content], { type: contentType })
         
@@ -698,7 +691,6 @@ const ExportPanel = ({
           filename = response.data.filename
         }
       } else if (response.data?.success && response.data?.downloadUrl) {
-        // Ответ содержит URL для скачивания
         window.open(response.data.downloadUrl, '_blank')
         
         toast.success('Экспорт завершен успешно!')
@@ -712,14 +704,12 @@ const ExportPanel = ({
         }
         return
       } else if (typeof response.data === 'string' || response.data instanceof ArrayBuffer) {
-        // Прямой ответ с данными
         const contentType = response.headers?.['content-type'] || getContentType(exportParams.format)
         blob = new Blob([response.data], { type: contentType })
       } else {
         throw new Error('Неподдерживаемый формат ответа')
       }
 
-      // Скачивание файла
       if (blob) {
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
@@ -729,7 +719,6 @@ const ExportPanel = ({
         document.body.appendChild(a)
         a.click()
         
-        // Cleanup
         setTimeout(() => {
           window.URL.revokeObjectURL(url)
           document.body.removeChild(a)
@@ -761,13 +750,12 @@ const ExportPanel = ({
     return types[format] || 'application/octet-stream'
   }
 
-  // === ИНИЦИАЛИЗАЦИЯ ===
-
+  // Инициализация
   useEffect(() => {
     loadExportConfig()
     loadFields()
     loadStatusOptions()
-  }, [type]) // Перезагружаем при смене типа
+  }, [type])
 
   useEffect(() => {
     if (onLoadingChange) {
@@ -775,26 +763,22 @@ const ExportPanel = ({
     }
   }, [isExporting, onLoadingChange])
 
-  // Проверка завершенности шагов
   const isStepCompleted = (stepId) => {
     const stepIndex = steps.findIndex(s => s.id === stepId)
     const currentIndex = steps.findIndex(s => s.id === currentStep)
     return stepIndex < currentIndex
   }
 
-  // Форматирование значений в предпросмотре
   const formatPreviewValue = (value, field) => {
     if (value === null || value === undefined) return '—'
     
     const str = String(value)
     
-    // Маскируем чувствительные поля
     const sensitiveField = availableFields.find(f => f.key === field)
     if (sensitiveField?.sensitive && settings.maskPasswords) {
       return '****'
     }
     
-    // Обрезаем длинные значения
     if (str.length > 30) {
       return str.substring(0, 27) + '...'
     }
@@ -802,7 +786,6 @@ const ExportPanel = ({
     return str
   }
 
-  // Computed значения
   const formatUpperCase = settings.format?.toUpperCase() || ''
   const today = new Date().toISOString().split('T')[0]
   const defaultFilename = `export-${today}`
@@ -833,27 +816,26 @@ const ExportPanel = ({
 
   const isFormValid = validateSettings()
 
-  // Получить доступные опции экспорта из серверной конфигурации
   const exportTypeOptions = exportConfig?.exportTypes || []
   const formatOptions = exportConfig?.formats || []
 
   if (configLoading || fieldsLoading || statusLoading) {
     return (
-      <div className="text-center py-5">
+      <div className="modal-loading">
         <CSpinner className="me-2" />
-        Загрузка конфигурации экспорта...
+        <span className="loading-text">Загрузка конфигурации экспорта...</span>
       </div>
     )
   }
 
   return (
-    <div className="export-panel">
-      {/* Progress Steps */}
+    <div className="export-panel modal-responsive">
       <div className="progress-steps mb-4">
         {steps.map((step, index) => (
           <div
             key={step.id}
             className={`step ${currentStep === step.id ? 'active' : ''} ${isStepCompleted(step.id) ? 'completed' : ''}`}
+            onClick={() => canProceed(step.id) && setCurrentStep(step.id)}
           >
             <div className="step-number">
               {isStepCompleted(step.id) ? (
@@ -862,146 +844,155 @@ const ExportPanel = ({
                 index + 1
               )}
             </div>
-            <div className="step-label">{step.label}</div>
+            <span className="step-name">{step.label}</span>
           </div>
         ))}
       </div>
 
-      {/* Step 1: Type & Filters */}
       {currentStep === 'type' && (
-        <div className="export-step">
-          <CRow>
-            <CCol lg={6}>
-              <CCard className="mb-4">
-                <CCardHeader>
-                  <h6 className="mb-0">Тип экспорта</h6>
-                </CCardHeader>
+        <div className="step-content">
+          <h5 className="mb-4">Что экспортировать?</h5>
+          <CRow className="g-4">
+            <CCol md={6}>
+              <CCard>
                 <CCardBody>
+                  <h6>Тип экспорта</h6>
                   <div className="export-types">
                     {exportTypeOptions.map(option => (
-                      <div
+                      <label
                         key={option.value}
-                        className={`export-type-card ${settings.exportType === option.value ? 'active' : ''}`}
-                        onClick={() => setSettings(prev => ({ ...prev, exportType: option.value }))}
+                        className={`export-type ${settings.exportType === option.value ? 'selected' : ''}`}
                       >
-                        <h6>{option.title}</h6>
-                        <p className="text-muted mb-0">{option.description}</p>
-                        {option.value === 'selected' && (
-                          <CBadge color="info" className="mt-2">
-                            Выбрано: {selectedIds.length}
-                          </CBadge>
-                        )}
-                      </div>
+                        <input
+                          type="radio"
+                          value={option.value}
+                          checked={settings.exportType === option.value}
+                          onChange={() => setSettings(prev => ({ ...prev, exportType: option.value }))}
+                        />
+                        <div className="content">
+                          <div className="title">{option.title}</div>
+                          <div className="description">{option.description}</div>
+                        </div>
+                      </label>
                     ))}
                   </div>
 
                   {settings.exportType === 'by_user_id' && (
                     <div className="mt-3">
-                      <CFormLabel>User ID (по одному на строку)</CFormLabel>
+                      <CFormLabel>User ID (по одному на строку):</CFormLabel>
                       <CFormTextarea
-                        rows={5}
+                        rows={4}
                         value={userIdsText}
                         onChange={(e) => setUserIdsText(e.target.value)}
                         onBlur={updateUserIds}
-                        placeholder="12345&#10;67890&#10;..."
+                        placeholder="USER123\nUSER456"
+                        className="form-control"
                       />
-                      <small className="text-muted">
-                        Введено ID: {settings.userIds.length}
-                      </small>
+                      <small className="text-muted">Введено: {settings.userIds.length}</small>
+                    </div>
+                  )}
+
+                  {settings.exportType === 'selected' && (
+                    <div className="mt-3">
+                      <CAlert color="info">
+                        <CIcon icon={cilCheckCircle} className="me-2" />
+                        Выбрано аккаунтов: <strong>{selectedIds.length}</strong>
+                      </CAlert>
                     </div>
                   )}
                 </CCardBody>
               </CCard>
             </CCol>
 
-            <CCol lg={6}>
-              <CCard className="mb-4">
-                <CCardHeader>
-                  <h6 className="mb-0">Дополнительные фильтры</h6>
-                  {hasActiveFilters && (
-                    <CButton
-                      size="sm"
-                      color="secondary"
-                      variant="ghost"
-                      className="float-end"
-                      onClick={clearAllFilters}
-                    >
-                      <CIcon icon={cilX} className="me-1" />
-                      Очистить
-                    </CButton>
-                  )}
-                </CCardHeader>
+            <CCol md={6}>
+              <CCard>
                 <CCardBody>
-                  {/* Фильтр по статусу */}
-                  <div className="mb-3">
-                    <CFormLabel>Статусы</CFormLabel>
-                    <CInputGroup className="mb-2">
-                      <CInputGroupText>
-                        <CIcon icon={cilSearch} />
-                      </CInputGroupText>
-                      <CFormInput
-                        placeholder="Поиск статусов..."
-                        value={statusSearchQuery}
-                        onChange={(e) => setStatusSearchQuery(e.target.value)}
-                      />
-                    </CInputGroup>
-                    <div className="status-checkboxes">
-                      {filteredStatusOptions.map(option => (
-                        <CFormCheck
-                          key={option.value}
-                          id={`status-${option.value}`}
-                          label={
-                            <span className="d-flex align-items-center">
-                              <CBadge color={option.color} className="me-2">
-                                {option.label}
-                              </CBadge>
-                            </span>
-                          }
-                          checked={settings.statusFilters.includes(option.value)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSettings(prev => ({
-                                ...prev,
-                                statusFilters: [...prev.statusFilters, option.value]
-                              }))
-                            } else {
-                              setSettings(prev => ({
-                                ...prev,
-                                statusFilters: prev.statusFilters.filter(s => s !== option.value)
-                              }))
-                            }
-                          }}
-                        />
-                      ))}
-                    </div>
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h6>Фильтры</h6>
+                    {hasActiveFilters && (
+                      <CButton
+                        color="outline-secondary"
+                        size="sm"
+                        onClick={clearAllFilters}
+                      >
+                        Очистить
+                      </CButton>
+                    )}
                   </div>
 
-                  {/* Фильтр по дате */}
-                  <CRow>
-                    <CCol sm={6}>
-                      <CFormLabel>Дата от</CFormLabel>
+                  <div className="mb-3">
+                    <CFormLabel>Статусы</CFormLabel>
+                    <div className="filter-search mb-2">
                       <CFormInput
-                        type="date"
-                        value={settings.dateFrom}
-                        onChange={(e) => setSettings(prev => ({ ...prev, dateFrom: e.target.value }))}
+                        type="text"
+                        value={statusSearchQuery}
+                        onChange={(e) => setStatusSearchQuery(e.target.value)}
+                        placeholder="Поиск статусов..."
+                        className="form-control form-control-sm"
                       />
-                    </CCol>
-                    <CCol sm={6}>
-                      <CFormLabel>Дата до</CFormLabel>
-                      <CFormInput
-                        type="date"
-                        value={settings.dateTo}
-                        onChange={(e) => setSettings(prev => ({ ...prev, dateTo: e.target.value }))}
-                      />
-                    </CCol>
-                  </CRow>
+                    </div>
+                    <div className="status-list">
+                      {filteredStatusOptions.map(option => (
+                        <label
+                          key={option.value}
+                          className="status-item"
+                        >
+                          <input
+                            type="checkbox"
+                            value={option.value}
+                            checked={settings.statusFilters.includes(option.value)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSettings(prev => ({
+                                  ...prev,
+                                  statusFilters: [...prev.statusFilters, option.value]
+                                }))
+                              } else {
+                                setSettings(prev => ({
+                                  ...prev,
+                                  statusFilters: prev.statusFilters.filter(s => s !== option.value)
+                                }))
+                              }
+                            }}
+                          />
+                          <CBadge color={option.color} className="ms-2">
+                            {option.label}
+                          </CBadge>
+                        </label>
+                      ))}
+                    </div>
+                    <small className="text-muted">Выбрано: {settings.statusFilters.length}</small>
+                  </div>
 
-                  {/* Поиск */}
-                  <div className="mt-3">
+                  <div className="mb-3">
+                    <CFormLabel>Период</CFormLabel>
+                    <CRow className="g-2">
+                      <CCol>
+                        <CFormInput
+                          type="date"
+                          value={settings.dateFrom}
+                          max={settings.dateTo || today}
+                          onChange={(e) => setSettings(prev => ({ ...prev, dateFrom: e.target.value }))}
+                        />
+                      </CCol>
+                      <CCol>
+                        <CFormInput
+                          type="date"
+                          value={settings.dateTo}
+                          min={settings.dateFrom}
+                          max={today}
+                          onChange={(e) => setSettings(prev => ({ ...prev, dateTo: e.target.value }))}
+                        />
+                      </CCol>
+                    </CRow>
+                  </div>
+
+                  <div>
                     <CFormLabel>Поиск</CFormLabel>
                     <CFormInput
-                      placeholder="Поиск по всем полям..."
+                      type="text"
                       value={settings.searchQuery}
+                      placeholder="Поиск по всем полям..."
                       onChange={(e) => setSettings(prev => ({ ...prev, searchQuery: e.target.value }))}
                     />
                   </div>
@@ -1012,212 +1003,357 @@ const ExportPanel = ({
         </div>
       )}
 
-      {/* Step 2: Format & Fields */}
       {currentStep === 'format' && (
-        <div className="export-step">
-          <CRow>
-            <CCol lg={4}>
-              <CCard className="mb-4">
-                <CCardHeader>
-                  <h6 className="mb-0">Формат экспорта</h6>
-                </CCardHeader>
+        <div className="step-content">
+          <h5 className="mb-4">Формат и поля экспорта</h5>
+          <CRow className="g-4">
+            <CCol md={6}>
+              <CCard>
                 <CCardBody>
-                  <div className="format-options">
+                  <h6>Формат: {formatUpperCase}</h6>
+                  <div className="export-types mb-3">
                     {formatOptions.map(format => (
-                      <div
+                      <label
                         key={format.value}
-                        className={`format-card ${settings.format === format.value ? 'active' : ''}`}
-                        onClick={() => setSettings(prev => ({ ...prev, format: format.value }))}
+                        className={`export-type ${settings.format === format.value ? 'selected' : ''}`}
                       >
-                        <h6>{format.label}</h6>
-                        <p className="text-muted mb-0">{format.description}</p>
-                      </div>
+                        <input
+                          type="radio"
+                          value={format.value}
+                          checked={settings.format === format.value}
+                          onChange={() => setSettings(prev => ({ ...prev, format: format.value }))}
+                        />
+                        <div className="content">
+                          <div className="title">{format.label}</div>
+                          <div className="description">{format.description}</div>
+                        </div>
+                      </label>
                     ))}
                   </div>
 
-                  {/* Настройки формата */}
-                  <div className="mt-4">
-                    <h6>Настройки {formatUpperCase}</h6>
-                    
-                    {settings.format === 'csv' && (
-                      <>
-                        <div className="mb-3">
-                          <CFormLabel>Разделитель</CFormLabel>
-                          <CFormSelect
-                            value={settings.csvDelimiter}
-                            onChange={(e) => setSettings(prev => ({ ...prev, csvDelimiter: e.target.value }))}
-                          >
-                            <option value=",">Запятая (,)</option>
-                            <option value=";">Точка с запятой (;)</option>
-                            <option value="\t">Табуляция</option>
-                            <option value="|">Вертикальная черта (|)</option>
-                          </CFormSelect>
-                        </div>
-                        <CFormCheck
-                          id="includeHeader"
-                          label="Включить заголовки"
-                          checked={settings.includeHeader}
-                          onChange={(e) => setSettings(prev => ({ ...prev, includeHeader: e.target.checked }))}
-                        />
-                      </>
-                    )}
+                  {settings.format === 'csv' && (
+                    <div>
+                      <div className="mb-3">
+                        <CFormLabel>Разделитель</CFormLabel>
+                        <CFormSelect
+                          value={settings.csvDelimiter}
+                          onChange={(e) => setSettings(prev => ({ ...prev, csvDelimiter: e.target.value }))}
+                        >
+                          <option value=",">Запятая (,)</option>
+                          <option value=";">Точка с запятой (;)</option>
+                          <option value="\t">Табуляция</option>
+                          <option value="|">Вертикальная черта (|)</option>
+                        </CFormSelect>
+                      </div>
+                      <CFormCheck
+                        id="includeHeader"
+                        label="Включить заголовок"
+                        checked={settings.includeHeader}
+                        onChange={(e) => setSettings(prev => ({ ...prev, includeHeader: e.target.checked }))}
+                        className="mb-2"
+                      />
+                    </div>
+                  )}
 
-                    {settings.format === 'txt' && (
+                  {settings.format === 'txt' && (
+                    <div>
                       <div className="mb-3">
                         <CFormLabel>Шаблон строки</CFormLabel>
-                        <CFormInput
+                        <CFormTextarea
                           value={settings.template}
                           onChange={(e) => setSettings(prev => ({ ...prev, template: e.target.value }))}
-                          placeholder="{login}:{password}"
+                          rows={3}
+                          placeholder="{login}:{password}:{email}"
+                          className="form-control template-input"
                         />
-                        <small className="text-muted d-block mt-1">
-                          Используйте {'{field}'} для вставки значений
+                        <small className="text-muted">
+                          Перетащите поля из списка справа или введите вручную
                         </small>
-                        {templatePreview && (
-                          <div className="mt-2">
-                            <strong>Пример:</strong> <code>{templatePreview}</code>
-                          </div>
-                        )}
-                        <CButton
-                          size="sm"
-                          color="secondary"
-                          className="mt-2"
-                          onClick={applyAutoTemplate}
-                          disabled={selectedFieldsList.length === 0}
-                        >
-                          Авто-шаблон
-                        </CButton>
                       </div>
-                    )}
-
-                    <div className="mt-3">
-                      <CFormLabel>Имя файла</CFormLabel>
-                      <CInputGroup>
-                        <CFormInput
-                          value={settings.filename}
-                          onChange={(e) => setSettings(prev => ({ ...prev, filename: e.target.value }))}
-                          placeholder={defaultFilename}
-                        />
-                        <CInputGroupText>.{settings.format}</CInputGroupText>
-                      </CInputGroup>
+                      {settings.template && (
+                        <div className="mb-3">
+                          <CFormLabel>Предпросмотр</CFormLabel>
+                          <div className="preview-box">
+                            <pre>{templatePreview}</pre>
+                          </div>
+                        </div>
+                      )}
+                      <CButton
+                        size="sm"
+                        color="outline-primary"
+                        onClick={applyAutoTemplate}
+                        className="mt-2"
+                        disabled={selectedFieldsList.length === 0}
+                      >
+                        Применить авто-шаблон
+                      </CButton>
                     </div>
+                  )}
 
-                    <CFormCheck
-                      className="mt-3"
-                      id="maskPasswords"
-                      label="Маскировать пароли"
-                      checked={settings.maskPasswords}
-                      onChange={(e) => setSettings(prev => ({ ...prev, maskPasswords: e.target.checked }))}
-                    />
+                  {(settings.format === 'json' || settings.format === 'xml') && (
+                    <div className="mb-3">
+                      <CFormLabel>Предпросмотр формата</CFormLabel>
+                      <div className="preview-box">
+                        <pre>
+                          {settings.format === 'json' ? 
+                            JSON.stringify(
+                              selectedFieldsList.map(item => ({ [item.field]: `${item.field}_sample` })),
+                              null,
+                              2
+                            ) : 
+                            `<?xml version="1.0" encoding="${settings.encoding}"?>
+<records>
+  <record>
+${selectedFieldsList.map(item => `    <${item.field}>${item.field}_sample</${item.field}>`).join('\n')}
+  </record>
+</records>`}
+                        </pre>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="mb-3">
+                    <CFormLabel>Кодировка</CFormLabel>
+                    <CFormSelect
+                      value={settings.encoding}
+                      onChange={(e) => setSettings(prev => ({ ...prev, encoding: e.target.value }))}
+                    >
+                      <option value="utf-8">UTF-8</option>
+                      <option value="windows-1251">Windows-1251</option>
+                    </CFormSelect>
                   </div>
+
+                  <div className="mb-3">
+                    <CFormLabel>Имя файла</CFormLabel>
+                    <CInputGroup>
+                      <CFormInput
+                        value={settings.filename}
+                        onChange={(e) => setSettings(prev => ({ ...prev, filename: e.target.value }))}
+                        placeholder={defaultFilename}
+                      />
+                      <CInputGroupText>.{settings.format}</CInputGroupText>
+                    </CInputGroup>
+                  </div>
+
+                  <CFormCheck
+                    id="maskPasswords"
+                    label="Маскировать пароли"
+                    checked={settings.maskPasswords}
+                    onChange={(e) => setSettings(prev => ({ ...prev, maskPasswords: e.target.checked }))}
+                    className="mb-2"
+                  />
+                  <CFormCheck
+                    id="compressOutput"
+                    label="Сжать файл"
+                    checked={settings.compressOutput}
+                    onChange={(e) => setSettings(prev => ({ ...prev, compressOutput: e.target.checked }))}
+                  />
                 </CCardBody>
               </CCard>
             </CCol>
 
-            <CCol lg={8}>
-              <CCard className="mb-4">
-                <CCardHeader>
-                  <h6 className="mb-0">Выбор полей</h6>
-                  <div className="header-actions">
-                    <CButton
-                      size="sm"
-                      color="primary"
-                      variant="ghost"
-                      onClick={addAllFields}
-                    >
-                      <CIcon icon={cilPlus} className="me-1" />
-                      Добавить все
-                    </CButton>
-                    <CButton
-                      size="sm"
-                      color="secondary"
-                      variant="ghost"
-                      onClick={clearSelectedFields}
-                    >
-                      <CIcon icon={cilX} className="me-1" />
-                      Очистить
-                    </CButton>
-                  </div>
-                </CCardHeader>
+            <CCol md={6}>
+              <CCard>
                 <CCardBody>
-                  <CRow>
-                    <CCol md={6}>
-                      <h6>Доступные поля</h6>
-                      <CInputGroup className="mb-2">
-                        <CInputGroupText>
-                          <CIcon icon={cilSearch} />
-                        </CInputGroupText>
-                        <CFormInput
-                          placeholder="Поиск полей..."
-                          value={fieldsSearchQuery}
-                          onChange={(e) => setFieldsSearchQuery(e.target.value)}
-                        />
-                      </CInputGroup>
-                      <div className="available-fields">
+                  <div className="d-flex justify-content-between align-items-center mb-3">
+                    <h6>Поля для формата экспорта</h6>
+                    <div>
+                      <CButton
+                        color="outline-primary"
+                        size="sm"
+                        onClick={addAllFields}
+                        className="me-2"
+                      >
+                        Добавить все
+                      </CButton>
+                      <CButton
+                        color="outline-secondary"
+                        size="sm"
+                        onClick={clearSelectedFields}
+                      >
+                        Очистить
+                      </CButton>
+                    </div>
+                  </div>
+
+                  {settings.format === 'csv' && (
+                    <div className="mb-3">
+                      <CFormLabel>Порядок колонок в CSV:</CFormLabel>
+                      <div className="format-preview-csv">
+                        {selectedFieldsList.length === 0 ? (
+                          <div className="text-muted small">
+                            Выберите поля ниже для формирования колонок
+                          </div>
+                        ) : (
+                          <div className="csv-columns">
+                            {selectedFieldsList.map((fieldItem, index) => (
+                              <span key={index} className="csv-column">
+                                {getFieldLabel(fieldItem.field)}
+                                {fieldItem.isDuplicate && (
+                                  <small>({fieldItem.duplicateIndex})</small>
+                                )}
+                                {index < selectedFieldsList.length - 1 && (
+                                  <span className="delimiter">{settings.csvDelimiter || ','}</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {settings.format === 'txt' && (
+                    <div className="mb-3">
+                      <CFormLabel>Формат строки:</CFormLabel>
+                      <div className="format-preview-txt">
+                        {!settings.template && selectedFieldsList.length > 0 ? (
+                          <div className="auto-template">
+                            <small className="text-muted">Автоматический шаблон:</small>
+                            <div className="template-auto">{autoTemplatePreview}</div>
+                            <CButton
+                              size="sm"
+                              color="outline-primary"
+                              onClick={applyAutoTemplate}
+                              className="mt-2"
+                            >
+                              Применить
+                            </CButton>
+                          </div>
+                        ) : settings.template ? (
+                          <div className="template-current">
+                            <small className="text-muted">Текущий шаблон:</small>
+                            <div className="template-display">{settings.template}</div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+
+                  {(settings.format === 'json' || settings.format === 'xml') && (
+                    <div className="mb-3">
+                      <CFormLabel>Порядок полей:</CFormLabel>
+                      <div className={`format-preview-${settings.format}`}>
+                        {selectedFieldsList.length === 0 ? (
+                          <div className="text-muted small">
+                            Выберите поля ниже для формирования структуры
+                          </div>
+                        ) : (
+                          <div className="format-columns">
+                            {selectedFieldsList.map((fieldItem, index) => (
+                              <span key={index} className="format-column">
+                                {getFieldLabel(fieldItem.field)}
+                                {fieldItem.isDuplicate && (
+                                  <small>({fieldItem.duplicateIndex})</small>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <CFormInput
+                    type="text"
+                    value={fieldsSearchQuery}
+                    onChange={(e) => setFieldsSearchQuery(e.target.value)}
+                    placeholder="Поиск полей..."
+                    className="mb-3"
+                  />
+
+                  <div className="available-fields mb-4">
+                    <h6 className="small text-muted mb-2">
+                      Доступные поля (перетащите или кликните для добавления в формат)
+                    </h6>
+                    {fieldsLoading ? (
+                      <div className="text-center py-2">
+                        <CSpinner size="sm" className="me-2" />
+                        Загрузка...
+                      </div>
+                    ) : (
+                      <div className="fields-grid">
                         {filteredFields.map(field => (
                           <div
                             key={field.key}
-                            className="field-item"
+                            className="field-chip"
                             onClick={() => addField(field)}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, field)}
+                            title={`Добавить ${field.label || field.key} в формат экспорта`}
                           >
-                            <span>{field.label}</span>
-                            <CIcon icon={cilPlus} />
+                            <span className="field-name">{field.label || field.key}</span>
+                            <CBadge color="secondary" size="sm">
+                              {field.type || 'text'}
+                            </CBadge>
                           </div>
                         ))}
                       </div>
-                    </CCol>
+                    )}
+                  </div>
 
-                    <CCol md={6}>
-                      <h6>Выбранные поля ({selectedFieldsList.length})</h6>
-                      <div className="selected-fields">
-                        {selectedFieldsList.length === 0 ? (
-                          <div className="text-center text-muted py-5">
-                            Выберите поля для экспорта
-                          </div>
-                        ) : (
-                          selectedFieldsList.map((item, index) => (
+                  <div className="selected-fields">
+                    <h6 className="small text-muted mb-2">
+                      Поля в формате экспорта ({selectedFieldsList.length}) <small className="text-info">- порядок имеет значение</small>
+                    </h6>
+                    <div
+                      className="selected-fields-area"
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                    >
+                      {selectedFieldsList.length === 0 ? (
+                        <div className="empty-drop-zone">
+                          <CIcon icon={cilList} size="lg" className="text-muted mb-2" />
+                          <p className="text-muted mb-0">
+                            Перетащите поля сюда для формирования {settings.format.toUpperCase()} формата
+                          </p>
+                          <small className="text-muted">
+                            Порядок полей = порядок {settings.format === 'csv' ? 'колонок' : settings.format === 'txt' ? 'в шаблоне' : 'в структуре'}
+                          </small>
+                        </div>
+                      ) : (
+                        <div className="selected-fields-list">
+                          {selectedFieldsList.map((fieldItem, index) => (
                             <div
-                              key={`${item.field}-${index}`}
-                              className="field-item selected"
+                              key={`${fieldItem.field}-${index}`}
+                              className="selected-field-item"
                               draggable
-                              onDragStart={(e) => handleDragStart(e, item, index)}
+                              onDragStart={(e) => handleDragStartSelected(e, index)}
                               onDragEnd={handleDragEnd}
+                              onDrop={(e) => handleDropReorder(e, index)}
                               onDragOver={handleDragOver}
-                              onDrop={(e) => handleDrop(e, index)}
+                              onDragLeave={handleDragLeave}
                             >
-                              <CIcon icon={cilList} className="drag-handle" />
-                              <span>
-                                {getFieldLabel(item.field)}
-                                {item.isDuplicate && (
-                                  <CBadge color="info" className="ms-1">
-                                    {item.duplicateIndex}
-                                  </CBadge>
-                                )}
-                              </span>
+                              <div className="field-order">{index + 1}</div>
+                              <div className="field-content">
+                                <span className="field-label">{getFieldLabel(fieldItem.field)}</span>
+                                <small className="text-muted">{fieldItem.field}</small>
+                              </div>
                               <div className="field-actions">
                                 <CButton
                                   size="sm"
-                                  color="primary"
-                                  variant="ghost"
+                                  color="outline-success"
                                   onClick={() => duplicateField(index)}
+                                  title="Дублировать поле"
                                 >
-                                  <CIcon icon={cilCopy} />
+                                  <CIcon icon={cilCopy} size="sm" />
                                 </CButton>
                                 <CButton
                                   size="sm"
-                                  color="danger"
-                                  variant="ghost"
+                                  color="outline-danger"
                                   onClick={() => removeFieldAt(index)}
+                                  title="Удалить из формата"
                                 >
-                                  <CIcon icon={cilX} />
+                                  <CIcon icon={cilX} size="sm" />
                                 </CButton>
                               </div>
                             </div>
-                          ))
-                        )}
-                      </div>
-                    </CCol>
-                  </CRow>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </CCardBody>
               </CCard>
             </CCol>
@@ -1225,159 +1361,173 @@ const ExportPanel = ({
         </div>
       )}
 
-      {/* Step 3: Preview */}
       {currentStep === 'preview' && (
-        <div className="export-step">
-          <CCard>
-            <CCardHeader>
-              <h6 className="mb-0">Предпросмотр экспорта</h6>
-              <CButton
-                size="sm"
-                color="primary"
-                variant="ghost"
-                onClick={loadPreview}
-                disabled={previewLoading}
-              >
-                <CIcon icon={cilReload} className="me-1" />
-                Обновить
-              </CButton>
-            </CCardHeader>
-            <CCardBody>
-              {previewLoading ? (
-                <div className="text-center py-5">
-                  <CSpinner />
-                  <p className="mt-2">Загрузка предпросмотра...</p>
-                </div>
-              ) : previewError ? (
-                <CAlert color="danger">
-                  {previewError}
-                </CAlert>
-              ) : previewData ? (
-                <>
-                  <div className="preview-stats mb-3">
-                    <CBadge color="info" className="me-2">
-                      Всего записей: {formatNumber(previewData.totalRecords)}
-                    </CBadge>
-                    <CBadge color="success" className="me-2">
-                      Поля: {previewData.fields?.length || selectedFieldsList.length}
-                    </CBadge>
-                    <CBadge color="secondary">
-                      Формат: {formatUpperCase}
-                    </CBadge>
-                  </div>
-
-                  {settings.format === 'txt' && settings.template ? (
-                    <div className="preview-txt">
-                      <h6>Пример строк:</h6>
-                      <pre className="preview-code">
-                        {previewData.data?.slice(0, 5).map((row, i) => {
-                          let line = settings.template
-                          selectedFieldsList.forEach(item => {
-                            const value = row[item.field] || ''
-                            line = line.replace(`{${item.field}}`, formatPreviewValue(value, item.field))
-                          })
-                          return line
-                        }).join('\n')}
-                      </pre>
+        <div className="step-content">
+          <h5 className="mb-4">Предпросмотр</h5>
+          <CRow className="g-4">
+            <CCol md={8}>
+              <CCard>
+                <CCardHeader className="d-flex justify-content-between align-items-center">
+                  <span>Данные для экспорта</span>
+                  <CButton
+                    color="outline-primary"
+                    size="sm"
+                    onClick={loadPreview}
+                    disabled={previewLoading}
+                  >
+                    {previewLoading && <CSpinner size="sm" className="me-1" />}
+                    Обновить
+                  </CButton>
+                </CCardHeader>
+                <CCardBody>
+                  {previewLoading ? (
+                    <div className="text-center py-4">
+                      <CSpinner className="me-2" />
+                      Загрузка предпросмотра...
                     </div>
-                  ) : (
+                  ) : previewError ? (
+                    <CAlert color="danger">{previewError}</CAlert>
+                  ) : previewData ? (
                     <div className="table-responsive">
-                      <CTable small bordered hover>
-                        <CTableHead>
-                          <CTableRow>
-                            {selectedFieldsList.map((item, i) => (
-                              <CTableHeaderCell key={i}>
-                                {getFieldLabel(item.field)}
-                                {item.isDuplicate && (
-                                  <CBadge color="info" className="ms-1">
-                                    {item.duplicateIndex}
-                                  </CBadge>
-                                )}
-                              </CTableHeaderCell>
-                            ))}
-                          </CTableRow>
-                        </CTableHead>
-                        <CTableBody>
-                          {previewData.data?.slice(0, 10).map((row, rowIndex) => (
-                            <CTableRow key={rowIndex}>
-                              {selectedFieldsList.map((item, colIndex) => (
-                                <CTableDataCell key={colIndex}>
-                                  {formatPreviewValue(row[item.field], item.field)}
-                                </CTableDataCell>
+                      {settings.format === 'txt' && settings.template ? (
+                        <div className="preview-box">
+                          <pre>
+                            {previewData.data?.slice(0, 5).map((row, i) => {
+                              let line = settings.template
+                              selectedFieldsList.forEach(item => {
+                                const value = row[item.field] || ''
+                                line = line.replace(`{${item.field}}`, formatPreviewValue(value, item.field))
+                              })
+                              return line
+                            }).join('\n')}
+                          </pre>
+                        </div>
+                      ) : (
+                        <CTable className="table-dark-compatible" small>
+                          <CTableHead>
+                            <CTableRow>
+                              {selectedFieldsList.map((fieldItem, index) => (
+                                <CTableHeaderCell key={index}>
+                                  {getFieldLabel(fieldItem.field)}
+                                  {fieldItem.isDuplicate && (
+                                    <small className="text-muted"> ({fieldItem.duplicateIndex})</small>
+                                  )}
+                                </CTableHeaderCell>
                               ))}
                             </CTableRow>
-                          ))}
-                        </CTableBody>
-                      </CTable>
+                          </CTableHead>
+                          <CTableBody>
+                            {previewData.data?.slice(0, 10).map((row, index) => (
+                              <CTableRow key={index}>
+                                {selectedFieldsList.map((fieldItem, fieldIndex) => (
+                                  <CTableDataCell key={fieldIndex}>
+                                    {formatPreviewValue(row[fieldItem.field], fieldItem.field)}
+                                  </CTableDataCell>
+                                ))}
+                              </CTableRow>
+                            ))}
+                          </CTableBody>
+                        </CTable>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted">
+                      <CButton color="primary" onClick={loadPreview}>
+                        Загрузить предпросмотр
+                      </CButton>
                     </div>
                   )}
+                </CCardBody>
+              </CCard>
+            </CCol>
 
-                  <div className="mt-3">
-                    <strong>Имя файла:</strong> <code>{displayFilename}</code>
+            <CCol md={4}>
+              <CCard>
+                <CCardBody>
+                  <h6>Информация</h6>
+                  <div className="info-list">
+                    <div className="info-item">
+                      <span className="label">Формат:</span>
+                      <span className="value">{formatUpperCase}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Полей:</span>
+                      <span className="value">{selectedFieldsList.length}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Записей:</span>
+                      <span className="value">{formatNumber(previewData?.totalRecords) || '—'}</span>
+                    </div>
+                    <div className="info-item">
+                      <span className="label">Файл:</span>
+                      <span className="value">{displayFilename}</span>
+                    </div>
                   </div>
-                </>
-              ) : (
-                <div className="text-center py-5 text-muted">
-                  Нет данных для предпросмотра
-                </div>
-              )}
-            </CCardBody>
-          </CCard>
+                </CCardBody>
+              </CCard>
+            </CCol>
+          </CRow>
         </div>
       )}
 
-      {/* Progress Bar */}
       {isExporting && (
-        <div className="export-progress mt-4">
-          <div className="d-flex justify-content-between mb-2">
-            <span>Экспорт данных...</span>
-            <span>{exportProgress}%</span>
+        <div className="export-progress">
+          <div className="progress-title">
+            <CIcon icon={cilCloudDownload} />
+            Экспорт данных...
           </div>
           <CProgress>
             <CProgressBar value={exportProgress} animated />
           </CProgress>
+          <div className="progress-text">{exportProgress}%</div>
         </div>
       )}
 
-      {/* Footer Actions */}
-      <div className="export-actions mt-4">
-        <CButton
-          color="secondary"
-          disabled={currentStep === 'type' || isExporting}
-          onClick={prevStep}
-        >
-          <CIcon icon={cilChevronLeft} className="me-1" />
-          Назад
-        </CButton>
-
-        {currentStep !== 'preview' ? (
-          <CButton
-            color="primary"
-            disabled={!canProceed(currentStep) || isExporting}
-            onClick={nextStep}
-          >
-            Далее
-            <CIcon icon={cilChevronRight} className="ms-1" />
-          </CButton>
-        ) : (
-          <CButton
-            color="success"
-            disabled={!isFormValid || isExporting}
-            onClick={executeExport}
-          >
-            {isExporting ? (
-              <>
-                <CSpinner size="sm" className="me-2" />
-                Экспортируется...
-              </>
-            ) : (
-              <>
-                <CIcon icon={cilCloudDownload} className="me-1" />
-                Экспортировать
-              </>
+      <div className="export-actions">
+        <div className="d-flex justify-content-between align-items-center w-100">
+          <small className="text-muted">
+            Шаг {steps.findIndex(s => s.id === currentStep) + 1} из {steps.length}
+          </small>
+          <div>
+            {currentStep !== 'type' && (
+              <CButton
+                color="light"
+                onClick={prevStep}
+                disabled={isExporting}
+                className="me-2"
+              >
+                Назад
+              </CButton>
             )}
-          </CButton>
-        )}
+            {currentStep !== 'preview' ? (
+              <CButton
+                color="primary"
+                onClick={nextStep}
+                disabled={!canProceed(currentStep) || isExporting}
+              >
+                Далее
+              </CButton>
+            ) : (
+              <CButton
+                color="success"
+                onClick={executeExport}
+                disabled={isExporting || !isFormValid}
+              >
+                {isExporting ? (
+                  <>
+                    <CSpinner size="sm" className="me-2" />
+                    Экспортируется...
+                  </>
+                ) : (
+                  <>
+                    <CIcon icon={cilCloudDownload} className="me-2" />
+                    Экспортировать
+                  </>
+                )}
+              </CButton>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   )

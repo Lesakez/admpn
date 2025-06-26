@@ -1,583 +1,413 @@
-// frontend/src/components/modals/ImportExportModal.scss
 
-// Глобальные переменные
-:root {
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --border-radius-sm: 0.25rem;
-  --border-radius-md: 0.5rem;
-  --shadow-light: 0 1px 3px rgba(0, 0, 0, 0.1);
-  --shadow-hover: 0 2px 8px rgba(0, 0, 0, 0.15);
-  --transition-fast: 0.2s ease;
-  --transition-smooth: 0.3s ease;
-}
+@import '@coreui/coreui/scss/functions';
+@import '@coreui/coreui/scss/variables';
+@import '@coreui/coreui/scss/mixins';
+@import './panels/ImportPanel.scss';
+@import './panels/ExportPanel.scss';
 
-// Миксины
-@mixin hover-effect {
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-hover);
-  }
-}
-
-@mixin focus-outline {
-  &:focus {
-    outline: 2px solid var(--cui-primary);
-    outline-offset: 2px;
-    box-shadow: 0 0 0 3px rgba(var(--cui-primary-rgb), 0.25);
-  }
-}
-
-@mixin responsive($breakpoint) {
-  @media (max-width: #{$breakpoint}px) {
-    @content;
-  }
-}
-
-.import-export-modal {
+// Общие стили для модального окна
+.export-modal {
   .modal-dialog {
     max-width: 1200px;
-    margin: 1.5rem auto;
-    height: calc(100vh - 3rem);
-    display: flex;
-    flex-direction: column;
+    margin: var(--cui-modal-margin) auto;
+    transition: var(--cui-modal-transition);
+
+    @media (max-width: 768px) {
+      max-width: 100%;
+      margin: 0;
+    }
   }
 
+  // Улучшенный backdrop с размытием
+  .modal-backdrop {
+    background-color: rgba(var(--cui-dark-rgb), var(--cui-modal-backdrop-opacity));
+    backdrop-filter: blur(var(--cui-modal-backdrop-blur));
+    -webkit-backdrop-filter: blur(var(--cui-modal-backdrop-blur));
+    transition: opacity var(--cui-modal-transition);
+
+    &.show {
+      animation: modalBackdropFadeIn 0.3s ease;
+    }
+  }
+
+  // Контент модального окна
   .modal-content {
     border: none;
-    border-radius: var(--border-radius-md);
-    box-shadow: var(--shadow-light);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+    background-color: var(--cui-modal-bg);
+    border-radius: var(--cui-modal-border-radius);
     overflow: hidden;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    background: var(--cui-body-bg);
+    position: relative;
+
+    // Градиентная граница
+    &::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      padding: 1px;
+      background: linear-gradient(
+        135deg,
+        rgba(var(--cui-primary-rgb), 0.2) 0%,
+        transparent 50%,
+        rgba(var(--cui-primary-rgb), 0.2) 100%
+      );
+      border-radius: inherit;
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask-composite: xor;
+      -webkit-mask-composite: xor;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    &:hover::before {
+      opacity: 1;
+    }
+
+    .modal.show & {
+      transform: none;
+      animation: modalContentSlideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    .modal:not(.show) & {
+      transform: var(--cui-modal-scale-transform);
+    }
   }
 
-  // Modal Header
+  // Заголовок модального окна
   .modal-header {
-    background: var(--cui-primary);
-    border-bottom: none;
-    padding: var(--spacing-md) var(--spacing-lg);
-    flex-shrink: 0;
+    padding: var(--cui-modal-padding);
+    border-bottom: $modal-header-border-width solid $modal-header-border-color;
+    background: var(--cui-modal-header-bg);
+    position: relative;
+
+    // Декоративная линия
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: $modal-header-padding-x;
+      right: $modal-header-padding-x;
+      height: 1px;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--cui-primary) 50%,
+        transparent 100%
+      );
+      opacity: 0.5;
+    }
 
     .modal-title {
-      font-size: 1.25rem;
-      font-weight: 500;
-      color: white;
+      font-weight: $font-weight-semibold;
+      color: var(--cui-emphasis-color);
+      font-size: $h5-font-size;
       display: flex;
       align-items: center;
-      gap: var(--spacing-sm);
-      letter-spacing: -0.01em;
+      gap: $spacer * 0.5;
+      margin: 0;
+      line-height: $headings-line-height;
 
       svg {
-        width: 24px;
-        height: 24px;
-        opacity: 0.9;
+        color: var(--cui-primary);
+        filter: drop-shadow(0 1px 2px rgba(var(--cui-primary-rgb), 0.2));
+        transition: transform 0.2s ease;
+        width: 1.5rem;
+        height: 1.5rem;
+      }
+
+      &:hover svg {
+        transform: scale(1.05);
       }
 
       .badge {
         font-size: 0.75rem;
-        padding: var(--spacing-xs) var(--spacing-sm);
+        padding: 0.25rem 0.5rem;
+        font-weight: 500;
       }
     }
 
     .btn-close {
-      background: none;
-      color: white;
-      opacity: 0.7;
-      padding: var(--spacing-sm);
-      transition: opacity var(--transition-fast), transform var(--transition-fast);
-      @include focus-outline;
-
-      &:hover {
-        opacity: 1;
-        transform: scale(1.1);
-      }
-    }
-  }
-
-  // Tabs Navigation
-  .nav-tabs {
-    background: var(--cui-gray-50);
-    border-bottom: 1px solid var(--cui-gray-200);
-    display: flex;
-    flex-shrink: 0;
-    padding: 0 var(--spacing-md);
-
-    .nav-item {
-      flex: 1;
-      margin: 0;
-    }
-
-    .nav-link {
-      border: none;
-      padding: var(--spacing-md);
-      color: var(--cui-gray-600);
-      font-weight: 500;
       background: transparent;
+      border: 1px solid var(--cui-border-color);
+      border-radius: 50%;
+      width: 2rem;
+      height: 2rem;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: var(--spacing-sm);
-      border-bottom: 2px solid transparent;
-      transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
-      @include focus-outline;
+      transition: all 0.3s ease;
+      opacity: $btn-close-opacity;
 
-      svg {
-        width: 18px;
-        height: 18px;
-        transition: transform var(--transition-fast);
+      &:focus {
+        outline: 0;
+        box-shadow: 0 0 0 $focus-ring-width rgba(var(--cui-primary), 0.25);
       }
 
-      &:hover:not(.active):not(:disabled) {
-        color: var(--cui-gray-800);
-        background: var(--cui-gray-100);
-
-        svg {
-          transform: translateY(-1px);
-        }
+      &:hover {
+        opacity: 1;
+        transform: scale(1.1) rotate(90deg);
+        background: var(--cui-danger);
+        border-color: var(--cui-danger);
+        color: var(--cui-contrast-color);
       }
 
-      &.active {
-        color: var(--cui-primary);
-        background: var(--cui-body-bg);
-        border-bottom-color: var(--cui-primary);
-
-        svg {
-          color: var(--cui-primary);
-        }
-      }
-
-      &:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
+      &:active {
+        transform: scale(0.95);
       }
     }
   }
 
-  // Modal Body
+  // Тело модального окна
   .modal-body {
-    flex: 1;
-    overflow-y: auto;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
+    padding: $modal-inner-padding;
+    background: var(--cui-body-bg);
+    position: relative;
 
     &::-webkit-scrollbar {
-      width: 5px;
+      width: 6px;
     }
+
     &::-webkit-scrollbar-track {
-      background: transparent;
+      background: var(--cui-tertiary-bg);
+      border-radius: 3px;
     }
+
     &::-webkit-scrollbar-thumb {
-      background: var(--cui-gray-300);
-      border-radius: 2.5px;
+      background: var(--cui-border-color);
+      border-radius: 3px;
+
       &:hover {
-        background: var(--cui-gray-400);
+        background: var(--cui-secondary-color);
       }
     }
 
-    // Tab Content
-    .tab-content {
-      flex: 1;
-      background: var(--cui-body-bg);
-      padding: var(--spacing-md);
-    }
+    &.scrollable {
+      &::before,
+      &::after {
+        content: '';
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 1px;
+        background: linear-gradient(
+          90deg,
+          transparent 0%,
+          var(--cui-primary) 50%,
+          transparent 100%
+        );
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
 
-    // Tab Pane
-    .tab-pane {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
+      &::before {
+        top: 0;
+      }
 
-      // Убираем внутренний скролл, так как он теперь в .modal-body
-      > div {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        padding: 0;
-        overflow: visible;
+      &::after {
+        bottom: 0;
+      }
+
+      &.scroll-top::before,
+      &.scroll-bottom::after {
+        opacity: 0.5;
       }
     }
   }
 
-  // Modal Footer
+  // Футер модального окна
   .modal-footer {
-    background: var(--cui-gray-50);
-    border-top: 1px solid var(--cui-gray-200);
-    padding: var(--spacing-md);
-    flex-shrink: 0;
+    padding: $modal-inner-padding;
+    border-top: $modal-footer-border-width solid $modal-footer-border-color;
+    background: var(--cui-modal-footer-bg);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: $btn-toolbar-gap;
 
-    .d-flex {
-      width: 100%;
-      justify-content: flex-end;
-      gap: var(--spacing-sm);
+    .text-muted {
+      font-size: 0.875rem;
+      color: var(--cui-secondary-color);
     }
 
     .btn {
       min-width: 100px;
-      font-weight: 500;
-      padding: var(--spacing-sm) var(--spacing-md);
-      border-radius: var(--border-radius-md);
-      font-size: 0.875rem;
-      @include hover-effect;
-      @include focus-outline;
+      font-weight: $font-weight-medium;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
 
-      &.btn-primary {
-        background: var(--cui-primary);
-        border: none;
-        color: white;
-
-        &:hover:not(:disabled) {
-          background: var(--cui-primary-emphasis);
-        }
+      &::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 0;
+        height: 0;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        transition: width 0.3s ease, height 0.3s ease;
       }
 
-      &.btn-secondary {
-        background: var(--cui-body-bg);
-        border: 1px solid var(--cui-gray-200);
-        color: var(--cui-gray-700);
+      &:active::before {
+        width: 200%;
+        height: 200%;
+      }
 
-        &:hover:not(:disabled) {
-          background: var(--cui-gray-50);
-          border-color: var(--cui-gray-400);
-        }
+      &:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
       }
 
       &:disabled {
-        opacity: 0.5;
+        opacity: 0.6;
         cursor: not-allowed;
+        transform: none !important;
       }
 
       svg {
-        width: 14px;
-        height: 14px;
+        width: 0.875rem;
+        height: 0.875rem;
       }
     }
   }
 
-  // Alerts
-  .alert {
-    border: none;
-    border-radius: var(--border-radius-md);
-    padding: var(--spacing-md);
-    margin: var(--spacing-md);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    font-weight: 500;
-    font-size: 0.875rem;
-
-    &.alert-success {
-      background: rgba(var(--cui-success-rgb), 0.1);
-      color: var(--cui-success-emphasis);
-
-      &::before {
-        content: '✓';
-        width: 24px;
-        height: 24px;
-        background: var(--cui-success);
-        color: white;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
-        flex-shrink: 0;
-      }
-    }
-
-    &.alert-danger {
-      background: rgba(var(--cui-danger-rgb), 0.1);
-      color: var(--cui-danger-emphasis);
-
-      &::before {
-        content: '!';
-        width: 24px;
-        height: 24px;
-        background: var(--cui-danger);
-        color: white;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
-        flex-shrink: 0;
-      }
-    }
-
-    .btn-link {
-      padding: 0;
-      font-size: 0.8125rem;
-      color: var(--cui-primary);
-      text-decoration: underline;
-      @include focus-outline;
-
-      &:hover {
-        color: var(--cui-primary-emphasis);
-      }
-    }
-  }
-
-  // Loading State
-  .text-center.py-5 {
-    flex: 1;
+  // Стили для панелей импорта/экспорта
+  .export-panel,
+  .import-panel {
+    height: 100%;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-
-    .spinner-border {
-      width: 3rem;
-      height: 3rem;
-      border-width: 0.3rem;
-      border-color: var(--cui-primary);
-      border-right-color: transparent;
-    }
-
-    p {
-      margin-top: var(--spacing-md);
-      font-size: 1rem;
-      color: var(--cui-gray-600);
-      font-weight: 500;
-    }
   }
+}
 
-  // Dark Theme Support
-  [data-coreui-theme="dark"] & {
-    .modal-content {
-      background: var(--cui-gray-900);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    }
-
-    .modal-header {
-      background: var(--cui-gray-800);
-
-      .modal-title {
-        color: var(--cui-gray-100);
-      }
-
-      .btn-close {
-        color: var(--cui-gray-400);
-
-        &:hover {
-          color: var(--cui-gray-100);
-        }
-      }
-    }
-
-    .nav-tabs {
-      background: var(--cui-gray-800);
-      border-bottom-color: var(--cui-gray-700);
-
-      .nav-link {
-        color: var(--cui-gray-400);
-
-        &:hover:not(.active):not(:disabled) {
-          color: var(--cui-gray-200);
-          background: var(--cui-gray-700);
-        }
-
-        &.active {
-          color: var(--cui-primary);
-          background: var(--cui-gray-900);
-          border-bottom-color: var(--cui-primary);
-        }
-      }
-    }
-
-    .modal-body {
-      background: var(--cui-gray-900);
-
-      .tab-content {
-        background: var(--cui-gray-900);
-      }
-    }
-
-    .modal-footer {
-      background: var(--cui-gray-800);
-      border-top-color: var(--cui-gray-700);
-
-      .btn-secondary {
-        background: var(--cui-gray-700);
-        border-color: var(--cui-gray-600);
-        color: var(--cui-gray-200);
-
-        &:hover:not(:disabled) {
-          background: var(--cui-gray-600);
-          border-color: var(--cui-gray-500);
-        }
-      }
-    }
-
-    .alert {
-      &.alert-success {
-        background: rgba(var(--cui-success-rgb), 0.2);
-      }
-      &.alert-danger {
-        background: rgba(var(--cui-danger-rgb), 0.2);
-      }
-
-      .btn-link {
-        color: var(--cui-primary-emphasis);
-      }
-    }
+// Анимации
+@keyframes modalBackdropFadeIn {
+  from {
+    opacity: 0;
   }
-
-  // Animations
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+  to {
+    opacity: var(--cui-modal-backdrop-opacity);
   }
+}
 
-  // Responsive Design
-  @include responsive(1200) {
-    .modal-dialog {
-      max-width: 95%;
-      margin: 1rem;
-      height: calc(100vh - 2rem);
-    }
+@keyframes modalContentSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-20px);
   }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
 
-  @include responsive(768) {
+// Адаптивность
+@media (max-width: 991.98px) {
+  .export-modal {
     .modal-dialog {
       max-width: 100%;
-      margin: 0;
-      height: 100vh;
+      margin: $modal-dialog-margin-y-sm-up;
     }
 
     .modal-content {
       border-radius: 0;
-    }
-
-    .modal-header {
-      padding: var(--spacing-md);
-
-      .modal-title {
-        font-size: 1.125rem;
-
-        svg {
-          width: 20px;
-          height: 20px;
-        }
-      }
-    }
-
-    .nav-tabs {
-      .nav-link {
-        padding: var(--spacing-sm);
-        font-size: 0.8125rem;
-
-        svg {
-          width: 16px;
-          height: 16px;
-        }
-      }
-    }
-
-    .modal-body {
-      .tab-content {
-        padding: var(--spacing-sm);
-      }
+      height: 100vh;
     }
 
     .modal-footer {
-      padding: var(--spacing-sm);
+      flex-direction: column;
 
       .btn {
-        min-width: 90px;
-        padding: var(--spacing-xs) var(--spacing-sm);
-        font-size: 0.8125rem;
+        width: 100%;
+        margin: 0;
       }
     }
   }
+}
 
-  @include responsive(576) {
-    .modal-header {
-      padding: var(--spacing-sm);
-
-      .modal-title {
-        font-size: 1rem;
-        gap: var(--spacing-xs);
-
-        svg {
-          width: 18px;
-          height: 18px;
-        }
-      }
+// Темная тема
+@media (prefers-color-scheme: dark) {
+  .export-modal {
+    .modal-content {
+      background: var(--cui-dark);
+      border-color: var(--cui-border-color-translucent);
     }
 
-    .nav-tabs {
-      .nav-link {
-        padding: var(--spacing-xs) var(--spacing-sm);
-        font-size: 0.75rem;
-        flex-direction: column;
-        gap: var(--spacing-xs);
-
-        svg {
-          width: 14px;
-          height: 14px;
-        }
-      }
+    .modal-header {
+      background: var(--cui-darker);
+      border-bottom-color: var(--cui-border-color-translucent);
     }
 
     .modal-body {
-      .tab-content {
-        padding: var(--spacing-xs);
-      }
-    }
-
-    .alert {
-      margin: var(--spacing-sm);
-      padding: var(--spacing-sm);
-      font-size: 0.8125rem;
-
-      &::before {
-        width: 20px;
-        height: 20px;
-        font-size: 0.75rem;
-      }
+      background: var(--cui-dark);
     }
 
     .modal-footer {
-      padding: var(--spacing-sm);
+      background: var(--cui-darker);
+      border-top-color: var(--cui-border-color-translucent);
+    }
 
-      .d-flex {
-        flex-direction: column;
-        gap: var(--spacing-sm);
+    .btn-close {
+      background: var(--cui-darker);
+      border-color: var(--cui-border-color-translucent);
+      color: var(--cui-body-color);
 
-        .btn {
-          width: 100%;
-        }
+      &:hover {
+        background: var(--cui-danger);
+        border-color: var(--cui-danger);
+        color: var(--cui-contrast-color);
       }
     }
   }
+}
 
-  // Modal Effects
-  &.fade .modal-dialog {
-    transition: transform var(--transition-smooth), opacity var(--transition-smooth);
-    transform: scale(0.95) translateY(20px);
-    opacity: 0;
+// Уменьшенная анимация для доступности
+@media (prefers-reduced-motion: reduce) {
+  .export-modal {
+    .modal-dialog {
+      transition: none;
+    }
+
+    .modal-backdrop {
+      transition: none;
+    }
+
+    .modal-content {
+      animation: none !important;
+
+      &::before {
+        transition: none;
+      }
+    }
+
+    .btn {
+      transition: none !important;
+
+      &::before {
+        transition: none;
+      }
+    }
   }
+}
 
-  &.show .modal-dialog {
-    transform: scale(1) translateY(0);
-    opacity: 1;
-  }
+// Высокий контраст
+@media (prefers-contrast: high) {
+  .export-modal {
+    .modal-content {
+      border-width: 2px;
+      border-color: var(--cui-emphasis-color);
+    }
 
-  // Backdrop
-  .modal-backdrop.show {
-    backdrop-filter: blur(5px);
-    background-color: rgba(0, 0, 0, 0.6);
+    .modal-header,
+    .modal-footer {
+      border-color: var(--cui-emphasis-color);
+    }
+
+    .btn-close {
+      border-width: 2px;
+    }
   }
 }

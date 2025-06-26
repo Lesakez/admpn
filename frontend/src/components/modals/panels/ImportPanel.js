@@ -1,5 +1,3 @@
-// frontend/src/components/modals/panels/ImportPanel.js
-
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   CButton,
@@ -465,9 +463,13 @@ const ImportPanel = ({
 
   if (configLoading) {
     return (
-      <div className="text-center p-5">
-        <CSpinner color="primary" />
-        <p className="mt-2">Загрузка конфигурации...</p>
+      <div className="modal-loading text-center p-5">
+        <div className="spinner-container">
+          <CSpinner color="primary" className="spinner-border" />
+        </div>
+        <p className="loading-text mt-2">
+          Загрузка конфигурации<span className="dots"></span>
+        </p>
       </div>
     )
   }
@@ -517,7 +519,7 @@ const ImportPanel = ({
               </CCol>
             </CRow>
             <div className="text-center mt-3">
-              <CButton color="primary" onClick={handleClearData}>
+              <CButton color="primary" onClick={handleClearData} className="btn-primary">
                 Новый импорт
               </CButton>
             </div>
@@ -530,8 +532,8 @@ const ImportPanel = ({
           <CRow>
             {/* Настройки формата */}
             <CCol lg={6}>
-              <CCard className="mb-4">
-                <CCardHeader>
+              <CCard className="import-panel__card mb-4">
+                <CCardHeader className="card-header">
                   <h6 className="mb-0 d-flex align-items-center">
                     <CIcon icon={cilCode} className="me-2" />
                     Настройки формата
@@ -560,7 +562,7 @@ const ImportPanel = ({
                     )}
                     
                     {formatValue && getCurrentFormat() && (
-                      <CAlert color="info" className="mt-2 py-2">
+                      <CAlert color="info" className="alert-info mt-2 py-2">
                         <small>
                           <strong>Пример:</strong> {getCurrentFormat().example}
                         </small>
@@ -590,17 +592,20 @@ const ImportPanel = ({
                     <CFormCheck
                       id="skipInvalid"
                       label="Пропускать невалидные строки"
+                      className="form-check"
                       {...register('skipInvalid')}
                     />
                     <CFormCheck
                       id="validateBeforeImport"
                       label="Валидировать перед импортом"
+                      className="form-check"
                       defaultChecked
                       {...register('validateBeforeImport')}
                     />
                     <CFormCheck
                       id="updateExisting"
                       label="Обновлять существующие записи"
+                      className="form-check"
                       {...register('updateExisting')}
                     />
                   </div>
@@ -610,8 +615,8 @@ const ImportPanel = ({
 
             {/* Загрузка данных */}
             <CCol lg={6}>
-              <CCard className="mb-4">
-                <CCardHeader>
+              <CCard className="import-panel__card mb-4">
+                <CCardHeader className="card-header">
                   <h6 className="mb-0 d-flex align-items-center">
                     <CIcon icon={cilCloudUpload} className="me-2" />
                     Загрузка данных
@@ -651,6 +656,7 @@ const ImportPanel = ({
                       color="secondary"
                       onClick={loadSampleData}
                       disabled={!formatValue}
+                      className="btn btn-secondary"
                     >
                       <CIcon icon={cilTask} className="me-2" />
                       Загрузить примеры
@@ -661,6 +667,7 @@ const ImportPanel = ({
                       variant="outline"
                       onClick={handleClearData}
                       disabled={!textValue}
+                      className="btn btn-danger"
                     >
                       <CIcon icon={cilTrash} className="me-2" />
                       Очистить
@@ -676,8 +683,7 @@ const ImportPanel = ({
                       id="importText"
                       rows="10"
                       placeholder="Вставьте данные сюда или загрузите файл..."
-                      className="import-panel__textarea"
-                      invalid={!!errors.text}
+                      className={`import-panel__textarea ${errors.text ? 'is-invalid' : ''}`}
                       {...register('text', { required: 'Введите данные для импорта' })}
                     />
                     {errors.text && (
@@ -751,7 +757,7 @@ const ImportPanel = ({
                     </h6>
                     <div className="import-panel__errors">
                       {validationErrors.map((error, idx) => (
-                        <CAlert key={idx} color="danger" className="py-2">
+                        <CAlert key={idx} color="danger" className="alert-danger py-2">
                           <strong>Строка {error.line}:</strong> {error.error}
                           <br />
                           <small className="text-muted">Данные: {error.text}</small>
@@ -771,8 +777,8 @@ const ImportPanel = ({
                 <span>Импорт данных...</span>
                 <span>{progress}%</span>
               </div>
-              <CProgress>
-                <CProgressBar value={progress} animated />
+              <CProgress className="progress">
+                <CProgressBar value={progress} className="progress-bar" animated />
               </CProgress>
             </div>
           )}
@@ -784,10 +790,11 @@ const ImportPanel = ({
               color="primary"
               size="lg"
               disabled={isLoading || !previewData?.hasData}
+              className="btn-primary"
             >
               {isLoading ? (
                 <>
-                  <CSpinner size="sm" className="me-2" />
+                  <CSpinner size="sm" className="spinner-border me-2" />
                   Импортируется...
                 </>
               ) : (

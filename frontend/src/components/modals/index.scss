@@ -1,10 +1,8 @@
 // frontend/src/components/modals/index.scss
 // Главный файл стилей для всех модальных окон
 
-// Импорт стилей модального окна импорта/экспорта
+// Импорт стилей компонентов модалок
 @import './ImportExportModal.scss';
-
-// Импорт стилей панелей
 @import './panels/ImportPanel.scss';
 @import './panels/ExportPanel.scss';
 
@@ -18,7 +16,7 @@
   }
 
   // Улучшенный backdrop
-  &-backdrop {
+  .modal-backdrop {
     backdrop-filter: blur(5px);
     
     &.show {
@@ -75,7 +73,7 @@
   .loading-text {
     margin-top: 1rem;
     font-size: 1.125rem;
-    color: var(--cui-gray-600);
+    color: var(--cui-secondary-color);
     font-weight: 500;
   }
 }
@@ -99,12 +97,36 @@
   }
   
   .error-message {
-    color: var(--cui-gray-600);
+    color: var(--cui-secondary-color);
     margin-bottom: 1.5rem;
   }
   
   .btn {
     min-width: 120px;
+  }
+}
+
+// Состояние успеха
+.modal-success {
+  padding: 2rem;
+  text-align: center;
+  
+  .success-icon {
+    font-size: 4rem;
+    color: var(--cui-success);
+    margin-bottom: 1rem;
+  }
+  
+  .success-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--cui-success);
+    margin-bottom: 0.5rem;
+  }
+  
+  .success-message {
+    color: var(--cui-secondary-color);
+    margin-bottom: 1.5rem;
   }
 }
 
@@ -118,80 +140,76 @@
   }
 }
 
-@keyframes slideIn {
+// Утилиты для анимаций
+.animate-slide-up {
+  animation: slideInUp 0.4s ease-out;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-delay-100 { animation-delay: 0.1s; }
+.animate-delay-200 { animation-delay: 0.2s; }
+.animate-delay-300 { animation-delay: 0.3s; }
+
+@keyframes slideInUp {
   from {
-    transform: translateY(-20px);
     opacity: 0;
+    transform: translateY(30px);
   }
   to {
-    transform: translateY(0);
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
-// Размеры модалок
-.modal-sm {
-  .modal-dialog {
-    max-width: 400px;
-  }
-}
-
-.modal-lg {
-  .modal-dialog {
-    max-width: 800px;
-  }
-}
-
-.modal-xl {
-  .modal-dialog {
-    max-width: 1200px;
-  }
-}
-
-.modal-fullscreen {
-  .modal-dialog {
-    max-width: 100%;
-    margin: 0;
-    
-    .modal-content {
+// Адаптивные модалки
+.modal-responsive {
+  @media (max-width: 991.98px) {
+    .modal-dialog {
+      max-width: 100%;
+      margin: 0;
       height: 100vh;
+    }
+
+    .modal-content {
       border-radius: 0;
+      height: 100vh;
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .modal-footer {
+      flex-direction: column;
+      
+      .btn {
+        width: 100%;
+        margin: 0;
+      }
     }
   }
 }
 
 // Темная тема
-[data-coreui-theme="dark"] {
+@media (prefers-color-scheme: dark) {
   .modal {
     .modal-content {
-      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.8);
+      background: var(--cui-dark);
     }
-    
+
     .modal-header {
-      &::after {
-        background: linear-gradient(90deg, transparent, var(--cui-gray-700), transparent);
-      }
+      background: var(--cui-darker);
+      border-bottom-color: var(--cui-border-color-translucent);
     }
-  }
-  
-  .modal-loading {
-    .loading-text {
-      color: var(--cui-gray-400);
+
+    .modal-body {
+      background: var(--cui-dark);
     }
-  }
-  
-  .modal-error {
-    .error-message {
-      color: var(--cui-gray-400);
+
+    .modal-footer {
+      background: var(--cui-darker);
+      border-top-color: var(--cui-border-color-translucent);
     }
   }
 }
